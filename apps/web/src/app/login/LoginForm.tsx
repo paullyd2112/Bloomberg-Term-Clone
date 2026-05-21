@@ -22,11 +22,22 @@ export default function LoginForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setError(error.message);
       setLoading(false);
     } else {
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("onboarding_completed")
+          .eq("id", data.user.id)
+          .single();
+        if (!profile?.onboarding_completed) {
+          router.push("/onboarding");
+          return;
+        }
+      }
       router.push(next);
       router.refresh();
     }
