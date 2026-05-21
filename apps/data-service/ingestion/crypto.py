@@ -21,7 +21,8 @@ from supabase_client import supabase
 
 load_dotenv()
 
-FINNHUB_KEY = os.environ.get("FINNHUB_API_KEY", "")
+FINNHUB_KEY      = os.environ.get("FINNHUB_API_KEY", "")
+COINGECKO_KEY    = os.environ.get("COINGECKO_API_KEY", "")
 
 COINGECKO_URL  = "https://api.coingecko.com/api/v3/coins/markets"
 FEAR_GREED_URL = "https://api.alternative.me/fng/?limit=1"
@@ -43,27 +44,53 @@ CCXT_SYMBOL_MAP: dict[str, str] = {
 
 # ─── CoinGecko market data ────────────────────────────────────────────────────
 
-def _fetch_coingecko_markets() -> list[dict]:
-    """Fetch top 50 coins by market cap. Free tier, no key needed."""
-    all_coins: list[dict] = []
+def _coingecko_headers() -> dict:
+    """Return auth headers if Demo API key is set, empty dict otherwise."""
+    if COINGECKO_KEY:
+        return {"x-cg-demo-api-key": COINGECKO_KEY}
+    return {}
 
-    with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
-        for page in (1, 2):  # 2 pages × 50 = top 100, we'll filter to 50 after merge
+
+def _fetch_coingecko_markets() -> list[dict]:
+    """Fetch top 100 coins by market cap. Uses Demo key if available."""
+    all_coins: list[dict] = []
+    headers = _coingecko_headers()
+
+    if COINGECKO_KEY:
+        logger.debug("CoinGecko: using Demo API key")
+    else:
+        logger.warning("COINGECKO_API_KEY not set — using keyless tier (rate limits apply)")
+
+    with httpx.Client(timeout=REQUEST_TIMEOUT, headers=headers) as client:
+        for page in (1, 2):
             try:
                 resp = client.get(
                     COINGECKO_URL,
                     params={
-                        "vs_currency":           "usd",
-                        "order":                 "market_cap_desc",
-                        "per_page":              50,
-                        "page":                  page,
-                        "sparkline":             "false",
+                        "vs_currency":             "usd",
+                        "order":                   "market_cap_desc",
+                        "per_page":                50,
+                        "page":                    page,
+                        "sparkline":               "false",
                         "price_change_percentage": "24h",
                     },
                 )
                 resp.raise_for_status()
                 all_coins.extend(resp.json())
                 time.sleep(COINGECKO_DELAY)
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    logger.warning("CoinGecko 429 on page {} — backing off 60s", page)
+                    time.sleep(60)
+                    try:
+                        resp = client.get(e.request.url)
+                        resp.raise_for_status()
+                        all_coins.extend(resp.json())
+                    except Exception as retry_e:
+                        logger.error("CoinGecko retry failed: {}", retry_e)
+                else:
+                    logger.warning("CoinGecko page {} error: {}", page, e)
+                break
             except Exception as e:
                 logger.warning("CoinGecko page {} fetch error: {}", page, e)
                 break
@@ -285,6 +312,7 @@ def ingest_crypto() -> str:
                     "page":        1,
                     "sparkline":   "false",
                 },
+                headers=_coingecko_headers(),
                 timeout=REQUEST_TIMEOUT,
             )
             resp.raise_for_status()
