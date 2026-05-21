@@ -1,1 +1,364 @@
-# Stub — implemented in corresponding prompt
+"""
+Outcome resolver — runs nightly at midnight UTC.
+Marks PENDING signals as WIN / LOSS / NEUTRAL based on price movement.
+Also handles alert evaluation every 30 minutes.
+"""
+
+import asyncio
+from datetime import datetime, timedelta, timezone
+
+import httpx
+import sentry_sdk
+from loguru import logger
+
+from supabase_client import supabase
+
+WIN_THRESHOLD  = 0.01   # 1% move in signal direction = WIN
+LOSS_THRESHOLD = 0.01   # 1% move against signal direction = LOSS
+
+REQUEST_TIMEOUT = 10.0
+
+
+# ─── Price helpers ────────────────────────────────────────────────────────────
+
+def _get_current_price(asset_type: str, identifier: str) -> float | None:
+    try:
+        result = (
+            supabase.table("raw_prices")
+            .select("price")
+            .eq("asset_type", asset_type)
+            .eq("identifier", identifier)
+            .order("captured_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return float(result.data[0]["price"]) if result.data else None
+    except Exception as e:
+        logger.warning("price fetch failed for {}/{}: {}", asset_type, identifier, e)
+        return None
+
+
+def _score_outcome(direction: str, entry: float, current: float) -> str:
+    if direction == "HOLD":
+        return "NEUTRAL"
+
+    pct_change = (current - entry) / entry
+
+    if direction in ("BUY", "YES"):
+        if pct_change >= WIN_THRESHOLD:
+            return "WIN"
+        if pct_change <= -LOSS_THRESHOLD:
+            return "LOSS"
+        return "NEUTRAL"
+
+    if direction in ("SELL", "NO"):
+        if pct_change <= -WIN_THRESHOLD:
+            return "WIN"
+        if pct_change >= LOSS_THRESHOLD:
+            return "LOSS"
+        return "NEUTRAL"
+
+    return "NEUTRAL"
+
+
+# ─── Prediction market settlement ─────────────────────────────────────────────
+
+async def _fetch_settled_kalshi(identifiers: list[str]) -> dict[str, str]:
+    """Returns {ticker: 'YES'|'NO'} for settled Kalshi markets."""
+    resolved: dict[str, str] = {}
+    id_set = set(identifiers)
+
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+        cursor = None
+        while True:
+            params: dict = {"status": "settled", "limit": 200}
+            if cursor:
+                params["cursor"] = cursor
+            try:
+                resp = await client.get(
+                    "https://trading-api.kalshi.com/trade-api/v2/markets",
+                    params=params,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception as e:
+                logger.warning("Kalshi settled fetch error: {}", e)
+                break
+
+            for m in data.get("markets", []):
+                ticker = m.get("ticker", "")
+                if ticker not in id_set:
+                    continue
+                result = m.get("result")
+                if result in ("yes", "no"):
+                    resolved[ticker] = result.upper()
+
+            cursor = data.get("cursor")
+            if not cursor or not data.get("markets"):
+                break
+
+    return resolved
+
+
+async def _fetch_resolved_polymarket(identifiers: list[str]) -> dict[str, str]:
+    """Returns {condition_id: 'YES'|'NO'} for resolved Polymarket markets."""
+    resolved: dict[str, str] = {}
+    id_set = set(identifiers)
+
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+        next_cursor = ""
+        while True:
+            params: dict = {"closed": "true"}
+            if next_cursor:
+                params["next_cursor"] = next_cursor
+            try:
+                resp = await client.get("https://clob.polymarket.com/markets", params=params)
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception as e:
+                logger.warning("Polymarket resolved fetch error: {}", e)
+                break
+
+            for m in data.get("data", []):
+                cid = m.get("condition_id", "")
+                if cid not in id_set:
+                    continue
+                # Find the winning token
+                for token in m.get("tokens", []):
+                    if token.get("winner"):
+                        outcome = (token.get("outcome") or "").upper()
+                        if outcome in ("YES", "NO"):
+                            resolved[cid] = outcome
+
+            next_cursor = data.get("next_cursor", "")
+            if not next_cursor or next_cursor == "LTE=":
+                break
+
+    return resolved
+
+
+# ─── Main resolver ────────────────────────────────────────────────────────────
+
+def resolve_outcomes() -> str:
+    """
+    Find PENDING signals older than 24h and resolve them.
+    Stocks/crypto: price-based WIN/LOSS/NEUTRAL.
+    Predictions: settlement from Kalshi/Polymarket APIs.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+
+    try:
+        result = (
+            supabase.table("signals")
+            .select("*")
+            .eq("outcome", "PENDING")
+            .eq("is_backtest", False)
+            .lte("created_at", cutoff)
+            .execute()
+        )
+        pending = result.data or []
+    except Exception as e:
+        logger.error("resolve_outcomes: failed to fetch pending signals — {}", e)
+        sentry_sdk.capture_exception(e)
+        return "failed to fetch pending signals"
+
+    if not pending:
+        logger.info("resolve_outcomes: no pending signals to resolve")
+        return "0 resolved"
+
+    logger.info("resolve_outcomes: resolving {} pending signals", len(pending))
+
+    # Split by asset type
+    stock_crypto = [s for s in pending if s["asset_type"] in ("stock", "crypto")]
+    predictions  = [s for s in pending if s["asset_type"] == "prediction"]
+
+    resolved_count = 0
+
+    # ── Stocks & Crypto: price-based ──────────────────────────────────────────
+    for signal in stock_crypto:
+        try:
+            entry_price = signal.get("price_at_signal")
+            if not entry_price:
+                continue
+
+            current_price = _get_current_price(signal["asset_type"], signal["identifier"])
+            if not current_price:
+                continue
+
+            outcome = _score_outcome(signal["direction"], float(entry_price), current_price)
+
+            supabase.table("signals").update({
+                "outcome":       outcome,
+                "resolved_at":   datetime.now(timezone.utc).isoformat(),
+                "outcome_price": current_price,
+            }).eq("id", signal["id"]).execute()
+
+            resolved_count += 1
+            logger.debug(
+                "Resolved {}/{} signal {} → {} (entry={} current={})",
+                signal["asset_type"], signal["identifier"],
+                signal["id"], outcome, entry_price, current_price,
+            )
+        except Exception as e:
+            logger.error("resolve error for signal {}: {}", signal.get("id"), e)
+            sentry_sdk.capture_exception(e)
+
+    # ── Prediction markets: API settlement ───────────────────────────────────
+    if predictions:
+        kalshi_ids     = [s["identifier"] for s in predictions
+                          if (s.get("metadata") or {}).get("source") == "kalshi"
+                          or "-" in s["identifier"]]
+        polymarket_ids = [s["identifier"] for s in predictions
+                          if s["identifier"] not in kalshi_ids]
+
+        kalshi_results, poly_results = asyncio.run(
+            asyncio.gather(
+                _fetch_settled_kalshi(kalshi_ids),
+                _fetch_resolved_polymarket(polymarket_ids),
+                return_exceptions=True,
+            )
+        )
+
+        settlement_map: dict[str, str] = {}
+        if isinstance(kalshi_results, dict):
+            settlement_map.update(kalshi_results)
+        if isinstance(poly_results, dict):
+            settlement_map.update(poly_results)
+
+        for signal in predictions:
+            ident     = signal["identifier"]
+            settled   = settlement_map.get(ident)
+            if not settled:
+                continue  # market not yet resolved
+
+            direction = signal["direction"]  # YES / NO / HOLD
+            outcome = "NEUTRAL"
+            if direction != "HOLD":
+                outcome = "WIN" if direction == settled else "LOSS"
+
+            try:
+                supabase.table("signals").update({
+                    "outcome":     outcome,
+                    "resolved_at": datetime.now(timezone.utc).isoformat(),
+                }).eq("id", signal["id"]).execute()
+                resolved_count += 1
+            except Exception as e:
+                logger.error("prediction resolve write failed for {}: {}", ident, e)
+                sentry_sdk.capture_exception(e)
+
+    summary = f"{resolved_count}/{len(pending)} signals resolved"
+    logger.info("resolve_outcomes complete — {}", summary)
+    return summary
+
+
+# ─── Alert evaluator ──────────────────────────────────────────────────────────
+
+def evaluate_alerts() -> str:
+    """
+    Check active alerts and update last_fired_at when triggered.
+    Notification delivery handled separately (email / push in later prompts).
+    """
+    try:
+        result = (
+            supabase.table("alerts")
+            .select("*")
+            .eq("is_active", True)
+            .execute()
+        )
+        alerts = result.data or []
+    except Exception as e:
+        logger.error("evaluate_alerts: fetch failed — {}", e)
+        sentry_sdk.capture_exception(e)
+        return "fetch failed"
+
+    if not alerts:
+        return "0 alerts active"
+
+    fired = 0
+
+    for alert in alerts:
+        try:
+            triggered = False
+
+            if alert["trigger_type"] == "signal_fired":
+                triggered = _check_signal_fired(alert)
+
+            elif alert["trigger_type"] == "price_threshold":
+                triggered = _check_price_threshold(alert)
+
+            elif alert["trigger_type"] == "news_drop":
+                triggered = _check_news_drop(alert)
+
+            if triggered:
+                supabase.table("alerts").update({
+                    "last_fired_at": datetime.now(timezone.utc).isoformat(),
+                }).eq("id", alert["id"]).execute()
+                fired += 1
+                logger.info(
+                    "Alert fired: user={} asset={}/{} type={}",
+                    alert["user_id"], alert["asset_type"],
+                    alert["identifier"], alert["trigger_type"],
+                )
+
+        except Exception as e:
+            logger.error("alert evaluation error for alert {}: {}", alert.get("id"), e)
+            sentry_sdk.capture_exception(e)
+
+    summary = f"{fired}/{len(alerts)} alerts fired"
+    logger.info("evaluate_alerts complete — {}", summary)
+    return summary
+
+
+def _check_signal_fired(alert: dict) -> bool:
+    """True if a new signal fired for this asset since last_fired_at."""
+    since = alert.get("last_fired_at") or (
+        datetime.now(timezone.utc) - timedelta(minutes=31)
+    ).isoformat()
+    try:
+        result = (
+            supabase.table("signals")
+            .select("id")
+            .eq("asset_type", alert["asset_type"])
+            .eq("identifier", alert["identifier"])
+            .eq("is_backtest", False)
+            .gte("created_at", since)
+            .limit(1)
+            .execute()
+        )
+        return bool(result.data)
+    except Exception:
+        return False
+
+
+def _check_price_threshold(alert: dict) -> bool:
+    """True if current price crossed the alert threshold."""
+    threshold = alert.get("threshold")
+    if threshold is None:
+        return False
+    current = _get_current_price(alert["asset_type"], alert["identifier"])
+    if current is None:
+        return False
+
+    last_fired = alert.get("last_fired_at")
+    if last_fired:
+        # Don't re-fire if price hasn't moved back through threshold
+        pass
+
+    return current >= float(threshold)
+
+
+def _check_news_drop(alert: dict) -> bool:
+    """True if a new news item appeared in the last 31 minutes."""
+    since = (datetime.now(timezone.utc) - timedelta(minutes=31)).isoformat()
+    try:
+        result = (
+            supabase.table("news_items")
+            .select("id")
+            .eq("identifier", alert["identifier"])
+            .gte("created_at", since)
+            .limit(1)
+            .execute()
+        )
+        return bool(result.data)
+    except Exception:
+        return False

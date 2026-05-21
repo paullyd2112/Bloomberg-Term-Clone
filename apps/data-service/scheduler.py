@@ -14,6 +14,7 @@ from ingestion.prediction_markets import ingest_prediction_markets
 from ingestion.stocks import ingest_stocks
 from ingestion.crypto import ingest_crypto
 from scoring.engine import score_stocks, score_crypto, score_prediction_markets
+from scoring.resolver import resolve_outcomes, evaluate_alerts
 
 load_dotenv()
 
@@ -89,13 +90,13 @@ def job_send_briefing_emails():
     pass  # Prompt 10
 
 def job_resolve_outcomes():
-    pass  # Prompt 7
+    return resolve_outcomes()
 
 def job_refresh_asset_accuracy():
     pass  # Prompt 28
 
 def job_evaluate_alerts():
-    pass  # Prompt 7
+    return evaluate_alerts()
 
 
 # ─── Schedule ─────────────────────────────────────────────────────────────────
@@ -165,10 +166,13 @@ def health():
 
     jobs = [{"id": job.id, "next_run": str(job.next_run_time)} for job in scheduler.get_jobs()]
 
+    errors_24h = sum(1 for s in _job_state.values() if s.get("status") == "error")
+
     return jsonify({
         "status": "ok",
         "scheduler_running": scheduler.running,
         "signals_today": signals_today,
+        "errors_24h": errors_24h,
         "job_states": _job_state,
         "scheduled_jobs": jobs,
     })
