@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { clsx } from "clsx";
 import { formatDistanceToNow } from "date-fns";
+import ShareButton from "./ShareButton";
 
 export type Signal = {
   id: number;
@@ -115,11 +116,14 @@ export default function SignalCard({ signal }: { signal: Signal }) {
             </span>
           )}
         </div>
-        {signal.news_context && signal.news_context.length > 0 && (
-          <span className="text-xs text-zinc-600">
-            {signal.news_context.length} news item{signal.news_context.length > 1 ? "s" : ""}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {signal.news_context && signal.news_context.length > 0 && (
+            <span className="text-xs text-zinc-600">
+              {signal.news_context.length} news item{signal.news_context.length > 1 ? "s" : ""}
+            </span>
+          )}
+          <ShareButton signalId={signal.id} />
+        </div>
       </div>
     </div>
   );
