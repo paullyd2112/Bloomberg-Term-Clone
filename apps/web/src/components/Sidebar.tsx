@@ -24,13 +24,12 @@ export default function Sidebar({ tier }: { tier: Tier }) {
   const pathname = usePathname();
 
   return (
-    <aside className="w-14 lg:w-52 flex-shrink-0 bg-zinc-950 border-r border-zinc-800 flex flex-col">
+    <aside className="hidden lg:flex w-52 flex-shrink-0 bg-zinc-950 border-r border-zinc-800 flex-col">
       {/* Logo */}
       <div className="h-14 flex items-center px-4 border-b border-zinc-800">
-        <span className="hidden lg:block font-bold text-white tracking-tight">
+        <span className="font-bold text-white tracking-tight">
           plebs<span className="text-green-400">.io</span>
         </span>
-        <span className="lg:hidden font-bold text-green-400 text-lg">P</span>
       </div>
 
       {/* Nav */}
@@ -53,7 +52,7 @@ export default function Sidebar({ tier }: { tier: Tier }) {
               key={href}
               href={locked ? "/dashboard/upgrade" : href}
               className={clsx(
-                "flex items-center gap-3 px-3 lg:px-4 py-2.5 mx-1.5 rounded-md text-sm transition-colors",
+                "flex items-center gap-3 px-4 py-2.5 mx-1.5 rounded-md text-sm transition-colors",
                 active
                   ? "bg-zinc-800 text-white"
                   : "text-zinc-400 hover:text-white hover:bg-zinc-800/50",
@@ -61,9 +60,9 @@ export default function Sidebar({ tier }: { tier: Tier }) {
               )}
             >
               <span className="text-base flex-shrink-0">{icon}</span>
-              <span className="hidden lg:block truncate">{label}</span>
+              <span className="truncate">{label}</span>
               {locked && (
-                <span className="hidden lg:block ml-auto text-[10px] text-zinc-500 uppercase tracking-wide">
+                <span className="ml-auto text-[10px] text-zinc-500 uppercase tracking-wide">
                   {requiredTier}
                 </span>
               )}
@@ -74,7 +73,7 @@ export default function Sidebar({ tier }: { tier: Tier }) {
 
       {/* Tier badge */}
       <div className="p-3 border-t border-zinc-800">
-        <div className="hidden lg:flex items-center justify-between">
+        <div className="flex items-center justify-between">
           <span className="text-xs text-zinc-500 capitalize">{tier} plan</span>
           {tier === "free" && (
             <Link

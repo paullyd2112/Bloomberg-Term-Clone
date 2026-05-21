@@ -24,13 +24,13 @@ export default function SignalFeed({ signals }: { signals: Signal[] }) {
   return (
     <div className="space-y-4">
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-zinc-800 pb-0">
+      <div className="flex items-center gap-1 border-b border-zinc-800 pb-0 overflow-x-auto scrollbar-none">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={clsx(
-              "px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
+              "px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px flex-shrink-0",
               activeTab === tab.id
                 ? "border-green-500 text-white"
                 : "border-transparent text-zinc-400 hover:text-white",
