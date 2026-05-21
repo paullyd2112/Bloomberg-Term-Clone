@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from sentry_setup import init_sentry
 from ingestion.prediction_markets import ingest_prediction_markets
+from ingestion.stocks import ingest_stocks
 
 load_dotenv()
 
@@ -56,7 +57,7 @@ def job_score_prediction_markets():
     pass  # Prompt 6
 
 def job_ingest_stocks():
-    pass  # Prompt 4
+    return ingest_stocks()
 
 def job_score_stocks():
     pass  # Prompt 6
