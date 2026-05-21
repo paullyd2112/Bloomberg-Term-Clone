@@ -1,5 +1,5 @@
 """
-Stocks ingestion — OpenBB (yfinance) + Pandas-TA indicators + Finnhub news.
+Stocks ingestion — yfinance + Pandas-TA indicators + Finnhub news.
 Runs every 60 minutes weekdays 9am-5pm ET via scheduler.
 """
 
@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import pandas_ta as ta
+import yfinance as yf
 import httpx
 import sentry_sdk
 from loguru import logger
@@ -101,19 +102,23 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
 # ─── Price fetch ──────────────────────────────────────────────────────────────
 
 def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
-    """Fetch 90 days of daily OHLCV via OpenBB yfinance provider."""
+    """Fetch 90 days of daily OHLCV via yfinance."""
     try:
-        from openbb import obb
-        start = (datetime.now(timezone.utc) - timedelta(days=90)).strftime("%Y-%m-%d")
-        result = obb.equity.price.historical(
-            symbol=ticker,
-            start_date=start,
-            provider="yfinance",
+        df = yf.download(
+            ticker,
+            period="90d",
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
         )
-        df = result.to_df()
         if df.empty:
             logger.warning("{}: empty OHLCV response", ticker)
             return None
+        # yfinance returns MultiIndex columns when downloading single ticker
+        # with some versions — flatten if needed
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        df.columns = [c.lower() for c in df.columns]
         return df
     except Exception as e:
         logger.error("{}: OHLCV fetch failed — {}", ticker, e)
