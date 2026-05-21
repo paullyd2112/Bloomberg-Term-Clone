@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type WatchlistItem = {
@@ -44,7 +45,12 @@ export default function WatchlistRow({ item }: { item: WatchlistItem }) {
       {/* Asset info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-mono font-semibold text-white text-sm">{item.identifier}</span>
+          <Link
+            href={`/dashboard/asset/${item.asset_type}/${encodeURIComponent(item.identifier)}`}
+            className="font-mono font-semibold text-white text-sm hover:text-green-400 transition-colors"
+          >
+            {item.identifier}
+          </Link>
           <span className="text-xs text-zinc-600 capitalize">{item.asset_type}</span>
         </div>
       </div>

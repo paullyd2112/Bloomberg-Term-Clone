@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { clsx } from "clsx";
 import { formatDistanceToNow } from "date-fns";
 
@@ -54,9 +55,12 @@ export default function SignalCard({ signal }: { signal: Signal }) {
           >
             {signal.direction}
           </span>
-          <span className="font-mono font-semibold text-white truncate">
+          <Link
+            href={`/dashboard/asset/${signal.asset_type}/${encodeURIComponent(signal.identifier)}`}
+            className="font-mono font-semibold text-white hover:text-green-400 truncate transition-colors"
+          >
             {signal.identifier}
-          </span>
+          </Link>
           <span className="text-xs text-zinc-500 capitalize hidden sm:block">
             {signal.asset_type}
           </span>
