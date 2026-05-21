@@ -15,6 +15,8 @@ from ingestion.stocks import ingest_stocks
 from ingestion.crypto import ingest_crypto
 from scoring.engine import score_stocks, score_crypto, score_prediction_markets
 from scoring.resolver import resolve_outcomes, evaluate_alerts
+from briefing.generator import generate_morning_briefing
+from briefing.emailer import send_briefing_emails
 
 load_dotenv()
 
@@ -84,10 +86,10 @@ def job_ingest_congressional():
     pass  # Prompt 16
 
 def job_generate_morning_briefing():
-    pass  # Prompt 10
+    return generate_morning_briefing()
 
 def job_send_briefing_emails():
-    pass  # Prompt 10
+    return send_briefing_emails()
 
 def job_resolve_outcomes():
     return resolve_outcomes()
