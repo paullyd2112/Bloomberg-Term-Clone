@@ -13,6 +13,7 @@ from sentry_setup import init_sentry
 from ingestion.prediction_markets import ingest_prediction_markets
 from ingestion.stocks import ingest_stocks
 from ingestion.crypto import ingest_crypto
+from scoring.engine import score_stocks, score_crypto, score_prediction_markets
 
 load_dotenv()
 
@@ -55,19 +56,19 @@ def job_ingest_prediction_markets():
     return ingest_prediction_markets()
 
 def job_score_prediction_markets():
-    pass  # Prompt 6
+    return score_prediction_markets()
 
 def job_ingest_stocks():
     return ingest_stocks()
 
 def job_score_stocks():
-    pass  # Prompt 6
+    return score_stocks()
 
 def job_ingest_crypto():
     return ingest_crypto()
 
 def job_score_crypto():
-    pass  # Prompt 6
+    return score_crypto()
 
 def job_ingest_options_flow():
     pass  # Prompt 25
