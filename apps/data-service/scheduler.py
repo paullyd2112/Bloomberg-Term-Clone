@@ -1,6 +1,6 @@
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from loguru import logger
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -40,15 +40,15 @@ def _run_job(name: str, fn):
     """Wrapper: logs, times, captures errors, never crashes scheduler."""
     with sentry_sdk.start_transaction(op="job", name=name):
         logger.info("Job started: {}", name)
-        start = datetime.utcnow()
+        start = datetime.now(timezone.utc)
         try:
             result = fn()
-            elapsed = (datetime.utcnow() - start).total_seconds()
-            _job_state[name] = {"last_run": datetime.utcnow().isoformat(), "status": "ok", "elapsed_s": elapsed}
+            elapsed = (datetime.now(timezone.utc) - start).total_seconds()
+            _job_state[name] = {"last_run": datetime.now(timezone.utc).isoformat(), "status": "ok", "elapsed_s": elapsed}
             logger.info("Job completed: {} ({:.1f}s) — {}", name, elapsed, result)
         except Exception as e:
-            elapsed = (datetime.utcnow() - start).total_seconds()
-            _job_state[name] = {"last_run": datetime.utcnow().isoformat(), "status": "error", "error": str(e)}
+            elapsed = (datetime.now(timezone.utc) - start).total_seconds()
+            _job_state[name] = {"last_run": datetime.now(timezone.utc).isoformat(), "status": "error", "error": str(e)}
             sentry_sdk.capture_exception(e)
             logger.error("Job failed: {} — {}", name, e)
 
@@ -160,7 +160,7 @@ def health():
         signals_today = (
             supabase.table("signals")
             .select("id", count="exact")
-            .gte("created_at", datetime.utcnow().date().isoformat())
+            .gte("created_at", datetime.now(timezone.utc).date().isoformat())
             .execute()
         ).count or 0
     except Exception:

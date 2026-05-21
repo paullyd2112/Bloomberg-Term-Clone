@@ -26,6 +26,6 @@ export function getPriceId(plan: PlanKey): string {
   return process.env[PLANS[plan].priceEnvKey]!;
 }
 
-export function getTierForPlan(plan: PlanKey): "pro" | "elite" {
-  return PLANS[plan].tier;
+export function getTierForPlan(plan: string): "pro" | "elite" {
+  return (PLANS[plan as PlanKey]?.tier) ?? "pro";
 }

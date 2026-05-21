@@ -3,6 +3,7 @@ Briefing emailer — runs weekdays at 8:45am ET (15 min after generation).
 Sends today's briefing to all Pro and Elite users who have confirmed emails.
 """
 
+import html
 import os
 from datetime import date, datetime, timezone
 
@@ -76,8 +77,8 @@ def _get_subscriber_emails() -> list[str]:
 
 def _render_html(briefing: dict) -> str:
     content  = briefing.get("content_json") or {}
-    headline = briefing.get("headline", "")
-    tone     = briefing.get("day_tone", "")
+    headline = html.escape(briefing.get("headline", ""))
+    tone     = html.escape(briefing.get("day_tone", ""))
     today    = date.today().strftime("%A, %B %-d")
 
     tone_color = {
@@ -89,26 +90,28 @@ def _render_html(briefing: dict) -> str:
 
     top_trades_html = ""
     for trade in content.get("top_trades", []):
-        direction = trade.get("direction", "")
-        dir_color = "#22c55e" if direction in ("BUY", "YES") else "#ef4444" if direction in ("SELL", "NO") else "#6b7280"
+        direction  = html.escape(trade.get("direction", ""))
+        identifier = html.escape(trade.get("identifier", ""))
+        one_liner  = html.escape(trade.get("one_liner", ""))
+        dir_color  = "#22c55e" if direction in ("BUY", "YES") else "#ef4444" if direction in ("SELL", "NO") else "#6b7280"
         top_trades_html += f"""
         <tr>
           <td style="padding:8px 12px;border-bottom:1px solid #27272a;">
-            <span style="font-family:monospace;font-weight:700;color:#fff;">{trade.get('identifier','')}</span>
+            <span style="font-family:monospace;font-weight:700;color:#fff;">{identifier}</span>
             &nbsp;
             <span style="background:{dir_color}22;color:{dir_color};border:1px solid {dir_color}55;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">{direction}</span>
             &nbsp;
-            <span style="color:#a1a1aa;font-size:12px;">{trade.get('confidence',0)}%</span>
+            <span style="color:#a1a1aa;font-size:12px;">{trade.get('confidence', 0)}%</span>
           </td>
-          <td style="padding:8px 12px;border-bottom:1px solid #27272a;color:#d4d4d8;font-size:13px;">{trade.get('one_liner','')}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #27272a;color:#d4d4d8;font-size:13px;">{one_liner}</td>
         </tr>"""
 
     watch_html = " &nbsp;·&nbsp; ".join(
-        f'<span style="font-family:monospace;color:#22c55e;">{t}</span>'
+        f'<span style="font-family:monospace;color:#22c55e;">{html.escape(t)}</span>'
         for t in content.get("watch_today", [])
     )
 
-    pred_edge = content.get("prediction_market_edge", "")
+    pred_edge    = html.escape(content.get("prediction_market_edge", ""))
     pred_section = ""
     if pred_edge:
         pred_section = f"""
@@ -140,7 +143,7 @@ def _render_html(briefing: dict) -> str:
     <!-- Market overview -->
     <div style="margin:20px 0;padding:16px;background:#18181b;border-radius:8px;border:1px solid #27272a;">
       <div style="font-size:11px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Market overview</div>
-      <div style="color:#d4d4d8;font-size:14px;line-height:1.6;">{content.get('market_overview','')}</div>
+      <div style="color:#d4d4d8;font-size:14px;line-height:1.6;">{html.escape(content.get('market_overview',''))}</div>
     </div>
 
     <!-- Top trades -->
@@ -154,7 +157,7 @@ def _render_html(briefing: dict) -> str:
     <!-- Macro -->
     <div style="margin:20px 0;padding:16px;background:#18181b;border-radius:8px;border:1px solid #27272a;">
       <div style="font-size:11px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Macro context</div>
-      <div style="color:#d4d4d8;font-size:14px;line-height:1.6;">{content.get('macro_context','')}</div>
+      <div style="color:#d4d4d8;font-size:14px;line-height:1.6;">{html.escape(content.get('macro_context',''))}</div>
     </div>
 
     {pred_section}
@@ -168,7 +171,7 @@ def _render_html(briefing: dict) -> str:
     <!-- Risk note -->
     <div style="margin:20px 0;padding:16px;background:#18181b;border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;">
       <div style="font-size:11px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Risk note</div>
-      <div style="color:#d4d4d8;font-size:14px;">{content.get('risk_note','')}</div>
+      <div style="color:#d4d4d8;font-size:14px;">{html.escape(content.get('risk_note',''))}</div>
     </div>
 
     <!-- CTA -->

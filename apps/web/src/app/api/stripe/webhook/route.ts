@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { getStripe, getTierForPlan, type PlanKey } from "@/lib/stripe";
+import { getStripe, getTierForPlan } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -55,8 +55,8 @@ export async function POST(req: Request) {
         const userId = sub.metadata?.supabase_user_id;
         if (!userId) break;
 
-        const plan     = (sub.metadata?.plan ?? "") as PlanKey;
-        const tier     = getTierForPlan(plan);
+        const plan = sub.metadata?.plan ?? "";
+        const tier = getTierForPlan(plan);
         const interval = (sub.items.data[0]?.price.recurring?.interval ?? null) as string | null;
         const active   = ["active", "trialing"].includes(sub.status);
 
