@@ -13,6 +13,7 @@ from sentry_setup import init_sentry
 from ingestion.prediction_markets import ingest_prediction_markets
 from ingestion.stocks import ingest_stocks
 from ingestion.crypto import ingest_crypto
+from ingestion.congressional import ingest_congressional
 from scoring.engine import score_stocks, score_crypto, score_prediction_markets
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from briefing.generator import generate_morning_briefing
@@ -83,7 +84,7 @@ def job_ingest_earnings():
     pass  # Prompt 27
 
 def job_ingest_congressional():
-    pass  # Prompt 16
+    return ingest_congressional()
 
 def job_generate_morning_briefing():
     return generate_morning_briefing()
