@@ -42,7 +42,7 @@ export function UpgradeModal({ onClose }: UpgradeModalProps) {
         <div className="flex items-center justify-between p-5 border-b border-[#1e2433]">
           <div className="flex items-center gap-2">
             <Zap size={16} className="text-[#00d4aa]" fill="currentColor" />
-            <span className="font-bold text-[#e2e8f0]">Flow<span className="text-[#00d4aa]">Desk</span> Pro</span>
+            <span className="font-bold text-[#e2e8f0]">Plebs<span className="text-[#00d4aa]">.io</span> Pro</span>
           </div>
           <button onClick={onClose} className="p-1 rounded text-[#64748b] hover:text-[#e2e8f0] hover:bg-[#1e2433]">
             <X size={14} />

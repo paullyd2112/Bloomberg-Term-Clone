@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FlowDesk — Market Intelligence for Retail Traders",
+  title: "Plebs.io — Market Intelligence for Retail Traders",
   description: "Real-time options flow, whale trades, and prediction market signals — curated for retail traders.",
 };
 

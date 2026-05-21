@@ -30,7 +30,7 @@ export function TopNav({ onUpgradeClick }: TopNavProps) {
         <div className="flex items-center gap-1.5">
           <Zap size={16} className="text-[#00d4aa]" fill="currentColor" />
           <span className="text-sm font-bold tracking-tight text-[#e2e8f0]">
-            Flow<span className="text-[#00d4aa]">Desk</span>
+            Plebs<span className="text-[#00d4aa]">.io</span>
           </span>
         </div>
 
