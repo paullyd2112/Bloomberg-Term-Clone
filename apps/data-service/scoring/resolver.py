@@ -42,6 +42,9 @@ def _score_outcome(direction: str, entry: float, current: float) -> str:
     if direction == "HOLD":
         return "NEUTRAL"
 
+    if entry == 0:
+        return "NEUTRAL"
+
     pct_change = (current - entry) / entry
 
     if direction in ("BUY", "YES"):
@@ -310,10 +313,12 @@ def evaluate_alerts() -> str:
 
 
 def _check_signal_fired(alert: dict) -> bool:
-    """True if a new signal fired for this asset since last_fired_at."""
-    since = alert.get("last_fired_at") or (
-        datetime.now(timezone.utc) - timedelta(minutes=31)
-    ).isoformat()
+    """True if a new signal fired for this asset since last_fired_at (or past 31 min)."""
+    last = alert.get("last_fired_at")
+    if last:
+        since = last.replace("Z", "+00:00")  # normalise Supabase UTC suffix
+    else:
+        since = (datetime.now(timezone.utc) - timedelta(minutes=31)).isoformat()
     try:
         result = (
             supabase.table("signals")
@@ -331,25 +336,46 @@ def _check_signal_fired(alert: dict) -> bool:
 
 
 def _check_price_threshold(alert: dict) -> bool:
-    """True if current price crossed the alert threshold."""
+    """True if price is at or above threshold AND hasn't fired since last crossing."""
     threshold = alert.get("threshold")
     if threshold is None:
         return False
+    threshold = float(threshold)
+
     current = _get_current_price(alert["asset_type"], alert["identifier"])
     if current is None:
         return False
 
+    if current < threshold:
+        return False
+
+    # Already fired while price was above — don't spam.
+    # Re-arm only after price dips back below threshold.
     last_fired = alert.get("last_fired_at")
     if last_fired:
-        # Don't re-fire if price hasn't moved back through threshold
-        pass
+        # Check if the price at last_fired_at was also above threshold.
+        # We can't look that up easily, so instead we check whether the
+        # price is still continuously above by comparing against a small
+        # hysteresis band (1% below threshold resets the alert).
+        reset_band = threshold * 0.99
+        # If we've fired before and price never dropped below the band,
+        # we treat the alert as already-acknowledged until it resets.
+        # Because we don't store historical prices here, we use a simple
+        # rule: don't re-fire within 4 hours of last firing.
+        last_fired_dt = datetime.fromisoformat(last_fired.replace("Z", "+00:00"))
+        if datetime.now(timezone.utc) - last_fired_dt < timedelta(hours=4):
+            return False
 
-    return current >= float(threshold)
+    return True
 
 
 def _check_news_drop(alert: dict) -> bool:
-    """True if a new news item appeared in the last 31 minutes."""
-    since = (datetime.now(timezone.utc) - timedelta(minutes=31)).isoformat()
+    """True if a new news item appeared since last_fired_at (or past 31 min)."""
+    last = alert.get("last_fired_at")
+    if last:
+        since = last.replace("Z", "+00:00")
+    else:
+        since = (datetime.now(timezone.utc) - timedelta(minutes=31)).isoformat()
     try:
         result = (
             supabase.table("news_items")

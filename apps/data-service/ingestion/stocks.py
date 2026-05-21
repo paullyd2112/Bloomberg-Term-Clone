@@ -72,10 +72,14 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
     # Resolve Pandas-TA column names (they include params in name)
     def _col(prefix: str) -> float | None:
         match = [c for c in df.columns if c.startswith(prefix.lower())]
-        return float(latest[match[0]]) if match else None
+        if not match:
+            return None
+        val = latest[match[0]]
+        return float(val) if pd.notna(val) else None
 
-    volume_sma = latest.get("volume_sma_20")
-    vol_ratio  = (float(latest["volume"]) / float(volume_sma)) if volume_sma else None
+    volume_sma_raw = latest.get("volume_sma_20")
+    volume_sma = float(volume_sma_raw) if pd.notna(volume_sma_raw) and volume_sma_raw else None
+    vol_ratio  = (float(latest["volume"]) / volume_sma) if volume_sma else None
 
     return {
         "rsi_14":              _col("rsi_"),

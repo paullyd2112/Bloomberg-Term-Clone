@@ -159,9 +159,9 @@ def _get_earnings_context(ticker: str) -> dict | None:
             return None
         e = result.data[0]
         report_dt = datetime.fromisoformat(str(e["report_date"]))
-        hours_until = int((report_dt - datetime.now(timezone.utc).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )).total_seconds() / 3600)
+        # report_date is a date — treat as start of that day UTC
+        report_dt = report_dt.replace(tzinfo=timezone.utc)
+        hours_until = int((report_dt - datetime.now(timezone.utc)).total_seconds() / 3600)
         return {
             "hours_until":             max(hours_until, 0),
             "report_time":             e.get("report_time", ""),
@@ -269,9 +269,15 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
         logger.warning("{}/{}: no price data found — skipping", asset_type, identifier)
         return None
 
-    meta         = price_row.get("metadata") or {}
+    meta          = price_row.get("metadata") or {}
     current_price = price_row.get("price")
     news          = _get_recent_news(asset_type, identifier)
+
+    # Without a valid price there is nothing meaningful to score
+    if current_price is None:
+        logger.warning("{}/{}: price is None — skipping", asset_type, identifier)
+        return None
+    current_price = float(current_price)
 
     # ── Build asset-specific context & call Claude ──────────────────────────
 
