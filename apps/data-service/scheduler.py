@@ -10,6 +10,7 @@ from flask import Flask, jsonify
 from dotenv import load_dotenv
 
 from sentry_setup import init_sentry
+from ingestion.prediction_markets import ingest_prediction_markets
 
 load_dotenv()
 
@@ -49,7 +50,7 @@ def _run_job(name: str, fn):
 # ─── Job stubs (bodies filled in subsequent prompts) ─────────────────────────
 
 def job_ingest_prediction_markets():
-    pass  # Prompt 3
+    return ingest_prediction_markets()
 
 def job_score_prediction_markets():
     pass  # Prompt 6
