@@ -35,6 +35,73 @@ async function updateUserTier(
     .eq("id", supabaseUserId);
 }
 
+// Credit amount in cents ($50 = one free Pro month)
+const REFERRAL_CREDIT_CENTS = 5000;
+
+async function _processReferralReward(referredUserId: string) {
+  try {
+    const admin = createAdminClient();
+
+    // Check if there's an unconverted referral for this user
+    const { data: referral } = await (admin as any)
+      .from("referrals")
+      .select("id, referrer_id")
+      .eq("referred_id", referredUserId)
+      .eq("status", "pending")
+      .single();
+
+    if (!referral) return;
+
+    // Look up referrer's Stripe customer ID
+    const { data: referrerProfile } = await (admin as any)
+      .from("profiles")
+      .select("stripe_customer_id, tier")
+      .eq("id", referral.referrer_id)
+      .single();
+
+    let customerId = referrerProfile?.stripe_customer_id as string | undefined;
+
+    // If referrer has no Stripe customer yet, create one so the credit is held
+    if (!customerId) {
+      const { data: authUser } = await admin.auth.admin.getUserById(referral.referrer_id);
+      if (authUser?.user?.email) {
+        const customer = await getStripe().customers.create({
+          email:    authUser.user.email,
+          metadata: { supabase_user_id: referral.referrer_id },
+        });
+        customerId = customer.id;
+        await (admin as any)
+          .from("profiles")
+          .update({ stripe_customer_id: customerId })
+          .eq("id", referral.referrer_id);
+      }
+    }
+
+    // Apply Stripe balance credit (negative = credit on account)
+    if (customerId) {
+      await getStripe().customers.createBalanceTransaction(customerId, {
+        amount:      -REFERRAL_CREDIT_CENTS,
+        currency:    "usd",
+        description: "Referral reward — $50 credit",
+      });
+    }
+
+    // Mark referral as rewarded
+    await (admin as any)
+      .from("referrals")
+      .update({
+        status:            "rewarded",
+        reward_granted_at: new Date().toISOString(),
+      })
+      .eq("id", referral.id);
+
+    console.log(`Referral rewarded: ${referral.id}, credit applied to ${customerId}`);
+  } catch (err) {
+    // Non-fatal — log but don't fail the webhook
+    console.error("Referral reward error:", err);
+  }
+}
+
 export async function POST(req: Request) {
   const rawBody = await getRawBody(req);
   const sig     = req.headers.get("stripe-signature") ?? "";
@@ -63,29 +130,9 @@ export async function POST(req: Request) {
 
         await updateUserTier(userId, active ? tier : "free", sub.id, interval);
 
-        // Convert any pending referral when user first goes active/trialing
+        // Reward referrer automatically when referred user goes active/trialing
         if (active) {
-          try {
-            const admin = createAdminClient();
-            const { data: profile } = await (admin as any)
-              .from("profiles")
-              .select("referred_by")
-              .eq("id", userId)
-              .single();
-
-            if (profile?.referred_by) {
-              await (admin as any)
-                .from("referrals")
-                .update({
-                  status:            "converted",
-                  reward_granted_at: new Date().toISOString(),
-                })
-                .eq("referred_id", userId)
-                .eq("status",      "pending");
-            }
-          } catch {
-            // Non-fatal
-          }
+          await _processReferralReward(userId);
         }
         break;
       }
