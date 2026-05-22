@@ -7,6 +7,7 @@ on:
 jobs:
   e2e:
     name: Playwright E2E
+    if: vars.PLAYWRIGHT_BASE_URL != ''
     runs-on: ubuntu-latest
     defaults:
       run:
