@@ -19,6 +19,7 @@ from ingestion.short_interest import ingest_short_interest
 from ingestion.earnings import ingest_earnings
 from scoring.engine import score_stocks, score_crypto, score_prediction_markets
 from scoring.resolver import resolve_outcomes, evaluate_alerts
+from scoring.accuracy import refresh_asset_accuracy
 from briefing.generator import generate_morning_briefing
 from briefing.emailer import send_briefing_emails
 
@@ -99,7 +100,7 @@ def job_resolve_outcomes():
     return resolve_outcomes()
 
 def job_refresh_asset_accuracy():
-    pass  # Prompt 28
+    return refresh_asset_accuracy()
 
 def job_evaluate_alerts():
     return evaluate_alerts()
