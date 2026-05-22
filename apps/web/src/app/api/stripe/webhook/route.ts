@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe, getTierForPlan } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,31 @@ export async function POST(req: Request) {
         const active   = ["active", "trialing"].includes(sub.status);
 
         await updateUserTier(userId, active ? tier : "free", sub.id, interval);
+
+        // Convert any pending referral when user first goes active/trialing
+        if (active) {
+          try {
+            const admin = createAdminClient();
+            const { data: profile } = await (admin as any)
+              .from("profiles")
+              .select("referred_by")
+              .eq("id", userId)
+              .single();
+
+            if (profile?.referred_by) {
+              await (admin as any)
+                .from("referrals")
+                .update({
+                  status:            "converted",
+                  reward_granted_at: new Date().toISOString(),
+                })
+                .eq("referred_id", userId)
+                .eq("status",      "pending");
+            }
+          } catch {
+            // Non-fatal
+          }
+        }
         break;
       }
 
