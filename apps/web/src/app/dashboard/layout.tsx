@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getUser, getUserTier } from "@/lib/user";
+import { getUser, getUserTier, getUserProfile } from "@/lib/user";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import BottomNav from "@/components/BottomNav";
@@ -13,11 +13,12 @@ export default async function DashboardLayout({
   if (!user) redirect("/login");
 
   const tier = await getUserTier();
+  const profile = await getUserProfile();
 
   return (
     <div className="flex h-screen bg-black text-white overflow-hidden">
       {/* Sidebar — desktop only */}
-      <Sidebar tier={tier} />
+      <Sidebar tier={tier} billingInterval={profile?.billing_interval} />
 
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar user={user} tier={tier} />

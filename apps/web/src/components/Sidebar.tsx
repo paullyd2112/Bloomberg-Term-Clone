@@ -22,8 +22,9 @@ const NAV: {
   { href: "/dashboard/pleby",      label: "Pleby AI",      icon: "🤖", tier: "elite" },
 ];
 
-export default function Sidebar({ tier }: { tier: Tier }) {
+export default function Sidebar({ tier, billingInterval }: { tier: Tier; billingInterval?: string | null }) {
   const pathname = usePathname();
+  const displayLabel = billingInterval === "lifetime" ? "Lifetime Pro" : `${tier} plan`;
 
   return (
     <aside className="hidden lg:flex w-52 flex-shrink-0 bg-zinc-950 border-r border-zinc-800 flex-col">
@@ -76,7 +77,7 @@ export default function Sidebar({ tier }: { tier: Tier }) {
       {/* Tier badge */}
       <div className="p-3 border-t border-zinc-800">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-zinc-500 capitalize">{tier} plan</span>
+          <span className="text-xs text-zinc-500 capitalize">{displayLabel}</span>
           {tier === "free" && (
             <Link
               href="/dashboard/upgrade"

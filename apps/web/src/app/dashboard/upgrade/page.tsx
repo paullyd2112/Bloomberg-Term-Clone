@@ -1,10 +1,13 @@
-import { getUserTier } from "@/lib/user";
+import { getUserTier, getUserProfile } from "@/lib/user";
 import { TIER_FEATURES } from "@/lib/tier";
 import UpgradeButtons from "./UpgradeButtons";
+import LifetimeButton from "./LifetimeButton";
 import BillingPortalButton from "./BillingPortalButton";
 
 export default async function UpgradePage() {
   const tier = await getUserTier();
+  const profile = await getUserProfile();
+  const isLifetime = profile?.billing_interval === "lifetime";
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-8">
@@ -18,24 +21,59 @@ export default async function UpgradePage() {
       </div>
 
       {/* Pricing grid */}
-      <div className="grid gap-4 md:grid-cols-2 max-w-2xl">
-        <PlanCard
-          name="Pro"
-          price={{ monthly: 50, annual: 480 }}
-          description="Serious retail traders"
-          features={TIER_FEATURES.pro}
-          current={tier === "pro"}
-          tier="pro"
-          highlighted
-        />
-        <PlanCard
-          name="Elite"
-          price={{ monthly: 99, annual: 948 }}
-          description="For the obsessed"
-          features={TIER_FEATURES.elite}
-          current={tier === "elite"}
-          tier="elite"
-        />
+      <div className="space-y-4">
+        {/* Lifetime offer */}
+        <div className="relative bg-gradient-to-br from-green-900/30 to-zinc-900 rounded-xl border border-green-700 p-6 flex flex-col gap-4">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-black text-xs font-bold px-3 py-0.5 rounded-full">
+            Best value
+          </div>
+          <div>
+            <div className="text-base font-bold text-white">Lifetime Pro</div>
+            <div className="text-xs text-zinc-400 mt-0.5">One-time payment, forever access</div>
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-white tabular-nums">$299</div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              Pays for itself in ~6 months
+            </div>
+          </div>
+          <ul className="space-y-1.5 flex-1">
+            {TIER_FEATURES.pro.map((f) => (
+              <li key={f} className="flex items-start gap-2 text-xs text-zinc-300">
+                <span className="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+                {f}
+              </li>
+            ))}
+          </ul>
+          {isLifetime ? (
+            <div className="text-center text-xs font-semibold text-zinc-500 border border-zinc-700 rounded-lg py-2">
+              Your plan
+            </div>
+          ) : (
+            <LifetimeButton />
+          )}
+        </div>
+
+        {/* Monthly/Annual plans */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <PlanCard
+            name="Pro"
+            price={{ monthly: 50, annual: 480 }}
+            description="Serious retail traders"
+            features={TIER_FEATURES.pro}
+            current={tier === "pro"}
+            tier="pro"
+            highlighted
+          />
+          <PlanCard
+            name="Elite"
+            price={{ monthly: 99, annual: 948 }}
+            description="For the obsessed"
+            features={TIER_FEATURES.elite}
+            current={tier === "elite"}
+            tier="elite"
+          />
+        </div>
       </div>
 
       {/* Billing portal for paying users */}

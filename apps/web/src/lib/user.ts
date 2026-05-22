@@ -27,6 +27,22 @@ export async function getUserTier(): Promise<Tier> {
   return (data?.tier as Tier) ?? "free";
 }
 
+export async function getUserProfile() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("tier, billing_interval")
+    .eq("id", user.id)
+    .single();
+
+  return data;
+}
+
 export async function requireUser() {
   const user = await getUser();
   if (!user) throw new Error("Unauthenticated");

@@ -198,10 +198,29 @@ function Features() {
 
 const PLANS = [
   {
+    name:     "Lifetime Pro",
+    price:    "$299",
+    period:   "once",
+    highlight: true,
+    cta:      "Get lifetime access",
+    href:     "/dashboard/upgrade",
+    features: [
+      "Real-time signals — stocks, crypto & predictions",
+      "Unlimited watchlist",
+      "Full options flow + dark pool",
+      "Morning briefing email (8:45am ET)",
+      "Portfolio tracker",
+      "Price & signal alerts",
+      "Congressional trades tracker",
+      "Per-asset AI accuracy tracking",
+      "Forever access",
+    ],
+  },
+  {
     name:     "Pro",
     price:    "$50",
     period:   "/mo",
-    highlight: true,
+    highlight: false,
     cta:      "Start 7-day trial",
     href:     "/signup",
     features: [
@@ -241,7 +260,7 @@ function Pricing() {
           <p className="text-zinc-500 mt-3">Start free. Upgrade when the signals pay for themselves.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {PLANS.map((plan) => (
             <div
               key={plan.name}

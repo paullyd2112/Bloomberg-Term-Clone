@@ -18,6 +18,7 @@ export const PLANS = {
   pro_annual:    { priceEnvKey: "STRIPE_PRICE_ANNUAL",        tier: "pro"   as const },
   elite_monthly: { priceEnvKey: "STRIPE_PRICE_ELITE_MONTHLY", tier: "elite" as const },
   elite_annual:  { priceEnvKey: "STRIPE_PRICE_ELITE_ANNUAL",  tier: "elite" as const },
+  lifetime_pro:  { priceEnvKey: "STRIPE_PRICE_LIFETIME",      tier: "pro"   as const },
 } as const;
 
 export type PlanKey = keyof typeof PLANS;

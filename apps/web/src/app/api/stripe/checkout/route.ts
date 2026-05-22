@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/user";
 import { createClient } from "@/lib/supabase/server";
 
 const Body = z.object({
-  plan: z.enum(["pro_monthly", "pro_quarterly", "pro_annual", "elite_monthly", "elite_annual"]),
+  plan: z.enum(["pro_monthly", "pro_quarterly", "pro_annual", "elite_monthly", "elite_annual", "lifetime_pro"]),
 });
 
 export async function POST(req: Request) {
@@ -50,19 +50,29 @@ export async function POST(req: Request) {
     }
   }
 
-  const session = await stripe.checkout.sessions.create({
+  const isLifetime = plan === "lifetime_pro";
+  const sessionConfig: Parameters<typeof stripe.checkout.sessions.create>[0] = {
     customer:             customerId,
-    mode:                 "subscription",
+    mode:                 isLifetime ? "payment" : "subscription",
     payment_method_types: ["card"],
     line_items:           [{ price: priceId, quantity: 1 }],
-    subscription_data: {
-      trial_period_days: 7,
-      metadata: { supabase_user_id: user.id, plan },
-    },
     success_url:           `${appUrl}/dashboard?upgrade=success`,
     cancel_url:            `${appUrl}/dashboard/upgrade?canceled=1`,
     allow_promotion_codes: true,
-  });
+  };
+
+  if (!isLifetime) {
+    sessionConfig.subscription_data = {
+      trial_period_days: 7,
+      metadata: { supabase_user_id: user.id, plan },
+    };
+  } else {
+    sessionConfig.payment_intent_data = {
+      metadata: { supabase_user_id: user.id, plan },
+    };
+  }
+
+  const session = await stripe.checkout.sessions.create(sessionConfig);
 
   return NextResponse.json({ url: session.url });
 }

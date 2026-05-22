@@ -117,6 +117,20 @@ export async function POST(req: Request) {
 
   try {
     switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const userId = session.metadata?.supabase_user_id;
+        const plan   = session.metadata?.plan;
+
+        if (!userId) break;
+        if (session.mode !== "payment") break;
+
+        const tier = getTierForPlan(plan ?? "");
+        await updateUserTier(userId, tier, null, "lifetime");
+        await _processReferralReward(userId);
+        break;
+      }
+
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const sub    = event.data.object as Stripe.Subscription;

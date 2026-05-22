@@ -22,6 +22,12 @@
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- `STRIPE_PRICE_MONTHLY` (Pro monthly price ID)
+- `STRIPE_PRICE_QUARTERLY` (Pro quarterly price ID)
+- `STRIPE_PRICE_ANNUAL` (Pro annual price ID)
+- `STRIPE_PRICE_ELITE_MONTHLY` (Elite monthly price ID)
+- `STRIPE_PRICE_ELITE_ANNUAL` (Elite annual price ID)
+- `STRIPE_PRICE_LIFETIME` (Lifetime Pro price ID — one-time $299 charge)
 - `ANTHROPIC_API_KEY`
 - `ADMIN_EMAILS` (comma-separated list of admin email addresses)
 
