@@ -1,47 +1,33 @@
 export type Tier = "free" | "pro" | "elite";
 
-export const SIGNAL_DELAY_MINUTES = 30;
+export const TRIAL_DAYS = 7;
 
 export const WATCHLIST_LIMIT: Record<Tier, number> = {
-  free:  5,
+  free:  0,
   pro:   Infinity,
   elite: Infinity,
 };
 
-export const TIER_FEATURES: Record<Tier, string[]> = {
-  free: [
-    "Signals with 30-minute delay",
-    "5-asset watchlist",
-    "Basic market overview",
-    "Congressional trades tracker",
-    "Public signal history",
-  ],
+// free tier is not a marketed plan — it's the expired/unsubscribed state
+export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
   pro: [
-    "Real-time signals — all markets",
+    "Real-time signals — stocks, crypto & predictions",
     "Unlimited watchlist",
     "Full options flow + dark pool",
-    "Morning briefing email",
+    "Morning briefing email (8:45am ET)",
     "Portfolio tracker",
-    "Alerts & notifications",
-    "Cross-market correlation",
+    "Price & signal alerts",
+    "Congressional trades tracker",
     "Per-asset AI accuracy tracking",
   ],
   elite: [
     "Everything in Pro",
     "Pleby — your AI trading analyst",
     "Ask Pleby about any asset anytime",
-    "Pleby morning briefing personalisation",
+    "Personalised morning briefing",
     "Priority signal delivery",
   ],
 };
-
-export function getSignalDelayFilter(tier: Tier) {
-  if (tier === "free") {
-    const cutoff = new Date(Date.now() - SIGNAL_DELAY_MINUTES * 60 * 1000);
-    return cutoff.toISOString();
-  }
-  return null; // no delay for pro/elite
-}
 
 export function canAccessFeature(tier: Tier, feature: "pleby" | "portfolio" | "alerts" | "real_time"): boolean {
   if (feature === "pleby")     return tier === "elite";
@@ -49,4 +35,8 @@ export function canAccessFeature(tier: Tier, feature: "pleby" | "portfolio" | "a
   if (feature === "alerts")    return tier === "pro" || tier === "elite";
   if (feature === "real_time") return tier === "pro" || tier === "elite";
   return false;
+}
+
+export function isPaidTier(tier: Tier): boolean {
+  return tier === "pro" || tier === "elite";
 }
