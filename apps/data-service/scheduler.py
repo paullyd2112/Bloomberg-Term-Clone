@@ -16,6 +16,7 @@ from ingestion.crypto import ingest_crypto
 from ingestion.congressional import ingest_congressional
 from ingestion.options_flow import ingest_options_flow
 from ingestion.short_interest import ingest_short_interest
+from ingestion.earnings import ingest_earnings
 from scoring.engine import score_stocks, score_crypto, score_prediction_markets
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from briefing.generator import generate_morning_briefing
@@ -83,7 +84,7 @@ def job_ingest_short_interest():
     return ingest_short_interest()
 
 def job_ingest_earnings():
-    pass  # Prompt 27
+    return ingest_earnings()
 
 def job_ingest_congressional():
     return ingest_congressional()
