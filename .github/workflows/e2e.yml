@@ -1,8 +1,6 @@
 name: E2E Tests
 
 on:
-  push:
-    branches: ["claude/market-intelligence-platform-2Idlc", "main"]
   pull_request:
     branches: ["main"]
 
