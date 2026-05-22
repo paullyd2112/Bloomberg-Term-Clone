@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserTier } from "@/lib/user";
 import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
+import SubscribeGate from "@/components/ui/SubscribeGate";
 
 export const revalidate = 60;
 
@@ -53,6 +54,10 @@ export default async function DashboardPage() {
   const winCount  = signals.filter((s) => s.outcome === "WIN").length;
   const lossCount = signals.filter((s) => s.outcome === "LOSS").length;
   const pending   = signals.filter((s) => s.outcome === "PENDING").length;
+
+  if (tier === "free") {
+    return <SubscribeGate />;
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">

@@ -188,19 +188,20 @@ export default function OnboardingPage() {
             <div>
               <h1 className="text-2xl font-bold text-white">You're all set!</h1>
               <p className="text-zinc-400 text-sm mt-2">
-                Live signals are loading. Your 7-day free trial is active.
+                Your 7-day trial is active. Full access starts now.
               </p>
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 text-left space-y-2">
               <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                What's on free tier
+                Included in your trial
               </p>
               {[
-                "Signals with 30-min delay",
-                "5-asset watchlist",
+                "Real-time signals — stocks, crypto & predictions",
+                "Unlimited watchlist",
+                "Full options flow + dark pool",
+                "Morning briefing email (8:45am ET)",
                 "Congressional trades tracker",
-                "Shareable signal links",
               ].map((f) => (
                 <div key={f} className="flex items-center gap-2 text-sm text-zinc-300">
                   <span className="text-green-400">✓</span>
@@ -220,7 +221,7 @@ export default function OnboardingPage() {
                 href="/dashboard/upgrade"
                 className="block text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
               >
-                Upgrade to Pro for real-time signals
+                View plans &amp; pricing
               </Link>
             </div>
           </div>

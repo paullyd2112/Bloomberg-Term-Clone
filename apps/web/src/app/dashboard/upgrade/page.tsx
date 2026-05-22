@@ -11,21 +11,14 @@ export default async function UpgradePage() {
       <div>
         <h1 className="text-xl font-bold text-white">Plans &amp; Billing</h1>
         <p className="text-sm text-zinc-400 mt-1">
-          You&apos;re on the <span className="text-white capitalize font-medium">{tier}</span> plan.
-          {tier === "free" && " Upgrade for real-time signals and the full suite."}
+          {tier === "free"
+            ? "Your trial has ended. Subscribe to keep access."
+            : <>You&apos;re on the <span className="text-white capitalize font-medium">{tier}</span> plan.</>}
         </p>
       </div>
 
       {/* Pricing grid */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <PlanCard
-          name="Free"
-          price={null}
-          description="Explore the platform"
-          features={TIER_FEATURES.free}
-          current={tier === "free"}
-          tier="free"
-        />
+      <div className="grid gap-4 md:grid-cols-2 max-w-2xl">
         <PlanCard
           name="Pro"
           price={{ monthly: 50, annual: 480 }}
@@ -71,11 +64,11 @@ function PlanCard({
   highlighted = false,
 }: {
   name: string;
-  price: { monthly: number; annual: number } | null;
+  price: { monthly: number; annual: number };
   description: string;
   features: readonly string[];
   current: boolean;
-  tier: "free" | "pro" | "elite";
+  tier: "pro" | "elite";
   highlighted?: boolean;
 }) {
   return (
@@ -97,19 +90,15 @@ function PlanCard({
         <div className="text-xs text-zinc-400 mt-0.5">{description}</div>
       </div>
 
-      {price ? (
-        <div>
-          <div className="text-2xl font-bold text-white tabular-nums">
-            ${price.monthly}
-            <span className="text-sm font-normal text-zinc-400">/mo</span>
-          </div>
-          <div className="text-xs text-zinc-500 mt-0.5">
-            ${price.annual}/yr — save ${price.monthly * 12 - price.annual}
-          </div>
+      <div>
+        <div className="text-2xl font-bold text-white tabular-nums">
+          ${price.monthly}
+          <span className="text-sm font-normal text-zinc-400">/mo</span>
         </div>
-      ) : (
-        <div className="text-2xl font-bold text-white">Free</div>
-      )}
+        <div className="text-xs text-zinc-500 mt-0.5">
+          ${price.annual}/yr — save ${price.monthly * 12 - price.annual}
+        </div>
+      </div>
 
       <ul className="space-y-1.5 flex-1">
         {features.map((f) => (
@@ -124,9 +113,9 @@ function PlanCard({
         <div className="text-center text-xs font-semibold text-zinc-500 border border-zinc-700 rounded-lg py-2">
           Current plan
         </div>
-      ) : tier !== "free" ? (
+      ) : (
         <UpgradeButtons planTier={tier} />
-      ) : null}
+      )}
     </div>
   );
 }

@@ -71,7 +71,7 @@ function Hero() {
       </div>
 
       <p className="mt-4 text-xs text-zinc-600">
-        No credit card required · Cancel anytime
+        7-day free trial · Credit card required · Cancel anytime
       </p>
     </section>
   );
@@ -198,21 +198,6 @@ function Features() {
 
 const PLANS = [
   {
-    name:     "Free",
-    price:    "$0",
-    period:   "forever",
-    highlight: false,
-    cta:      "Start free",
-    href:     "/signup",
-    features: [
-      "Signals with 30-min delay",
-      "5-asset watchlist",
-      "Congressional trades tracker",
-      "Shareable signal links",
-      "Public signal history",
-    ],
-  },
-  {
     name:     "Pro",
     price:    "$50",
     period:   "/mo",
@@ -220,12 +205,13 @@ const PLANS = [
     cta:      "Start 7-day trial",
     href:     "/signup",
     features: [
-      "Real-time signals — all markets",
+      "Real-time signals — stocks, crypto & predictions",
       "Unlimited watchlist",
       "Full options flow + dark pool",
-      "Morning briefing email",
+      "Morning briefing email (8:45am ET)",
       "Portfolio tracker",
-      "Alerts & notifications",
+      "Price & signal alerts",
+      "Congressional trades tracker",
       "Per-asset AI accuracy tracking",
     ],
   },
@@ -255,7 +241,7 @@ function Pricing() {
           <p className="text-zinc-500 mt-3">Start free. Upgrade when the signals pay for themselves.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
           {PLANS.map((plan) => (
             <div
               key={plan.name}
@@ -305,7 +291,7 @@ function Pricing() {
         </div>
 
         <p className="text-center text-zinc-600 text-xs mt-8">
-          All plans include a 7-day free trial · No credit card required to start
+          All plans include a 7-day free trial · Credit card required · Cancel anytime
         </p>
       </div>
     </section>
@@ -319,7 +305,7 @@ function Stats() {
     { value: "3 markets",  label: "Stocks, crypto & predictions" },
     { value: "8:45am ET",  label: "Daily briefing delivery" },
     { value: "2h cooldown",label: "Signal dedup window" },
-    { value: "7-day trial",label: "No card required" },
+    { value: "7-day trial",label: "CC required, cancel anytime" },
   ];
 
   return (
@@ -346,7 +332,7 @@ function CTAStrip() {
           Ready to trade with an edge?
         </h2>
         <p className="text-zinc-500">
-          Join free. Real-time signals upgrade available anytime.
+          7-day trial. Real-time signals from day one.
         </p>
         <Link
           href="/signup"
