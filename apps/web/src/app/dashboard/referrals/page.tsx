@@ -39,7 +39,7 @@ export default async function ReferralsPage() {
   const user              = await requireUser();
   const { code, referrals } = await getData(user.id);
 
-  const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? "https://plebs.io";
+  const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? "https://plebs.finance";
   const inviteUrl = code ? `${appUrl}/invite/${code}` : null;
 
   const converted = referrals.filter((r) => r.status !== "pending").length;

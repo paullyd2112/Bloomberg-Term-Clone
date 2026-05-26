@@ -17,11 +17,13 @@ from ingestion.congressional import ingest_congressional
 from ingestion.options_flow import ingest_options_flow
 from ingestion.short_interest import ingest_short_interest
 from ingestion.earnings import ingest_earnings
+from ingestion.macro_events import seed_macro_events
 from scoring.engine import score_stocks, score_crypto, score_prediction_markets
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
 from briefing.generator import generate_morning_briefing
 from briefing.emailer import send_briefing_emails
+from briefing.welcome_emails import send_welcome_sequence
 
 load_dotenv()
 
@@ -87,6 +89,9 @@ def job_ingest_short_interest():
 def job_ingest_earnings():
     return ingest_earnings()
 
+def job_seed_macro_events():
+    return seed_macro_events()
+
 def job_ingest_congressional():
     return ingest_congressional()
 
@@ -95,6 +100,9 @@ def job_generate_morning_briefing():
 
 def job_send_briefing_emails():
     return send_briefing_emails()
+
+def job_send_welcome_sequence():
+    return send_welcome_sequence()
 
 def job_resolve_outcomes():
     return resolve_outcomes()
@@ -133,6 +141,8 @@ scheduler.add_job(lambda: _run_job("ingest_short_interest", job_ingest_short_int
                   CronTrigger(hour=7, minute=0, day_of_week="mon-fri"), id="ingest_short_interest")
 scheduler.add_job(lambda: _run_job("ingest_earnings", job_ingest_earnings),
                   CronTrigger(hour=6, minute=0, day_of_week="mon-fri"), id="ingest_earnings")
+scheduler.add_job(lambda: _run_job("seed_macro_events", job_seed_macro_events),
+                  CronTrigger(hour=6, minute=30, day_of_week="mon-fri"), id="seed_macro_events")
 
 # Congressional — daily
 scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressional),
@@ -143,6 +153,8 @@ scheduler.add_job(lambda: _run_job("generate_morning_briefing", job_generate_mor
                   CronTrigger(hour=8, minute=30, day_of_week="mon-fri"), id="generate_morning_briefing")
 scheduler.add_job(lambda: _run_job("send_briefing_emails", job_send_briefing_emails),
                   CronTrigger(hour=8, minute=45, day_of_week="mon-fri"), id="send_briefing_emails")
+scheduler.add_job(lambda: _run_job("send_welcome_sequence", job_send_welcome_sequence),
+                  CronTrigger(hour=9, minute=0), id="send_welcome_sequence")
 
 # Resolution & accuracy — nightly
 scheduler.add_job(lambda: _run_job("resolve_outcomes", job_resolve_outcomes),

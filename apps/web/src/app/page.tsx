@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Plebs.io — Trading Intelligence for Retail Traders",
+  title: "Plebs.finance — Trading Intelligence for Retail Traders",
   description:
     "Real-time AI signals for stocks, crypto, and prediction markets. Congressional trade tracker, options flow, morning briefing — everything Bloomberg has, built for the WSB crowd.",
 };
@@ -14,7 +14,7 @@ function Nav() {
     <nav className="fixed top-0 inset-x-0 z-50 border-b border-zinc-800/60 bg-[#09090b]/80 backdrop-blur-md">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
         <Link href="/" className="text-lg font-extrabold text-white tracking-tight">
-          plebs<span className="text-green-400">.io</span>
+          plebs<span className="text-green-400">.finance</span>
         </Link>
         <div className="flex items-center gap-3">
           <Link
@@ -199,7 +199,7 @@ function Features() {
 const PLANS = [
   {
     name:     "Lifetime Pro",
-    price:    "$299",
+    price:    "$399",
     period:   "once",
     highlight: true,
     cta:      "Get lifetime access",
@@ -218,7 +218,7 @@ const PLANS = [
   },
   {
     name:     "Pro",
-    price:    "$50",
+    price:    "$79",
     period:   "/mo",
     highlight: false,
     cta:      "Start 7-day trial",
@@ -236,7 +236,7 @@ const PLANS = [
   },
   {
     name:     "Elite",
-    price:    "$99",
+    price:    "$149",
     period:   "/mo",
     highlight: false,
     cta:      "Start 7-day trial",
@@ -372,7 +372,7 @@ function Footer() {
     <footer className="border-t border-zinc-800/60 py-10 px-4">
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="text-base font-extrabold text-white tracking-tight">
-          plebs<span className="text-green-400">.io</span>
+          plebs<span className="text-green-400">.finance</span>
         </div>
         <div className="flex items-center gap-6 text-xs text-zinc-500">
           <Link href="/dashboard" className="hover:text-zinc-300 transition-colors">Dashboard</Link>

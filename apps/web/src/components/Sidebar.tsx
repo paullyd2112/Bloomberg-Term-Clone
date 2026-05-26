@@ -16,6 +16,7 @@ const NAV: {
   { href: "/dashboard/portfolio",  label: "Portfolio",     icon: "◈",  tier: "pro" },
   { href: "/dashboard/alerts",     label: "Alerts",        icon: "🔔", tier: "pro" },
   { href: "/dashboard/congress",   label: "Congress",      icon: "🏛" },
+  { href: "/dashboard/calendar",   label: "Econ Calendar", icon: "📅" },
   { href: "/dashboard/briefing",   label: "Morning Brief", icon: "☀" },
   { href: "/dashboard/backtest",    label: "Backtester",    icon: "📊", tier: "pro" },
   { href: "/dashboard/referrals",  label: "Referrals",     icon: "🎁" },

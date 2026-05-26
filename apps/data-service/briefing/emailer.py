@@ -15,7 +15,7 @@ from supabase_client import supabase
 
 resend.api_key = os.environ.get("RESEND_API_KEY", "")
 
-FROM_ADDRESS  = "Plebs Morning Brief <brief@plebs.io>"
+FROM_ADDRESS  = "Plebs Morning Brief <brief@plebs.finance>"
 SUBJECT_PREFIX = "☀️ Plebs Brief"
 
 
@@ -176,14 +176,14 @@ def _render_html(briefing: dict) -> str:
 
     <!-- CTA -->
     <div style="text-align:center;margin:28px 0 20px;">
-      <a href="https://plebs.io/dashboard" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:14px;padding:12px 28px;border-radius:6px;text-decoration:none;">
+      <a href="https://plebs.finance/dashboard" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:14px;padding:12px 28px;border-radius:6px;text-decoration:none;">
         Open dashboard →
       </a>
     </div>
 
     <!-- Footer -->
     <div style="border-top:1px solid #27272a;padding-top:16px;text-align:center;font-size:11px;color:#3f3f46;">
-      Plebs.io · Not financial advice · <a href="https://plebs.io/unsubscribe" style="color:#52525b;">Unsubscribe</a>
+      Plebs.io · Not financial advice · <a href="https://plebs.finance/unsubscribe" style="color:#52525b;">Unsubscribe</a>
     </div>
 
   </div>
@@ -220,9 +220,9 @@ def _render_text(briefing: dict) -> str:
         "",
         "Watch: " + ", ".join(content.get("watch_today", [])),
         "",
-        "Open dashboard: https://plebs.io/dashboard",
+        "Open dashboard: https://plebs.finance/dashboard",
         "",
-        "Not financial advice. Unsubscribe: https://plebs.io/unsubscribe",
+        "Not financial advice. Unsubscribe: https://plebs.finance/unsubscribe",
     ]
     return "\n".join(lines)
 
