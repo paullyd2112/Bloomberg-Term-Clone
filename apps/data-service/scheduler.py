@@ -166,6 +166,14 @@ scheduler.add_job(lambda: _run_job("refresh_asset_accuracy", job_refresh_asset_a
 scheduler.add_job(lambda: _run_job("evaluate_alerts", job_evaluate_alerts),
                   IntervalTrigger(minutes=30), id="evaluate_alerts")
 
+# Portfolio allocations — notify users on the 1st of each month at 8am ET
+# Actual regeneration is user-triggered via the dashboard or Pleby
+scheduler.add_job(
+    lambda: logger.info("Monthly allocation reminder — users should refresh their allocations"),
+    CronTrigger(day=1, hour=8, minute=0, timezone="America/New_York"),
+    id="monthly_allocation_reminder"
+)
+
 
 # ─── Health endpoint ──────────────────────────────────────────────────────────
 app = Flask(__name__)

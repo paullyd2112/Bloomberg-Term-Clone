@@ -96,6 +96,39 @@ export const PLEBY_TOOLS: Anthropic.Tool[] = [
       required: ["ticker"],
     },
   },
+  {
+    name: "get_portfolio_allocation",
+    description: "Get the user's current portfolio allocation suggestion. Use this when the user asks about their portfolio, allocation, or how to invest their money.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "rebuild_portfolio_allocation",
+    description: "Generate a new portfolio allocation for the user based on their goal, risk tolerance, and investment amount. Use when the user asks to rebuild, update, or create a new allocation.",
+    input_schema: {
+      type: "object",
+      properties: {
+        goal: {
+          type: "string",
+          enum: ["short_term", "medium_term", "long_term"],
+          description: "User's investment time horizon",
+        },
+        risk_tolerance: {
+          type: "string",
+          enum: ["conservative", "moderate", "aggressive"],
+          description: "User's risk tolerance",
+        },
+        investment_amount: {
+          type: "number",
+          description: "Amount in USD the user wants to invest",
+        },
+      },
+      required: ["goal", "risk_tolerance", "investment_amount"],
+    },
+  },
 ];
 
 export async function executeTool(
@@ -193,6 +226,38 @@ export async function executeTool(
           .maybeSingle();
         if (!data) return JSON.stringify({ error: `No upcoming earnings for ${ticker}` });
         return JSON.stringify(data);
+      }
+
+      case "get_portfolio_allocation": {
+        const { data } = await supabase
+          .from("portfolio_allocations")
+          .select("*")
+          .order("generated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!data) return JSON.stringify({ message: "No allocation found. Ask the user for their goal, risk tolerance, and investment amount to generate one." });
+        return JSON.stringify(data);
+      }
+
+      case "rebuild_portfolio_allocation": {
+        const { goal, risk_tolerance, investment_amount } = input as {
+          goal: string;
+          risk_tolerance: string;
+          investment_amount: number;
+        };
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://plebs.finance";
+        try {
+          const res = await fetch(`${appUrl}/api/allocator`, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ goal, risk_tolerance, investment_amount }),
+          });
+          const data = await res.json();
+          if (!res.ok) return JSON.stringify({ error: data.error ?? "Generation failed" });
+          return JSON.stringify(data);
+        } catch (err) {
+          return JSON.stringify({ error: "Failed to generate allocation" });
+        }
       }
 
       default:

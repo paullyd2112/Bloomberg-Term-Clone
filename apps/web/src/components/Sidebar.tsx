@@ -20,6 +20,7 @@ const NAV: {
   { href: "/dashboard/briefing",   label: "Morning Brief", icon: "☀" },
   { href: "/dashboard/backtest",    label: "Backtester",    icon: "📊", tier: "pro" },
   { href: "/dashboard/referrals",  label: "Referrals",     icon: "🎁" },
+  { href: "/dashboard/allocator",  label: "Allocator",     icon: "◈",  tier: "elite" },
   { href: "/dashboard/pleby",      label: "Pleby AI",      icon: "🤖", tier: "elite" },
 ];
 
