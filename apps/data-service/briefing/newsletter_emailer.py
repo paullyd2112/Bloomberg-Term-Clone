@@ -15,7 +15,7 @@ from loguru import logger
 from supabase_client import supabase
 
 resend.api_key   = os.environ.get("RESEND_API_KEY", "")
-FROM_ADDRESS     = "Plebs <daily@plebs.finance>"
+FROM_ADDRESS     = "Pleby from Plebs <daily@plebs.finance>"
 APP_URL          = os.environ.get("NEXT_PUBLIC_APP_URL", "https://plebs.finance")
 
 
