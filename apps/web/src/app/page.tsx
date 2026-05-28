@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import NewsletterSignup from "@/components/NewsletterSignup";
 
 export const metadata: Metadata = {
   title: "Plebs.finance — Trading Intelligence for Retail Traders",
@@ -359,6 +360,12 @@ function CTAStrip() {
         >
           Start your free trial →
         </Link>
+        <div className="pt-6 border-t border-zinc-800/60">
+          <p className="text-zinc-500 text-sm mb-4">
+            Not ready to sign up? Get the free daily newsletter — markets in plain English, every weekday at 7am ET.
+          </p>
+          <NewsletterSignup />
+        </div>
         <p className="text-zinc-700 text-xs">Not financial advice.</p>
       </div>
     </section>

@@ -21,8 +21,8 @@ from ingestion.macro_events import seed_macro_events
 from scoring.engine import score_stocks, score_crypto, score_prediction_markets
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
-from briefing.generator import generate_morning_briefing
-from briefing.emailer import send_briefing_emails
+from briefing.newsletter import generate_newsletter
+from briefing.newsletter_emailer import send_newsletter
 from briefing.welcome_emails import send_welcome_sequence
 
 load_dotenv()
@@ -95,11 +95,11 @@ def job_seed_macro_events():
 def job_ingest_congressional():
     return ingest_congressional()
 
-def job_generate_morning_briefing():
-    return generate_morning_briefing()
+def job_generate_newsletter():
+    return generate_newsletter()
 
-def job_send_briefing_emails():
-    return send_briefing_emails()
+def job_send_newsletter():
+    return send_newsletter()
 
 def job_send_welcome_sequence():
     return send_welcome_sequence()
@@ -148,13 +148,13 @@ scheduler.add_job(lambda: _run_job("seed_macro_events", job_seed_macro_events),
 scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressional),
                   CronTrigger(hour=8, minute=0), id="ingest_congressional")
 
-# Briefing — weekdays
-scheduler.add_job(lambda: _run_job("generate_morning_briefing", job_generate_morning_briefing),
-                  CronTrigger(hour=8, minute=30, day_of_week="mon-fri"), id="generate_morning_briefing")
-scheduler.add_job(lambda: _run_job("send_briefing_emails", job_send_briefing_emails),
-                  CronTrigger(hour=8, minute=45, day_of_week="mon-fri"), id="send_briefing_emails")
+# Newsletter — generate at 6:30am, send at 7:00am ET weekdays
+scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newsletter),
+                  CronTrigger(hour=6, minute=30, day_of_week="mon-fri", timezone="America/New_York"), id="generate_newsletter")
+scheduler.add_job(lambda: _run_job("send_newsletter", job_send_newsletter),
+                  CronTrigger(hour=7, minute=0, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
 scheduler.add_job(lambda: _run_job("send_welcome_sequence", job_send_welcome_sequence),
-                  CronTrigger(hour=9, minute=0), id="send_welcome_sequence")
+                  CronTrigger(hour=9, minute=0, timezone="America/New_York"), id="send_welcome_sequence")
 
 # Resolution & accuracy — nightly
 scheduler.add_job(lambda: _run_job("resolve_outcomes", job_resolve_outcomes),
