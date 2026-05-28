@@ -44,7 +44,7 @@ class NewsletterContent(BaseModel):
     market_vibe:   Literal["bullish", "bearish", "mixed", "quiet"]
 
 
-JAKE_SYSTEM_PROMPT = """You are Jake, head writer at Plebs.finance. You write a daily finance newsletter for retail traders.
+NEWSLETTER_SYSTEM_PROMPT = """You are the voice of Plebs.finance. You write a daily finance newsletter for retail traders.
 
 YOUR VOICE:
 - You're 28, former analyst, now writing for regular people who are serious about markets
@@ -223,7 +223,7 @@ def generate_newsletter() -> dict | None:
             messages=[
                 {"role": "user", "content": user_prompt},
             ],
-            system=JAKE_SYSTEM_PROMPT,
+            system=NEWSLETTER_SYSTEM_PROMPT,
             response_model=NewsletterContent,
         )
     except Exception as e:
