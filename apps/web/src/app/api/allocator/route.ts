@@ -3,7 +3,6 @@ import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser, getUserTier } from "@/lib/user";
-import { canAccessFeature } from "@/lib/tier";
 
 export const maxDuration = 60;
 
@@ -100,7 +99,7 @@ export async function POST(req: Request) {
   catch { return NextResponse.json({ error: "Unauthenticated" }, { status: 401 }); }
 
   const tier = await getUserTier();
-  if (!canAccessFeature(tier, "elite")) {
+  if (tier !== "elite") {
     return NextResponse.json({ error: "Elite tier required" }, { status: 403 });
   }
 
@@ -177,7 +176,7 @@ export async function GET() {
   catch { return NextResponse.json({ error: "Unauthenticated" }, { status: 401 }); }
 
   const tier = await getUserTier();
-  if (!canAccessFeature(tier, "elite")) {
+  if (tier !== "elite") {
     return NextResponse.json({ error: "Elite tier required" }, { status: 403 });
   }
 
