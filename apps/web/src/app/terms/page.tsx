@@ -11,8 +11,8 @@ export default function TermsOfService() {
 
       <section className="mb-8">
         <p>
-          These Terms of Service ("Terms") govern your use of Plebs.io ("Service"), operated by
-          Plebs.io ("we," "us," or "our"). By creating an account or using the Service, you agree
+          These Terms of Service (&quot;Terms&quot;) govern your use of Plebs.io (&quot;Service&quot;), operated by
+          Plebs.io (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). By creating an account or using the Service, you agree
           to these Terms. If you do not agree, do not use Plebs.io.
         </p>
       </section>
@@ -103,7 +103,7 @@ export default function TermsOfService() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-white mb-3">8. Disclaimers & Limitation of Liability</h2>
         <p>
-          The Service is provided "as is" without warranties of any kind. We do not guarantee
+          The Service is provided &quot;as is&quot; without warranties of any kind. We do not guarantee
           the accuracy, completeness, or timeliness of any market data or signals. To the maximum
           extent permitted by law, Plebs.io shall not be liable for any trading losses, lost
           profits, or indirect damages arising from your use of the Service.

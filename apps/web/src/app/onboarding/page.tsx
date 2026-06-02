@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 type Experience = "beginner" | "intermediate" | "advanced";
@@ -23,8 +22,6 @@ const STEPS = ["experience", "markets", "done"] as const;
 type Step = (typeof STEPS)[number];
 
 export default function OnboardingPage() {
-  const router = useRouter();
-
   const [step, setStep]         = useState<Step>("experience");
   const [experience, setExp]    = useState<Experience | null>(null);
   const [assets, setAssets]     = useState<Set<AssetPref>>(new Set());
@@ -88,8 +85,8 @@ export default function OnboardingPage() {
         {step === "experience" && (
           <div className="space-y-6">
             <div>
-              <h1 className="text-2xl font-bold text-white">What's your trading experience?</h1>
-              <p className="text-zinc-500 text-sm mt-1">We'll tailor signal explanations to your level.</p>
+              <h1 className="text-2xl font-bold text-white">What&apos;s your trading experience?</h1>
+              <p className="text-zinc-500 text-sm mt-1">We&apos;ll tailor signal explanations to your level.</p>
             </div>
 
             <div className="space-y-3">
@@ -186,7 +183,7 @@ export default function OnboardingPage() {
           <div className="text-center space-y-6">
             <div className="text-6xl">🎉</div>
             <div>
-              <h1 className="text-2xl font-bold text-white">You're all set!</h1>
+              <h1 className="text-2xl font-bold text-white">You&apos;re all set!</h1>
               <p className="text-zinc-400 text-sm mt-2">
                 Your 7-day trial is active. Full access starts now.
               </p>

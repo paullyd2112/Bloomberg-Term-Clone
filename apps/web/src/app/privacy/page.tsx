@@ -11,7 +11,7 @@ export default function PrivacyPolicy() {
 
       <section className="mb-8">
         <p>
-          Plebs.io ("we," "us," or "our") operates the Plebs.io platform, a market intelligence
+          Plebs.io (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) operates the Plebs.io platform, a market intelligence
           and trading signals service. This Privacy Policy explains how we collect, use, and
           protect your information when you use our service.
         </p>
