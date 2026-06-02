@@ -1,6 +1,6 @@
 # Data ingestion
 yfinance==0.2.40
-ccxt==4.3.0
+ccxt==4.3.24
 httpx==0.27.0
 beautifulsoup4==4.12.0
 
