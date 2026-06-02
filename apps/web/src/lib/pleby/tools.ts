@@ -255,7 +255,7 @@ export async function executeTool(
           const data = await res.json();
           if (!res.ok) return JSON.stringify({ error: data.error ?? "Generation failed" });
           return JSON.stringify(data);
-        } catch (err) {
+        } catch {
           return JSON.stringify({ error: "Failed to generate allocation" });
         }
       }

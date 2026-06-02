@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe, getTierForPlan } from "@/lib/stripe";

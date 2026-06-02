@@ -33,12 +33,6 @@ const RISK_LABELS: Record<RiskTolerance, string> = {
   aggressive:   "Aggressive",
 };
 
-const ASSET_COLORS: Record<string, string> = {
-  stock:      "bg-blue-500",
-  crypto:     "bg-amber-500",
-  prediction: "bg-purple-500",
-};
-
 const ASSET_TEXT: Record<string, string> = {
   stock:      "text-blue-400",
   crypto:     "text-amber-400",
