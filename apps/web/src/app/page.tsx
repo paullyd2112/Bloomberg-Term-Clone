@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import NewsletterSignup from "@/components/NewsletterSignup";
+import TickerBar from "@/components/TickerBar";
 
 export const metadata: Metadata = {
   title: "Plebs.finance — Trading Intelligence for Retail Traders",
@@ -401,6 +402,9 @@ export default function LandingPage() {
   return (
     <div className="bg-[#09090b] min-h-screen">
       <Nav />
+      <div className="pt-14">
+        <TickerBar />
+      </div>
       <main>
         <Hero />
         <SignalStrip />

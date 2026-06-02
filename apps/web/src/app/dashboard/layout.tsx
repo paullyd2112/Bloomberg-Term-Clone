@@ -3,6 +3,7 @@ import { getUser, getUserTier, getUserProfile } from "@/lib/user";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import BottomNav from "@/components/BottomNav";
+import TickerBar from "@/components/TickerBar";
 
 export default async function DashboardLayout({
   children,
@@ -22,6 +23,7 @@ export default async function DashboardLayout({
 
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar user={user} tier={tier} />
+        <TickerBar />
         {/* pb-16 reserves space for the mobile bottom nav */}
         <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">{children}</main>
       </div>
