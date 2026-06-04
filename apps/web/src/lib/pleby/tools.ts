@@ -106,6 +106,29 @@ export const PLEBY_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "assess_position_risk",
+    description:
+      "Assess the security and risk profile of a position. Use when the user asks about risk, safety, downside, exposure, or whether a trade is risky. Returns a structured risk scorecard covering volatility, signal confidence, news sentiment, and options flow.",
+    input_schema: {
+      type: "object",
+      properties: {
+        identifier: {
+          type: "string",
+          description: "Ticker or asset identifier (e.g. 'NVDA', 'BTC')",
+        },
+        asset_type: {
+          type: "string",
+          enum: ["stock", "crypto", "prediction"],
+        },
+        position_size_usd: {
+          type: "number",
+          description: "Optional: user's position size in USD for concentration warnings",
+        },
+      },
+      required: ["identifier", "asset_type"],
+    },
+  },
+  {
     name: "rebuild_portfolio_allocation",
     description: "Generate a new portfolio allocation for the user based on their goal, risk tolerance, and investment amount. Use when the user asks to rebuild, update, or create a new allocation.",
     input_schema: {
@@ -237,6 +260,65 @@ export async function executeTool(
           .maybeSingle();
         if (!data) return JSON.stringify({ message: "No allocation found. Ask the user for their goal, risk tolerance, and investment amount to generate one." });
         return JSON.stringify(data);
+      }
+
+      case "assess_position_risk": {
+        const { identifier, asset_type, position_size_usd } = input as {
+          identifier: string;
+          asset_type: string;
+          position_size_usd?: number;
+        };
+        const id = identifier.toUpperCase();
+
+        const [priceRes, signalRes, accuracyRes, newsRes, optionsRes] = await Promise.all([
+          supabase
+            .from("raw_prices")
+            .select("price, change_24h, volume, captured_at")
+            .eq("identifier", id)
+            .eq("asset_type", asset_type)
+            .order("captured_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          supabase
+            .from("signals")
+            .select("direction, confidence, outcome, created_at")
+            .eq("identifier", id)
+            .order("created_at", { ascending: false })
+            .limit(5),
+          supabase
+            .from("asset_accuracy")
+            .select("win_rate, total_signals, avg_confidence")
+            .eq("identifier", id)
+            .eq("asset_type", asset_type)
+            .maybeSingle(),
+          supabase
+            .from("news_items")
+            .select("headline, sentiment_score, published_at")
+            .eq("identifier", id)
+            .order("published_at", { ascending: false })
+            .limit(5),
+          asset_type === "stock"
+            ? supabase
+                .from("options_flow")
+                .select("contract_type, volume_oi_ratio, premium_usd, is_unusual, captured_at")
+                .eq("ticker", id)
+                .eq("is_unusual", true)
+                .order("premium_usd", { ascending: false })
+                .limit(5)
+            : Promise.resolve({ data: null }),
+        ]);
+
+        const result = {
+          identifier: id,
+          asset_type,
+          position_size_usd: position_size_usd ?? null,
+          price_data: priceRes.data ?? null,
+          recent_signals: signalRes.data ?? [],
+          accuracy: accuracyRes.data ?? null,
+          recent_news: newsRes.data ?? [],
+          unusual_options: optionsRes.data ?? [],
+        };
+        return JSON.stringify(result);
       }
 
       case "rebuild_portfolio_allocation": {

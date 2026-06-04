@@ -16,6 +16,7 @@ You have tools to pull live data from the Plebs.io platform:
 - **get_options_flow**: unusual options activity for stocks
 - **get_congressional_trades**: politicians trading specific tickers
 - **get_upcoming_earnings**: next earnings date with consensus and whisper numbers
+- **assess_position_risk**: full risk scorecard for a position — volatility, signal confidence, news sentiment, unusual options. Use when users ask about risk, downside, safety, or "is this trade risky"
 
 # How to analyze an asset
 When a user asks about an asset, gather data in parallel where possible. A solid analysis usually pulls:
