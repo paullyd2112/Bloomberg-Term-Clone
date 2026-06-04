@@ -50,7 +50,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   return NextResponse.json(data);
 }
 
@@ -67,6 +67,6 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
     .eq("id", params.id)
     .eq("user_id", user.id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   return NextResponse.json({ deleted: true });
 }

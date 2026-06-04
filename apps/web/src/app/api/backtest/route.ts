@@ -153,7 +153,7 @@ export async function POST(req: Request) {
   if (params.horizon    !== "all") query = query.eq("time_horizon", params.horizon)  as typeof query;
 
   const { data: signals, error } = await query.order("created_at").limit(2000);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: "Internal server error" }, { status: 500 });
 
   const results = computeResults((signals ?? []) as RawSignal[], params.trade_size);
 
