@@ -28,6 +28,7 @@ from briefing.welcome_emails import send_welcome_sequence
 load_dotenv()
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
+os.makedirs("logs", exist_ok=True)
 logger.remove()
 logger.add(sys.stdout, level="INFO", colorize=True,
            format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | {message}")

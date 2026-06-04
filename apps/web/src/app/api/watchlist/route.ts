@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     if (error.code === "23505") {
       return NextResponse.json({ error: "Already in watchlist" }, { status: 409 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 
   return NextResponse.json(data, { status: 201 });
@@ -73,6 +73,6 @@ export async function DELETE(req: Request) {
     .eq("id", id)
     .eq("user_id", user.id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   return NextResponse.json({ deleted: true });
 }

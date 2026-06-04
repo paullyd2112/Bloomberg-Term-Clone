@@ -42,9 +42,10 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect logged-in users away from auth pages
   if (user && (pathname === "/login" || pathname === "/signup")) {
-    const next = request.nextUrl.searchParams.get("next") ?? "/dashboard";
+    const rawNext = request.nextUrl.searchParams.get("next") ?? "/dashboard";
+    const safeNext = /^\/(?!\/)/.test(rawNext) ? rawNext : "/dashboard";
     const url = request.nextUrl.clone();
-    url.pathname = next;
+    url.pathname = safeNext;
     url.search = "";
     return NextResponse.redirect(url);
   }

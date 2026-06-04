@@ -2,21 +2,27 @@
 
 import { useState } from "react";
 
+type Status = "idle" | "loading" | "done" | "already_subscribed" | "has_account" | "error";
+
 export default function NewsletterSignup() {
-  const [email,   setEmail]   = useState("");
-  const [status,  setStatus]  = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [email,  setEmail]  = useState("");
+  const [status, setStatus] = useState<Status>("idle");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email) return;
     setStatus("loading");
     try {
-      const res = await fetch("/api/newsletter/subscribe", {
+      const res  = await fetch("/api/newsletter/subscribe", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ email }),
       });
-      setStatus(res.ok ? "done" : "error");
+      const data = await res.json();
+      if (!res.ok)            setStatus("error");
+      else if (data.exists)   setStatus("has_account");
+      else if (data.already_subscribed) setStatus("already_subscribed");
+      else                    setStatus("done");
     } catch {
       setStatus("error");
     }
@@ -26,6 +32,25 @@ export default function NewsletterSignup() {
     return (
       <p className="text-green-400 font-medium text-sm">
         You&apos;re in. First email hits tomorrow at 7am ET.
+      </p>
+    );
+  }
+
+  if (status === "already_subscribed") {
+    return (
+      <p className="text-zinc-400 font-medium text-sm">
+        You&apos;re already subscribed — check your inbox tomorrow at 7am ET.
+      </p>
+    );
+  }
+
+  if (status === "has_account") {
+    return (
+      <p className="text-zinc-400 font-medium text-sm">
+        Looks like you already have a Plebs account.{" "}
+        <a href="/login" className="text-green-400 underline underline-offset-2 hover:text-green-300">
+          Log in to access the full dashboard.
+        </a>
       </p>
     );
   }
