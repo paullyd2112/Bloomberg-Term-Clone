@@ -2,7 +2,6 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe, getTierForPlan } from "@/lib/stripe";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +24,8 @@ async function updateUserTier(
   subscriptionId: string | null,
   billingInterval: string | null,
 ) {
-  const supabase = createClient();
-  await supabase
+  const supabase = createAdminClient();
+  await (supabase as any)
     .from("profiles")
     .update({
       tier,
