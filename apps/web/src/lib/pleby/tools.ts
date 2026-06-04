@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 export const PLEBY_TOOLS: Anthropic.Tool[] = [
@@ -136,6 +137,7 @@ export async function executeTool(
   input: Record<string, unknown>,
 ): Promise<string> {
   const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   try {
     switch (name) {
@@ -229,9 +231,11 @@ export async function executeTool(
       }
 
       case "get_portfolio_allocation": {
+        if (!user) return JSON.stringify({ error: "Not authenticated" });
         const { data } = await supabase
           .from("portfolio_allocations")
           .select("*")
+          .eq("user_id", user.id)
           .order("generated_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -245,11 +249,15 @@ export async function executeTool(
           risk_tolerance: string;
           investment_amount: number;
         };
+        const cookieStore = cookies();
+        const cookieHeader = cookieStore.getAll()
+          .map(c => `${c.name}=${c.value}`)
+          .join("; ");
         const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://plebs.finance";
         try {
           const res = await fetch(`${appUrl}/api/allocator`, {
             method:  "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "Cookie": cookieHeader },
             body:    JSON.stringify({ goal, risk_tolerance, investment_amount }),
           });
           const data = await res.json();

@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserTier } from "@/lib/user";
 import { isPaidTier } from "@/lib/tier";
+
+const BacktestBody = z.object({
+  asset_type:     z.enum(["all", "stock", "crypto", "prediction"]),
+  direction:      z.enum(["all", "BUY", "SELL", "YES", "NO"]),
+  horizon:        z.enum(["all", "intraday", "swing", "longterm", "before_close"]),
+  min_confidence: z.number().int().min(0).max(100),
+  start_date:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  end_date:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  trade_size:     z.number().positive().max(1_000_000),
+});
 
 export const dynamic = "force-dynamic";
 
@@ -121,7 +132,11 @@ export async function POST(req: Request) {
   const tier = await getUserTier();
   if (!isPaidTier(tier)) return NextResponse.json({ error: "Pro required" }, { status: 403 });
 
-  const params: BacktestParams = await req.json();
+  const parsed = BacktestBody.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
+  }
+  const params: BacktestParams = parsed.data;
 
   const supabase = createClient();
   let query = supabase

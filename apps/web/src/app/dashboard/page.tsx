@@ -6,12 +6,10 @@ import SubscribeGate from "@/components/ui/SubscribeGate";
 
 export const revalidate = 60;
 
-async function fetchSignals(userId: string, tier: string): Promise<Signal[]> {
+async function fetchSignals(): Promise<Signal[]> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("get_dashboard_signals", {
-    p_user_id: userId,
-    p_tier:    tier,
-    p_limit:   60,
+    p_limit: 60,
   });
   if (error) {
     console.error("get_dashboard_signals error:", error.message);
@@ -47,7 +45,7 @@ export default async function DashboardPage() {
   const user    = await getUser();
   const tier    = await getUserTier();
   const [signals, movers] = await Promise.all([
-    fetchSignals(user!.id, tier),
+    fetchSignals(),
     fetchTopMovers(),
   ]);
 

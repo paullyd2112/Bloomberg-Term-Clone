@@ -5,8 +5,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
+  const code    = searchParams.get("code");
+  const rawNext = searchParams.get("next") ?? "/dashboard";
+  const next    = /^\/(?!\/)/.test(rawNext) ? rawNext : "/dashboard";
   const ref  = searchParams.get("ref")?.toLowerCase().trim() ?? null;
 
   if (code) {
