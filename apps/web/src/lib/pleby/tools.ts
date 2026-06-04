@@ -154,9 +154,12 @@ export const PLEBY_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+const MAX_TOOL_LIMIT = 100;
+
 export async function executeTool(
   name: string,
   input: Record<string, unknown>,
+  userId: string,
 ): Promise<string> {
   const supabase = createClient();
 
@@ -177,7 +180,8 @@ export async function executeTool(
       }
 
       case "get_recent_signals": {
-        const { identifier, limit = 5 } = input as { identifier: string; limit?: number };
+        const { identifier, limit: rawLimit = 5 } = input as { identifier: string; limit?: number };
+        const limit = Math.min(rawLimit, MAX_TOOL_LIMIT);
         const { data } = await supabase
           .from("signals")
           .select(
@@ -202,7 +206,8 @@ export async function executeTool(
       }
 
       case "get_news": {
-        const { identifier, limit = 5 } = input as { identifier: string; limit?: number };
+        const { identifier, limit: rawNewsLimit = 5 } = input as { identifier: string; limit?: number };
+        const limit = Math.min(rawNewsLimit, MAX_TOOL_LIMIT);
         const { data } = await supabase
           .from("news_items")
           .select("headline, source, sentiment_score, published_at, url")
@@ -213,7 +218,8 @@ export async function executeTool(
       }
 
       case "get_options_flow": {
-        const { ticker, limit = 10 } = input as { ticker: string; limit?: number };
+        const { ticker, limit: rawOptionsLimit = 10 } = input as { ticker: string; limit?: number };
+        const limit = Math.min(rawOptionsLimit, MAX_TOOL_LIMIT);
         const { data } = await supabase
           .from("options_flow")
           .select(
@@ -227,7 +233,8 @@ export async function executeTool(
       }
 
       case "get_congressional_trades": {
-        const { ticker, limit = 10 } = input as { ticker: string; limit?: number };
+        const { ticker, limit: rawCongressLimit = 10 } = input as { ticker: string; limit?: number };
+        const limit = Math.min(rawCongressLimit, MAX_TOOL_LIMIT);
         const { data } = await supabase
           .from("congressional_trades")
           .select("politician, party, transaction, amount_range, trade_date, report_date")
@@ -255,6 +262,7 @@ export async function executeTool(
         const { data } = await supabase
           .from("portfolio_allocations")
           .select("*")
+          .eq("user_id", userId)
           .order("generated_at", { ascending: false })
           .limit(1)
           .maybeSingle();

@@ -107,6 +107,7 @@ export async function POST(req: Request) {
               const result = await executeTool(
                 block.name,
                 block.input as Record<string, unknown>,
+                user.id,
               );
               return {
                 type: "tool_result" as const,
