@@ -13,6 +13,7 @@ from loguru import logger
 from dotenv import load_dotenv
 
 from supabase_client import supabase
+from utils.sentiment import score_headlines
 
 load_dotenv()
 
@@ -202,6 +203,11 @@ async def _fetch_news_for_market(
     ]
 
     if rows:
+        headlines = [r["headline"] for r in rows]
+        scores    = score_headlines(headlines)
+        for row, score in zip(rows, scores):
+            row["sentiment_score"] = score
+
         try:
             supabase.table("news_items").insert(rows).execute()
         except Exception as e:
@@ -250,6 +256,35 @@ def ingest_prediction_markets() -> str:
     if not all_records:
         logger.warning("No prediction market records fetched — both APIs may be down")
         return "0 records written"
+
+    # Calculate change_24h by comparing against prices stored ~24h ago
+    identifiers = [r["identifier"] for r in all_records]
+    prev_prices: dict[str, float] = {}
+    try:
+        since_26h = (datetime.now(timezone.utc) - timedelta(hours=26)).isoformat()
+        since_22h = (datetime.now(timezone.utc) - timedelta(hours=22)).isoformat()
+        # Fetch in batches of 100 to avoid URL length limits
+        for i in range(0, len(identifiers), 100):
+            chunk = identifiers[i:i+100]
+            rows = (
+                supabase.table("raw_prices")
+                .select("identifier, price")
+                .eq("asset_type", "prediction")
+                .in_("identifier", chunk)
+                .gte("captured_at", since_26h)
+                .lte("captured_at", since_22h)
+                .execute()
+            ).data or []
+            for row in rows:
+                if row["identifier"] not in prev_prices and row.get("price"):
+                    prev_prices[row["identifier"]] = float(row["price"])
+    except Exception as e:
+        logger.warning("change_24h lookup failed: {}", e)
+
+    for r in all_records:
+        prev = prev_prices.get(r["identifier"])
+        if prev and prev > 0 and r.get("price") is not None:
+            r["change_24h"] = round((float(r["price"]) - prev) / prev * 100, 2)
 
     written    = 0
     batch_size = 100

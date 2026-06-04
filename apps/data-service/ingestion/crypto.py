@@ -18,15 +18,17 @@ from loguru import logger
 from dotenv import load_dotenv
 
 from supabase_client import supabase
+from utils.sentiment import score_headlines
 
 load_dotenv()
 
 FINNHUB_KEY      = os.environ.get("FINNHUB_API_KEY", "")
 COINGECKO_KEY    = os.environ.get("COINGECKO_API_KEY", "")
 
-COINGECKO_URL  = "https://api.coingecko.com/api/v3/coins/markets"
-FEAR_GREED_URL = "https://api.alternative.me/fng/?limit=1"
-FINNHUB_NEWS   = "https://finnhub.io/api/v1/news"
+COINGECKO_URL      = "https://api.coingecko.com/api/v3/coins/markets"
+COINGECKO_TRENDING = "https://api.coingecko.com/api/v3/search/trending"
+FEAR_GREED_URL     = "https://api.alternative.me/fng/?limit=1"
+FINNHUB_NEWS       = "https://finnhub.io/api/v1/news"
 
 REQUEST_TIMEOUT = 15.0
 COINGECKO_DELAY = 1.2   # respect free-tier rate limit (~50 req/min)
@@ -43,6 +45,20 @@ CCXT_SYMBOL_MAP: dict[str, str] = {
 
 
 # ─── CoinGecko market data ────────────────────────────────────────────────────
+
+def _fetch_trending_symbols() -> set[str]:
+    """Fetch CoinGecko trending coins (top 7 by search volume). Free endpoint."""
+    try:
+        resp = httpx.get(COINGECKO_TRENDING, headers=_coingecko_headers(), timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        coins = resp.json().get("coins", [])
+        symbols = {c["item"]["symbol"].upper() for c in coins if c.get("item", {}).get("symbol")}
+        logger.info("CoinGecko trending coins: {}", symbols)
+        return symbols
+    except Exception as e:
+        logger.warning("CoinGecko trending fetch failed: {}", e)
+        return set()
+
 
 def _coingecko_headers() -> dict:
     """Return auth headers if Demo API key is set, empty dict otherwise."""
@@ -224,6 +240,12 @@ def _fetch_and_store_crypto_news() -> int:
     ]
 
     if rows:
+        # Score all headlines in one Claude Haiku call
+        headlines = [r["headline"] for r in rows]
+        scores    = score_headlines(headlines)
+        for row, score in zip(rows, scores):
+            row["sentiment_score"] = score
+
         try:
             supabase.table("news_items").insert(rows).execute()
         except Exception as e:
@@ -234,7 +256,7 @@ def _fetch_and_store_crypto_news() -> int:
 
 # ─── Per-coin ingestion ───────────────────────────────────────────────────────
 
-def _ingest_coin(cg_data: dict) -> bool:
+def _ingest_coin(cg_data: dict, is_trending: bool = False) -> bool:
     symbol = _coingecko_to_symbol(cg_data)
     if not symbol:
         return False
@@ -254,6 +276,7 @@ def _ingest_coin(cg_data: dict) -> bool:
             "sentiment_votes_up_pct": cg_data.get("sentiment_votes_up_percentage"),
             "ath":                   cg_data.get("ath"),
             "ath_change_pct":        cg_data.get("ath_change_percentage"),
+            "is_trending":           is_trending,
         },
     }
 
@@ -285,6 +308,9 @@ def ingest_crypto() -> str:
     """
     logger.info("Starting crypto ingestion")
 
+    # Trending coins — fetch before market data so we can tag them
+    trending_symbols = _fetch_trending_symbols()
+
     # Fear & Greed first — useful context even if coins fail
     fg = _fetch_fear_greed()
     if fg:
@@ -294,9 +320,9 @@ def ingest_crypto() -> str:
     # Fetch CoinGecko market data
     cg_coins = _fetch_coingecko_markets()
 
-    # Ensure priority symbols are included even if outside top 50
+    # Ensure priority + trending symbols are included even if outside top 50
     cg_symbols = {_coingecko_to_symbol(c) for c in cg_coins}
-    missing_priority = PRIORITY_SYMBOLS - cg_symbols
+    missing_priority = (PRIORITY_SYMBOLS | trending_symbols) - cg_symbols
 
     if missing_priority:
         logger.info("Fetching {} priority coins not in top-50: {}",
@@ -336,7 +362,7 @@ def ingest_crypto() -> str:
 
     for coin in unique:
         try:
-            ok = _ingest_coin(coin)
+            ok = _ingest_coin(coin, is_trending=_coingecko_to_symbol(coin) in trending_symbols)
             if ok:
                 success += 1
             else:
