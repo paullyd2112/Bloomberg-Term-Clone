@@ -103,8 +103,8 @@ export default async function WatchlistPage() {
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
           <div className="flex items-center gap-3 px-4 py-2 border-b border-zinc-800 text-xs font-semibold text-zinc-500 uppercase tracking-widest">
             <div className="flex-1">Asset</div>
-            <div className="min-w-[80px] text-right">Price</div>
-            <div className="min-w-[64px] text-right">Signal</div>
+            <div className="min-w-[64px] sm:min-w-[80px] text-right">Price</div>
+            <div className="min-w-[52px] sm:min-w-[64px] text-right">Signal</div>
             <div className="w-6" />
           </div>
 

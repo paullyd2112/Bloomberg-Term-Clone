@@ -33,7 +33,7 @@ export default function Sidebar({ tier, billingInterval }: { tier: Tier; billing
       {/* Logo */}
       <div className="h-14 flex items-center px-4 border-b border-zinc-800">
         <span className="font-bold text-white tracking-tight">
-          plebs<span className="text-green-400">.io</span>
+          plebs<span className="text-green-400">.finance</span>
         </span>
       </div>
 

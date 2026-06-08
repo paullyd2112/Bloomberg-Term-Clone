@@ -56,7 +56,7 @@ export default function WatchlistRow({ item }: { item: WatchlistItem }) {
       </div>
 
       {/* Price */}
-      <div className="text-right min-w-[80px]">
+      <div className="text-right min-w-[64px] sm:min-w-[80px]">
         {item.latest_price?.price != null ? (
           <>
             <div className="text-sm text-white font-mono tabular-nums">
@@ -76,7 +76,7 @@ export default function WatchlistRow({ item }: { item: WatchlistItem }) {
       </div>
 
       {/* Latest signal */}
-      <div className="min-w-[64px] text-right">
+      <div className="min-w-[52px] sm:min-w-[64px] text-right">
         {item.latest_signal ? (
           <div className="flex items-center gap-1 justify-end">
             <span className={`text-xs font-bold ${DIR_COLOR[item.latest_signal.direction] ?? "text-zinc-400"}`}>
