@@ -4,11 +4,15 @@ Runs every 30 minutes via scheduler.
 """
 
 import asyncio
+import base64
 import os
+import time
 from datetime import datetime, timedelta, timezone
 
 import httpx
 import sentry_sdk
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 from loguru import logger
 from dotenv import load_dotenv
 
@@ -16,20 +20,57 @@ from supabase_client import supabase
 
 load_dotenv()
 
-NEWS_API_KEY    = os.environ.get("NEWS_API_KEY", "")
+NEWS_API_KEY       = os.environ.get("NEWS_API_KEY", "")
+KALSHI_API_KEY     = os.environ.get("KALSHI_API_KEY", "")
+KALSHI_PRIVATE_KEY = os.environ.get("KALSHI_PRIVATE_KEY", "")
 
-KALSHI_URL      = "https://trading-api.kalshi.com/trade-api/v2/markets"
-POLYMARKET_URL  = "https://clob.polymarket.com/markets"
-NEWSAPI_URL     = "https://newsapi.org/v2/everything"
+KALSHI_BASE        = "https://trading-api.kalshi.com/trade-api/v2"
+KALSHI_MARKETS_PATH = "/trade-api/v2/markets"
+POLYMARKET_URL     = "https://clob.polymarket.com/markets"
+NEWSAPI_URL        = "https://newsapi.org/v2/everything"
 
 KALSHI_MIN_VOLUME     = 100
 POLYMARKET_MIN_VOLUME = 100
 REQUEST_TIMEOUT       = 15.0
 
 
+# ─── Kalshi RSA-PSS auth ──────────────────────────────────────────────────────
+
+def _kalshi_headers(method: str, path: str) -> dict:
+    """Generate signed headers for Kalshi API v2 (RSA-PSS, timestamp in ms)."""
+    if not KALSHI_API_KEY or not KALSHI_PRIVATE_KEY:
+        return {}
+
+    ts  = str(int(time.time() * 1000))
+    msg = (ts + method.upper() + path).encode()
+
+    # Support both literal \n (env var) and real newlines
+    pem = KALSHI_PRIVATE_KEY.replace("\\n", "\n").encode()
+    private_key = serialization.load_pem_private_key(pem, password=None)
+
+    sig = private_key.sign(
+        msg,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH,
+        ),
+        hashes.SHA256(),
+    )
+
+    return {
+        "KALSHI-ACCESS-KEY":       KALSHI_API_KEY,
+        "KALSHI-ACCESS-TIMESTAMP": ts,
+        "KALSHI-ACCESS-SIGNATURE": base64.b64encode(sig).decode(),
+    }
+
+
 # ─── Fetchers ─────────────────────────────────────────────────────────────────
 
 async def _fetch_kalshi(client: httpx.AsyncClient) -> list[dict]:
+    if not KALSHI_API_KEY or not KALSHI_PRIVATE_KEY:
+        logger.warning("Kalshi credentials not set — skipping Kalshi ingestion")
+        return []
+
     records = []
     cursor  = None
 
@@ -39,7 +80,12 @@ async def _fetch_kalshi(client: httpx.AsyncClient) -> list[dict]:
             params["cursor"] = cursor
 
         try:
-            resp = await client.get(KALSHI_URL, params=params, timeout=REQUEST_TIMEOUT)
+            resp = await client.get(
+                f"{KALSHI_BASE}/markets",
+                params=params,
+                headers=_kalshi_headers("GET", KALSHI_MARKETS_PATH),
+                timeout=REQUEST_TIMEOUT,
+            )
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
