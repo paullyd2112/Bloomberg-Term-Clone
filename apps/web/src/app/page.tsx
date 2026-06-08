@@ -200,53 +200,36 @@ function Features() {
 
 const PLANS = [
   {
-    name:     "Lifetime Pro",
-    price:    "$399",
-    period:   "once",
+    name:      "Pro",
+    price:     "$74.99",
+    period:    "/mo",
+    highlight: false,
+    cta:       "Start 7-day trial",
+    href:      "/signup",
+    features: [
+      "Real-time AI signals — stocks & crypto",
+      "Unlimited watchlist",
+      "Full options flow + dark pool",
+      "Congressional trade tracker",
+      "Morning briefing email (7am ET)",
+      "Portfolio tracker + P&L",
+      "Price & signal alerts",
+      "Per-asset AI accuracy tracking",
+    ],
+  },
+  {
+    name:      "Elite",
+    price:     "$149.98",
+    period:    "/mo",
     highlight: true,
-    cta:      "Get lifetime access",
-    href:     "/dashboard/upgrade",
-    features: [
-      "Real-time signals — stocks, crypto & predictions",
-      "Unlimited watchlist",
-      "Full options flow + dark pool",
-      "Morning briefing email (8:45am ET)",
-      "Portfolio tracker",
-      "Price & signal alerts",
-      "Congressional trades tracker",
-      "Per-asset AI accuracy tracking",
-      "Forever access",
-    ],
-  },
-  {
-    name:     "Pro",
-    price:    "$79",
-    period:   "/mo",
-    highlight: false,
-    cta:      "Start 7-day trial",
-    href:     "/signup",
-    features: [
-      "Real-time signals — stocks, crypto & predictions",
-      "Unlimited watchlist",
-      "Full options flow + dark pool",
-      "Morning briefing email (8:45am ET)",
-      "Portfolio tracker",
-      "Price & signal alerts",
-      "Congressional trades tracker",
-      "Per-asset AI accuracy tracking",
-    ],
-  },
-  {
-    name:     "Elite",
-    price:    "$149",
-    period:   "/mo",
-    highlight: false,
-    cta:      "Start 7-day trial",
-    href:     "/signup",
+    cta:       "Start 7-day trial",
+    href:      "/signup",
     features: [
       "Everything in Pro",
-      "Pleby — AI trading analyst",
-      "Ask Pleby about any asset",
+      "Prediction market signals (Kalshi + Polymarket)",
+      "The real alpha — AI finds mispriced contracts",
+      "Pleby — AI trading analyst chat",
+      "Ask Pleby about any asset anytime",
       "Personalised morning briefing",
       "Priority signal delivery",
     ],
@@ -259,10 +242,10 @@ function Pricing() {
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-14">
           <h2 className="text-3xl sm:text-4xl font-bold text-white">Simple pricing</h2>
-          <p className="text-zinc-500 mt-3">Start free. Upgrade when the signals pay for themselves.</p>
+          <p className="text-zinc-500 mt-3">Two tiers. No free tier. The signals pay for themselves.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
           {PLANS.map((plan) => (
             <div
               key={plan.name}
@@ -312,7 +295,7 @@ function Pricing() {
         </div>
 
         <p className="text-center text-zinc-600 text-xs mt-8">
-          All plans include a 7-day free trial · Credit card required · Cancel anytime
+          7-day free trial · Credit card required · Cancel anytime
         </p>
       </div>
     </section>

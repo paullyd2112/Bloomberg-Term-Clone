@@ -11,29 +11,31 @@ export const WATCHLIST_LIMIT: Record<Tier, number> = {
 // free tier is not a marketed plan — it's the expired/unsubscribed state
 export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
   pro: [
-    "Real-time signals — stocks, crypto & predictions",
+    "Real-time AI signals — stocks & crypto",
     "Unlimited watchlist",
     "Full options flow + dark pool",
-    "Morning briefing email (8:45am ET)",
-    "Portfolio tracker",
+    "Congressional trade tracker",
+    "Morning briefing email (7am ET)",
+    "Portfolio tracker + P&L",
     "Price & signal alerts",
-    "Congressional trades tracker",
     "Per-asset AI accuracy tracking",
   ],
   elite: [
     "Everything in Pro",
-    "Pleby — your AI trading analyst",
+    "Prediction market signals (Kalshi + Polymarket)",
+    "Pleby — AI trading analyst chat",
     "Ask Pleby about any asset anytime",
     "Personalised morning briefing",
     "Priority signal delivery",
   ],
 };
 
-export function canAccessFeature(tier: Tier, feature: "pleby" | "portfolio" | "alerts" | "real_time"): boolean {
-  if (feature === "pleby")     return tier === "elite";
-  if (feature === "portfolio") return tier === "pro" || tier === "elite";
-  if (feature === "alerts")    return tier === "pro" || tier === "elite";
-  if (feature === "real_time") return tier === "pro" || tier === "elite";
+export function canAccessFeature(tier: Tier, feature: "pleby" | "portfolio" | "alerts" | "real_time" | "prediction_markets"): boolean {
+  if (feature === "pleby")               return tier === "elite";
+  if (feature === "prediction_markets")  return tier === "elite";
+  if (feature === "portfolio")           return tier === "pro" || tier === "elite";
+  if (feature === "alerts")              return tier === "pro" || tier === "elite";
+  if (feature === "real_time")           return tier === "pro" || tier === "elite";
   return false;
 }
 
