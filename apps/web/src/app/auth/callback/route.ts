@@ -3,8 +3,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const APP_ORIGIN = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams, origin: requestOrigin } = new URL(request.url);
+  // Pin to the configured app URL in production; fall back to request origin in dev
+  const origin  = APP_ORIGIN || requestOrigin;
   const code    = searchParams.get("code");
   const rawNext = searchParams.get("next") ?? "/dashboard";
   const next    = /^\/(?!\/)/.test(rawNext) ? rawNext : "/dashboard";
