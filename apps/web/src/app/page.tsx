@@ -201,7 +201,7 @@ function Features() {
 const PLANS = [
   {
     name:      "Pro",
-    price:     "$74.99",
+    price:     "$79",
     period:    "/mo",
     highlight: false,
     cta:       "Start 7-day trial",

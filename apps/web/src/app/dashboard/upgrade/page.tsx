@@ -94,7 +94,7 @@ export default async function UpgradePage() {
         <div className="grid gap-4 md:grid-cols-2">
           <PlanCard
             name="Pro"
-            price={{ monthly: 74.99, annual: 720 }}
+            price={{ monthly: 79, annual: 758 }}
             description="Serious retail traders"
             features={TIER_FEATURES.pro}
             current={tier === "pro" && profile?.billing_interval !== "lifetime"}
