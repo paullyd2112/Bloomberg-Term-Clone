@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/user";
 import { createClient } from "@/lib/supabase/server";
 
 const Body = z.object({
-  plan: z.enum(["pro_monthly", "pro_quarterly", "pro_annual", "elite_monthly", "elite_annual", "lifetime_pro", "lifetime_elite"]),
+  plan: z.enum(["pro_monthly", "pro_quarterly", "pro_annual", "elite_monthly", "elite_quarterly", "elite_annual", "lifetime_pro", "lifetime_elite"]),
 });
 
 export async function POST(req: Request) {

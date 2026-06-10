@@ -2,20 +2,24 @@
 
 import { useState } from "react";
 
-type PlanInterval = "monthly" | "annual";
+type PlanInterval = "monthly" | "quarterly" | "annual";
+
+const INTERVALS: { id: PlanInterval; label: string }[] = [
+  { id: "monthly",   label: "Monthly" },
+  { id: "quarterly", label: "Quarterly (save ~10%)" },
+  { id: "annual",    label: "Annual (save ~20%)" },
+];
+
+const PLAN_KEYS: Record<"pro" | "elite", Record<PlanInterval, string>> = {
+  pro:   { monthly: "pro_monthly",   quarterly: "pro_quarterly",   annual: "pro_annual" },
+  elite: { monthly: "elite_monthly", quarterly: "elite_quarterly", annual: "elite_annual" },
+};
 
 export default function UpgradeButtons({ planTier }: { planTier: "pro" | "elite" }) {
   const [interval, setInterval] = useState<PlanInterval>("monthly");
   const [loading, setLoading] = useState(false);
 
-  const planKey =
-    planTier === "pro"
-      ? interval === "monthly"
-        ? "pro_monthly"
-        : "pro_annual"
-      : interval === "monthly"
-      ? "elite_monthly"
-      : "elite_annual";
+  const planKey = PLAN_KEYS[planTier][interval];
 
   async function handleCheckout() {
     setLoading(true);
@@ -41,18 +45,18 @@ export default function UpgradeButtons({ planTier }: { planTier: "pro" | "elite"
   return (
     <div className="space-y-2">
       {/* Interval toggle */}
-      <div className="flex rounded-lg border border-zinc-700 p-0.5 gap-0.5">
-        {(["monthly", "annual"] as PlanInterval[]).map((i) => (
+      <div className="flex flex-col gap-0.5 rounded-lg border border-zinc-700 p-0.5">
+        {INTERVALS.map(({ id, label }) => (
           <button
-            key={i}
-            onClick={() => setInterval(i)}
-            className={`flex-1 text-xs py-1.5 rounded-md transition-colors font-medium ${
-              interval === i
+            key={id}
+            onClick={() => setInterval(id)}
+            className={`w-full text-xs py-1.5 rounded-md transition-colors font-medium text-left px-2 ${
+              interval === id
                 ? "bg-zinc-700 text-white"
                 : "text-zinc-400 hover:text-white"
             }`}
           >
-            {i === "annual" ? "Annual (save ~20%)" : "Monthly"}
+            {label}
           </button>
         ))}
       </div>

@@ -23,9 +23,17 @@ export default async function UpgradePage() {
 
       {/* Lifetime plans */}
       <div>
-        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-3">
-          Lifetime access — one-time payment
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
+            Lifetime access — one-time payment
+          </h2>
+          <span className="text-xs font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/30 px-2 py-0.5 rounded-full">
+            Limited time offer
+          </span>
+        </div>
+        <p className="text-xs text-zinc-500 mb-4">
+          Pay once, keep access forever. Lifetime plans won&apos;t be available permanently — grab it while it lasts.
+        </p>
         <div className="grid gap-4 md:grid-cols-2">
           {/* Lifetime Pro */}
           <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 flex flex-col gap-4">

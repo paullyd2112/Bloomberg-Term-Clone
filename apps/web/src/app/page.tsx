@@ -297,6 +297,25 @@ function Pricing() {
         <p className="text-center text-zinc-600 text-xs mt-8">
           7-day free trial · Credit card required · Cancel anytime
         </p>
+
+        {/* Lifetime callout */}
+        <div className="mt-8 max-w-xl mx-auto rounded-xl border border-amber-500/30 bg-amber-500/5 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold text-white flex items-center gap-2">
+              <span className="text-amber-400">⚡</span>
+              Prefer to pay once? Lifetime access from $399
+            </div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              Limited time only — pay once, keep access forever.
+            </div>
+          </div>
+          <Link
+            href="/signup"
+            className="flex-shrink-0 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+          >
+            Get lifetime →
+          </Link>
+        </div>
       </div>
     </section>
   );
