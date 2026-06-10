@@ -219,7 +219,7 @@ const PLANS = [
   },
   {
     name:      "Elite",
-    price:     "$149.99",
+    price:     "$149",
     period:    "/mo",
     highlight: true,
     cta:       "Start 7-day trial",

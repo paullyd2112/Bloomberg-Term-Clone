@@ -103,7 +103,7 @@ export default async function UpgradePage() {
           />
           <PlanCard
             name="Elite"
-            price={{ monthly: 149.99, annual: 1440 }}
+            price={{ monthly: 149, annual: 1430 }}
             description="For the obsessed"
             features={TIER_FEATURES.elite}
             current={tier === "elite" && profile?.billing_interval !== "lifetime"}
