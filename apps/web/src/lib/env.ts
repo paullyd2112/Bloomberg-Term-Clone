@@ -28,6 +28,7 @@ export const STRIPE_PRICE_ANNUAL             = () => requireEnv("STRIPE_PRICE_AN
 export const STRIPE_PRICE_ELITE_MONTHLY      = () => requireEnv("STRIPE_PRICE_ELITE_MONTHLY");
 export const STRIPE_PRICE_ELITE_ANNUAL       = () => requireEnv("STRIPE_PRICE_ELITE_ANNUAL");
 export const STRIPE_PRICE_LIFETIME           = () => requireEnv("STRIPE_PRICE_LIFETIME");
+export const STRIPE_PRICE_LIFETIME_ELITE     = () => requireEnv("STRIPE_PRICE_LIFETIME_ELITE");
 
 // ─── Email ────────────────────────────────────────────────────────────────────
 export const RESEND_API_KEY                  = () => requireEnv("RESEND_API_KEY");

@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/user";
 import { createClient } from "@/lib/supabase/server";
 
 const Body = z.object({
-  plan: z.enum(["pro_monthly", "pro_quarterly", "pro_annual", "elite_monthly", "elite_annual", "lifetime_pro"]),
+  plan: z.enum(["pro_monthly", "pro_quarterly", "pro_annual", "elite_monthly", "elite_annual", "lifetime_pro", "lifetime_elite"]),
 });
 
 export async function POST(req: Request) {
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const isLifetime = plan === "lifetime_pro";
+  const isLifetime = plan === "lifetime_pro" || plan === "lifetime_elite";
   const sessionConfig: Parameters<typeof stripe.checkout.sessions.create>[0] = {
     customer:             customerId,
     mode:                 isLifetime ? "payment" : "subscription",
@@ -67,6 +67,8 @@ export async function POST(req: Request) {
       metadata: { supabase_user_id: user.id, plan },
     };
   } else {
+    // Set metadata on the session itself so checkout.session.completed webhook can read it
+    sessionConfig.metadata = { supabase_user_id: user.id, plan };
     sessionConfig.payment_intent_data = {
       metadata: { supabase_user_id: user.id, plan },
     };

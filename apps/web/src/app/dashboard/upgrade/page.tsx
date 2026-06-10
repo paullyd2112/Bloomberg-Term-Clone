@@ -7,7 +7,8 @@ import BillingPortalButton from "./BillingPortalButton";
 export default async function UpgradePage() {
   const tier = await getUserTier();
   const profile = await getUserProfile();
-  const isLifetime = profile?.billing_interval === "lifetime";
+  const isLifetimePro   = profile?.billing_interval === "lifetime" && tier === "pro";
+  const isLifetimeElite = profile?.billing_interval === "lifetime" && tier === "elite";
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-8">
@@ -20,57 +21,92 @@ export default async function UpgradePage() {
         </p>
       </div>
 
-      {/* Pricing grid */}
-      <div className="space-y-4">
-        {/* Lifetime offer */}
-        <div className="relative bg-gradient-to-br from-green-900/30 to-zinc-900 rounded-xl border border-green-700 p-6 flex flex-col gap-4">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-black text-xs font-bold px-3 py-0.5 rounded-full">
-            Best value
-          </div>
-          <div>
-            <div className="text-base font-bold text-white">Lifetime Pro</div>
-            <div className="text-xs text-zinc-400 mt-0.5">One-time payment, forever access</div>
-          </div>
-          <div>
-            <div className="text-3xl font-bold text-white tabular-nums">$299</div>
-            <div className="text-xs text-zinc-500 mt-0.5">
-              Pays for itself in ~6 months
+      {/* Lifetime plans */}
+      <div>
+        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-3">
+          Lifetime access — one-time payment
+        </h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Lifetime Pro */}
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 flex flex-col gap-4">
+            <div>
+              <div className="text-base font-bold text-white">Lifetime Pro</div>
+              <div className="text-xs text-zinc-400 mt-0.5">One-time payment, forever access</div>
             </div>
-          </div>
-          <ul className="space-y-1.5 flex-1">
-            {TIER_FEATURES.pro.map((f) => (
-              <li key={f} className="flex items-start gap-2 text-xs text-zinc-300">
-                <span className="text-green-400 mt-0.5 flex-shrink-0">✓</span>
-                {f}
-              </li>
-            ))}
-          </ul>
-          {isLifetime ? (
-            <div className="text-center text-xs font-semibold text-zinc-500 border border-zinc-700 rounded-lg py-2">
-              Your plan
+            <div>
+              <div className="text-3xl font-bold text-white tabular-nums">$399</div>
+              <div className="text-xs text-zinc-500 mt-0.5">Pays for itself in ~5 months</div>
             </div>
-          ) : (
-            <LifetimeButton />
-          )}
-        </div>
+            <ul className="space-y-1.5 flex-1">
+              {TIER_FEATURES.pro.map((f) => (
+                <li key={f} className="flex items-start gap-2 text-xs text-zinc-300">
+                  <span className="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+            {isLifetimePro ? (
+              <div className="text-center text-xs font-semibold text-zinc-500 border border-zinc-700 rounded-lg py-2">
+                Your plan
+              </div>
+            ) : (
+              <LifetimeButton plan="lifetime_pro" />
+            )}
+          </div>
 
-        {/* Monthly/Annual plans */}
+          {/* Lifetime Elite */}
+          <div className="relative bg-gradient-to-br from-green-900/30 to-zinc-900 border border-green-700 rounded-xl p-6 flex flex-col gap-4">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-black text-xs font-bold px-3 py-0.5 rounded-full">
+              Best value
+            </div>
+            <div>
+              <div className="text-base font-bold text-white">Lifetime Elite</div>
+              <div className="text-xs text-zinc-400 mt-0.5">One-time payment, forever access</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-white tabular-nums">$649</div>
+              <div className="text-xs text-zinc-500 mt-0.5">Pays for itself in ~4 months</div>
+            </div>
+            <ul className="space-y-1.5 flex-1">
+              {TIER_FEATURES.elite.map((f) => (
+                <li key={f} className="flex items-start gap-2 text-xs text-zinc-300">
+                  <span className="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+            {isLifetimeElite ? (
+              <div className="text-center text-xs font-semibold text-zinc-500 border border-zinc-700 rounded-lg py-2">
+                Your plan
+              </div>
+            ) : (
+              <LifetimeButton plan="lifetime_elite" />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Monthly / Annual plans */}
+      <div>
+        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-3">
+          Subscription plans
+        </h2>
         <div className="grid gap-4 md:grid-cols-2">
           <PlanCard
             name="Pro"
-            price={{ monthly: 50, annual: 480 }}
+            price={{ monthly: 74.99, annual: 720 }}
             description="Serious retail traders"
             features={TIER_FEATURES.pro}
-            current={tier === "pro"}
+            current={tier === "pro" && profile?.billing_interval !== "lifetime"}
             tier="pro"
             highlighted
           />
           <PlanCard
             name="Elite"
-            price={{ monthly: 99, annual: 948 }}
+            price={{ monthly: 149.99, annual: 1440 }}
             description="For the obsessed"
             features={TIER_FEATURES.elite}
-            current={tier === "elite"}
+            current={tier === "elite" && profile?.billing_interval !== "lifetime"}
             tier="elite"
           />
         </div>
@@ -109,6 +145,8 @@ function PlanCard({
   tier: "pro" | "elite";
   highlighted?: boolean;
 }) {
+  const savingsPerYear = Math.round(price.monthly * 12 - price.annual);
+
   return (
     <div
       className={`relative bg-zinc-900 rounded-xl border p-5 flex flex-col gap-4 ${
@@ -134,7 +172,7 @@ function PlanCard({
           <span className="text-sm font-normal text-zinc-400">/mo</span>
         </div>
         <div className="text-xs text-zinc-500 mt-0.5">
-          ${price.annual}/yr — save ${price.monthly * 12 - price.annual}
+          ${price.annual}/yr — save ~${savingsPerYear}
         </div>
       </div>
 

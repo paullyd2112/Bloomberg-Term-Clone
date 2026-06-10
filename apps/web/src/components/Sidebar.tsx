@@ -26,7 +26,10 @@ const NAV: {
 
 export default function Sidebar({ tier, billingInterval }: { tier: Tier; billingInterval?: string | null }) {
   const pathname = usePathname();
-  const displayLabel = billingInterval === "lifetime" ? "Lifetime Pro" : `${tier} plan`;
+  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const displayLabel = billingInterval === "lifetime"
+    ? `Lifetime ${capitalize(tier)}`
+    : `${tier} plan`;
 
   return (
     <aside className="hidden lg:flex w-52 flex-shrink-0 bg-zinc-950 border-r border-zinc-800 flex-col">
