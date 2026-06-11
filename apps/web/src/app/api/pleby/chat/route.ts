@@ -12,7 +12,7 @@ const MAX_ITERATIONS = 6;
 
 // Per-user daily cap — 50 messages/24 h (in-memory, resets on deploy)
 const _rl = new Map<string, { count: number; resetAt: number }>();
-const DAILY_LIMIT = 50;
+const DAILY_LIMIT = 100;
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function isRateLimited(userId: string): boolean {
