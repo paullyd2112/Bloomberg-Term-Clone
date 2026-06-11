@@ -35,9 +35,8 @@ export default function Sidebar({ tier, billingInterval }: { tier: Tier; billing
     <aside className="hidden lg:flex w-52 flex-shrink-0 bg-zinc-950 border-r border-zinc-800 flex-col">
       {/* Logo */}
       <div className="h-14 flex items-center px-4 border-b border-zinc-800">
-        <span className="font-bold text-white tracking-tight">
-          plebs<span className="text-green-400">.finance</span>
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.png" alt="Plebs" className="h-7 w-auto" />
       </div>
 
       {/* Nav */}

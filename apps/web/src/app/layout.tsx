@@ -14,8 +14,17 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Plebs.io — Trading Intelligence",
-  description: "Real-time signals for stocks, crypto, and prediction markets.",
+  title: "Plebs — Hedge fund tools. Retail prices.",
+  description: "AI-powered trading signals for stocks, crypto & prediction markets. Options flow, congressional trades, morning briefing — Wall Street's toolkit, finally for everyone.",
+  openGraph: {
+    title: "Plebs — Hedge fund tools. Retail prices.",
+    description: "AI-powered trading signals for stocks, crypto & prediction markets.",
+    images: [{ url: "/logo.png", width: 500, height: 200 }],
+  },
+  twitter: {
+    card: "summary",
+    images: ["/logo-icon.png"],
+  },
 };
 
 export default function RootLayout({

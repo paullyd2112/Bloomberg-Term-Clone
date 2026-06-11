@@ -233,7 +233,8 @@ export default function PlebyClient() {
           <div className="max-w-3xl mx-auto space-y-6">
             {messages.length === 0 && !streaming && (
               <div className="text-center py-12 space-y-3">
-                <div className="text-5xl">🤖</div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/pleby-mascot.png" alt="Pleby" className="h-36 w-auto mx-auto" />
                 <h2 className="text-white font-semibold text-lg">Ask Pleby</h2>
                 <p className="text-zinc-500 text-sm max-w-md mx-auto">
                   Your AI trading analyst. Ask about any stock, crypto, or prediction market — Pleby pulls live signals, options flow, congressional trades, and news to give you a synthesized take.

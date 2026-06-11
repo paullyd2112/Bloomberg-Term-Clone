@@ -15,8 +15,9 @@ function Nav() {
   return (
     <nav className="fixed top-0 inset-x-0 z-50 border-b border-zinc-800/60 bg-[#09090b]/80 backdrop-blur-md">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-        <Link href="/" className="text-lg font-extrabold text-white tracking-tight">
-          plebs<span className="text-green-400">.finance</span>
+        <Link href="/">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Plebs" className="h-8 w-auto" />
         </Link>
         <div className="flex items-center gap-3">
           <Link
