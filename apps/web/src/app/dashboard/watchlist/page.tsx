@@ -3,6 +3,7 @@ import { getUser, getUserTier } from "@/lib/user";
 import { WATCHLIST_LIMIT } from "@/lib/tier";
 import AddToWatchlist from "@/components/watchlist/AddToWatchlist";
 import WatchlistRow from "@/components/watchlist/WatchlistRow";
+import SubscribeGate from "@/components/ui/SubscribeGate";
 
 export const revalidate = 60;
 
@@ -67,8 +68,11 @@ async function fetchWatchlist(userId: string): Promise<WatchlistItem[]> {
 }
 
 export default async function WatchlistPage() {
-  const user  = await getUser();
-  const tier  = await getUserTier();
+  const user = await getUser();
+  const tier = await getUserTier();
+
+  if (tier === "free") return <SubscribeGate />;
+
   const items = await fetchWatchlist(user!.id);
 
   const limit        = WATCHLIST_LIMIT[tier];
