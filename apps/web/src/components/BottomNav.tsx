@@ -17,7 +17,7 @@ const NAV_PRO = [
   { href: "/dashboard",           label: "Signals",   icon: "⚡" },
   { href: "/dashboard/watchlist", label: "Watch",     icon: "★" },
   { href: "/dashboard/portfolio", label: "Portfolio", icon: "◈" },
-  { href: "/dashboard/alerts",    label: "Alerts",    icon: "🔔" },
+  { href: "/dashboard/congress",  label: "Congress",  icon: "🏛" },
   { href: "/dashboard/briefing",  label: "Brief",     icon: "☀" },
 ] as const;
 
@@ -26,7 +26,7 @@ const NAV_ELITE = [
   { href: "/dashboard/watchlist", label: "Watch",     icon: "★" },
   { href: "/dashboard/portfolio", label: "Portfolio", icon: "◈" },
   { href: "/dashboard/pleby",     label: "Pleby",     icon: "🤖" },
-  { href: "/dashboard/briefing",  label: "Brief",     icon: "☀" },
+  { href: "/dashboard/congress",  label: "Congress",  icon: "🏛" },
 ] as const;
 
 export default function BottomNav({ tier }: { tier: Tier }) {
