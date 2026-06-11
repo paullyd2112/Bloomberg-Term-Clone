@@ -35,9 +35,11 @@
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ANTHROPIC_API_KEY`
-- `QUIVER_API_KEY`
+- `RESEND_API_KEY`
+- `QUIVER_API_KEY` (optional — congressional trades only; app works without it)
 - `BINANCE_API_KEY` (optional — public endpoints work without it)
 - `BINANCE_API_SECRET` (optional)
+- `SENTRY_DSN` (optional — error monitoring)
 
 ## Remaining prompts
 - [ ] Prompt 30: Backtesting
