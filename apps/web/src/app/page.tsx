@@ -202,10 +202,10 @@ function Features() {
 const PLANS = [
   {
     name:      "Pro",
-    price:     "$79",
+    price:     "$40",
     period:    "/mo",
     highlight: false,
-    cta:       "Start 7-day trial",
+    cta:       "Start 14-day trial",
     href:      "/signup",
     features: [
       "Real-time AI signals — stocks & crypto",
@@ -220,10 +220,10 @@ const PLANS = [
   },
   {
     name:      "Elite",
-    price:     "$149",
+    price:     "$80",
     period:    "/mo",
     highlight: true,
-    cta:       "Start 7-day trial",
+    cta:       "Start 14-day trial",
     href:      "/signup",
     features: [
       "Everything in Pro",

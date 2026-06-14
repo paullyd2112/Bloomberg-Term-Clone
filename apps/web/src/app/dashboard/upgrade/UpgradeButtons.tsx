@@ -2,17 +2,16 @@
 
 import { useState } from "react";
 
-type PlanInterval = "monthly" | "quarterly" | "annual";
+type PlanInterval = "monthly" | "quarterly";
 
 const INTERVALS: { id: PlanInterval; label: string }[] = [
   { id: "monthly",   label: "Monthly" },
   { id: "quarterly", label: "Quarterly (save ~10%)" },
-  { id: "annual",    label: "Annual (save ~20%)" },
 ];
 
 const PLAN_KEYS: Record<"pro" | "elite", Record<PlanInterval, string>> = {
-  pro:   { monthly: "pro_monthly",   quarterly: "pro_quarterly",   annual: "pro_annual" },
-  elite: { monthly: "elite_monthly", quarterly: "elite_quarterly", annual: "elite_annual" },
+  pro:   { monthly: "pro_monthly",   quarterly: "pro_quarterly" },
+  elite: { monthly: "elite_monthly", quarterly: "elite_quarterly" },
 };
 
 export default function UpgradeButtons({ planTier }: { planTier: "pro" | "elite" }) {
@@ -66,7 +65,7 @@ export default function UpgradeButtons({ planTier }: { planTier: "pro" | "elite"
         disabled={loading}
         className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold text-sm py-2.5 rounded-lg transition-colors"
       >
-        {loading ? "Redirecting…" : "Start 7-day free trial →"}
+        {loading ? "Redirecting…" : "Start 14-day free trial →"}
       </button>
       <p className="text-center text-xs text-zinc-600">Credit card required. Cancel anytime.</p>
     </div>
