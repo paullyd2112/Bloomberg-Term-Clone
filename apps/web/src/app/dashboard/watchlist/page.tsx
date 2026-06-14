@@ -88,7 +88,6 @@ export default async function WatchlistPage() {
           <p className="text-xs text-zinc-500 mt-0.5">
             {count}
             {limit === Infinity ? "" : ` / ${limit}`} assets
-            {tier === "free" && " · free tier limit"}
           </p>
         </div>
         <AddToWatchlist limitReached={limitReached} />
@@ -118,14 +117,6 @@ export default async function WatchlistPage() {
         </div>
       )}
 
-      {tier === "free" && count > 0 && (
-        <p className="text-xs text-zinc-600 text-center">
-          Free plan is limited to {limit} assets.{" "}
-          <a href="/dashboard/upgrade" className="text-green-400 hover:text-green-300">
-            Upgrade for unlimited →
-          </a>
-        </p>
-      )}
     </div>
   );
 }
