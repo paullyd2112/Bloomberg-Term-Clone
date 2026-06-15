@@ -5,7 +5,8 @@ import { requireUser } from "@/lib/user";
 import { createClient } from "@/lib/supabase/server";
 
 const Body = z.object({
-  plan: z.enum(["pro_monthly", "pro_quarterly", "pro_annual", "elite_monthly", "elite_quarterly", "elite_annual", "lifetime_pro", "lifetime_elite"]),
+  plan: z.enum(["pro_monthly", "pro_quarterly", "pro_annual", "elite_monthly", "elite_quarterly", "elite_annual", "lifetime_pro", "lifetime_elite", "founding_pro", "founding_elite"]),
+  ref:  z.string().max(64).optional(),
 });
 
 export async function POST(req: Request) {
@@ -22,6 +23,7 @@ export async function POST(req: Request) {
   }
 
   const plan    = parsed.data.plan as PlanKey;
+  const ref     = parsed.data.ref ?? null;
   const priceId = getPriceId(plan);
   const stripe  = getStripe();
   const appUrl  = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -50,7 +52,13 @@ export async function POST(req: Request) {
     }
   }
 
-  const isLifetime = plan === "lifetime_pro" || plan === "lifetime_elite";
+  const isLifetime  = plan === "lifetime_pro"   || plan === "lifetime_elite";
+  const isMonthly   = plan === "pro_monthly"    || plan === "elite_monthly";
+  const baseMetadata = {
+    supabase_user_id: user.id,
+    plan,
+    ...(ref ? { influencer_ref: ref } : {}),
+  };
   const sessionConfig: Parameters<typeof stripe.checkout.sessions.create>[0] = {
     customer:             customerId,
     mode:                 isLifetime ? "payment" : "subscription",
@@ -63,15 +71,13 @@ export async function POST(req: Request) {
 
   if (!isLifetime) {
     sessionConfig.subscription_data = {
-      trial_period_days: 14,
-      metadata: { supabase_user_id: user.id, plan },
+      ...(isMonthly ? { trial_period_days: 14 } : {}),
+      metadata: baseMetadata,
     };
   } else {
     // Set metadata on the session itself so checkout.session.completed webhook can read it
-    sessionConfig.metadata = { supabase_user_id: user.id, plan };
-    sessionConfig.payment_intent_data = {
-      metadata: { supabase_user_id: user.id, plan },
-    };
+    sessionConfig.metadata = baseMetadata;
+    sessionConfig.payment_intent_data = { metadata: baseMetadata };
   }
 
   const session = await stripe.checkout.sessions.create(sessionConfig);
