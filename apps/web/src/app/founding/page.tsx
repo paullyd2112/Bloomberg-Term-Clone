@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { TIER_FEATURES } from "@/lib/tier";
@@ -60,21 +60,12 @@ function CheckoutButton({ plan, ref: influencerRef }: { plan: "founding_pro" | "
   );
 }
 
-export default function FoundingPage() {
-  const params       = useSearchParams();
+function FoundingContent() {
+  const params        = useSearchParams();
   const influencerRef = params.get("ref");
 
   return (
-    <div className="min-h-screen bg-[#09090b] flex flex-col">
-      {/* Header */}
-      <div className="border-b border-zinc-800/60 h-14 flex items-center px-6">
-        <Link href="/">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Plebs" className="h-7 w-auto" />
-        </Link>
-      </div>
-
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-16">
+    <main className="flex-1 flex flex-col items-center justify-center px-4 py-16">
         {/* Badge */}
         <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold px-4 py-1.5 rounded-full mb-8">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
@@ -147,7 +138,23 @@ export default function FoundingPage() {
         <p className="mt-3 text-[10px] text-zinc-700 text-center">
           Not financial advice. Past performance is not indicative of future results.
         </p>
-      </main>
+    </main>
+  );
+}
+
+export default function FoundingPage() {
+  return (
+    <div className="min-h-screen bg-[#09090b] flex flex-col">
+      {/* Header */}
+      <div className="border-b border-zinc-800/60 h-14 flex items-center px-6">
+        <Link href="/">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Plebs" className="h-7 w-auto" />
+        </Link>
+      </div>
+      <Suspense fallback={<div className="flex-1" />}>
+        <FoundingContent />
+      </Suspense>
     </div>
   );
 }
