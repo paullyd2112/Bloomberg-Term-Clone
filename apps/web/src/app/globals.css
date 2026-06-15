@@ -30,4 +30,30 @@ body {
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
+
+  /* Faint terminal grid backdrop */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  /* Radial mask that fades the grid toward the edges */
+  .mask-fade {
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 80%);
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 80%);
+  }
+
+  /* Subtle premium hairline used on cards/panels */
+  .ring-hairline {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  /* Soft green ambient glow */
+  .glow-green {
+    box-shadow:
+      0 0 0 1px rgba(34, 197, 94, 0.15),
+      0 0 60px -12px rgba(34, 197, 94, 0.45);
+  }
 }
