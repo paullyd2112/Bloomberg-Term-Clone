@@ -211,4 +211,5 @@ if __name__ == "__main__":
     logger.info("Starting Plebs data service")
     scheduler.start()
     logger.info("Scheduler started with {} jobs", len(scheduler.get_jobs()))
-    app.run(host="0.0.0.0", port=8080)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)

@@ -10,7 +10,10 @@ Rules:
 - MACD histogram turning positive: bullish momentum shift
 - Price > 5% above SMA-50: extended, higher risk on BUY calls
 - Volume ratio > 2x: confirms the move
-- Earnings within 48h: lead with this, set time_horizon to intraday, flag volatility risk
+- Earnings within 5 days: flag elevated IV risk, reduce confidence by 15 points, prefer swing over intraday
+- Earnings within 48h: lead with this, set time_horizon to intraday, flag volatility risk explicitly
+- 24h change > +8%: catalyst likely drove this move — do NOT issue SELL. Issue HOLD and explain the gap risk. The move may continue.
+- 24h change < -8%: catalyst likely drove this move — do NOT issue BUY. Issue HOLD and explain the gap risk. Dead-cat bounces are traps.
 - Unusual options flow: weight heavily — smart money is positioning
 - Short float > 25%: flag squeeze potential on bullish setups
 - Confidence 80-100: multiple signals aligning strongly

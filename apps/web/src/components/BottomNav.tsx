@@ -5,25 +5,33 @@ import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
 import type { Tier } from "@/lib/tier";
 
-const NAV = [
+const NAV_FREE = [
   { href: "/dashboard",           label: "Signals",  icon: "⚡" },
   { href: "/dashboard/watchlist", label: "Watch",    icon: "★" },
   { href: "/dashboard/congress",  label: "Congress", icon: "🏛" },
   { href: "/dashboard/briefing",  label: "Brief",    icon: "☀" },
-  { href: "/dashboard/upgrade",   label: "Upgrade",  icon: "↑",  upgradeOnly: true },
+  { href: "/dashboard/upgrade",   label: "Upgrade",  icon: "↑" },
 ] as const;
 
 const NAV_PRO = [
   { href: "/dashboard",           label: "Signals",   icon: "⚡" },
   { href: "/dashboard/watchlist", label: "Watch",     icon: "★" },
   { href: "/dashboard/portfolio", label: "Portfolio", icon: "◈" },
-  { href: "/dashboard/alerts",    label: "Alerts",    icon: "🔔" },
+  { href: "/dashboard/congress",  label: "Congress",  icon: "🏛" },
   { href: "/dashboard/briefing",  label: "Brief",     icon: "☀" },
+] as const;
+
+const NAV_ELITE = [
+  { href: "/dashboard",           label: "Signals",   icon: "⚡" },
+  { href: "/dashboard/watchlist", label: "Watch",     icon: "★" },
+  { href: "/dashboard/portfolio", label: "Portfolio", icon: "◈" },
+  { href: "/dashboard/pleby",     label: "Pleby",     icon: "🤖" },
+  { href: "/dashboard/congress",  label: "Congress",  icon: "🏛" },
 ] as const;
 
 export default function BottomNav({ tier }: { tier: Tier }) {
   const pathname = usePathname();
-  const items    = tier === "free" ? NAV : NAV_PRO;
+  const items    = tier === "elite" ? NAV_ELITE : tier === "pro" ? NAV_PRO : NAV_FREE;
 
   return (
     <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-zinc-950 border-t border-zinc-800 flex">

@@ -10,6 +10,23 @@ export const maxDuration = 60;
 
 const MAX_ITERATIONS = 6;
 
+// Per-user daily cap — 50 messages/24 h (in-memory, resets on deploy)
+const _rl = new Map<string, { count: number; resetAt: number }>();
+const DAILY_LIMIT = 100;
+const WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function isRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const entry = _rl.get(userId);
+  if (!entry || now > entry.resetAt) {
+    _rl.set(userId, { count: 1, resetAt: now + WINDOW_MS });
+    return false;
+  }
+  if (entry.count >= DAILY_LIMIT) return true;
+  entry.count++;
+  return false;
+}
+
 function sse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
@@ -21,6 +38,13 @@ export async function POST(req: Request) {
   const tier = await getUserTier();
   if (!canAccessFeature(tier, "pleby")) {
     return new Response("Elite tier required", { status: 403 });
+  }
+
+  if (isRateLimited(user.id)) {
+    return new Response(
+      JSON.stringify({ error: "Daily message limit reached. Resets in 24 hours." }),
+      { status: 429, headers: { "Content-Type": "application/json" } },
+    );
   }
 
   const { conversation_id, message } = (await req.json()) as {

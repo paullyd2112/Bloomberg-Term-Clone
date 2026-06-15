@@ -73,7 +73,7 @@ export default function PositionRow({ pos }: { pos: Position }) {
     <div className="px-4 py-3 border-b border-zinc-800 last:border-0 hover:bg-zinc-800/20 transition-colors group">
       <div className="flex items-center gap-3 flex-wrap">
         {/* Ticker + direction */}
-        <div className="flex items-center gap-2 min-w-[140px]">
+        <div className="flex items-center gap-2 min-w-[110px] sm:min-w-[140px]">
           <Link
             href={`/dashboard/asset/${pos.asset_type}/${encodeURIComponent(pos.identifier)}`}
             className="font-mono font-bold text-white hover:text-green-400 transition-colors text-sm"
@@ -86,7 +86,7 @@ export default function PositionRow({ pos }: { pos: Position }) {
         </div>
 
         {/* Entry */}
-        <div className="text-xs text-zinc-500 min-w-[90px]">
+        <div className="text-xs text-zinc-500 min-w-[70px] sm:min-w-[90px]">
           <span className="text-zinc-600">Entry </span>
           <span className="font-mono text-zinc-300">
             {pos.asset_type === "prediction"

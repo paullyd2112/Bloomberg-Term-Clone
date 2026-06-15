@@ -88,7 +88,7 @@ export default function CongressPage() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
         {[
           { label: "Total trades",  value: filtered.length, cls: "text-white" },
           { label: "Buys",          value: buys,            cls: "text-green-400" },
@@ -111,7 +111,7 @@ export default function CongressPage() {
           onChange={(e) =>
             startTransition(() => setFilter((f) => ({ ...f, search: e.target.value })))
           }
-          className="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 w-52"
+          className="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 w-full sm:w-52"
         />
 
         {/* Party filter */}

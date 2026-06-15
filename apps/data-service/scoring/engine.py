@@ -142,7 +142,7 @@ def _get_fear_greed() -> dict:
 
 
 def _get_earnings_context(ticker: str) -> dict | None:
-    cutoff = (datetime.now(timezone.utc) + timedelta(hours=48)).date().isoformat()
+    cutoff = (datetime.now(timezone.utc) + timedelta(days=5)).date().isoformat()
     today  = datetime.now(timezone.utc).date().isoformat()
     try:
         result = (
@@ -345,6 +345,40 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
         logger.error("{}/{}: Claude scoring failed — {}", asset_type, identifier, e)
         sentry_sdk.capture_exception(e)
         return None
+
+    # Circuit breaker — don't issue counter-trend signals after a large gap move.
+    # A >8% gap up/down almost always means a fundamental catalyst repriced the stock;
+    # fading it with a directional signal is the fastest way to burn users.
+    change = price_row.get("change_24h")
+    if change is not None:
+        try:
+            change_f = float(change)
+            if change_f >= 8.0 and signal.direction == "SELL":
+                logger.warning(
+                    "{}/{}: circuit breaker — +{:.1f}% gap up, downgrading SELL to HOLD",
+                    asset_type, identifier, change_f,
+                )
+                signal.direction   = "HOLD"
+                signal.confidence  = min(signal.confidence, 45)
+                signal.reasoning   = (
+                    f"[Circuit breaker] Stock gapped up +{change_f:.1f}% — likely catalyst-driven. "
+                    f"Fading a gap this large carries extreme risk. "
+                    + signal.reasoning
+                )
+            elif change_f <= -8.0 and signal.direction == "BUY":
+                logger.warning(
+                    "{}/{}: circuit breaker — {:.1f}% gap down, downgrading BUY to HOLD",
+                    asset_type, identifier, change_f,
+                )
+                signal.direction   = "HOLD"
+                signal.confidence  = min(signal.confidence, 45)
+                signal.reasoning   = (
+                    f"[Circuit breaker] Stock gapped down {change_f:.1f}% — likely catalyst-driven. "
+                    f"Catching this knife carries extreme risk. "
+                    + signal.reasoning
+                )
+        except (TypeError, ValueError):
+            pass
 
     # Write to Supabase
     try:

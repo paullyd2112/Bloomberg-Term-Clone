@@ -16,9 +16,6 @@ const NAV: {
   { href: "/dashboard/portfolio",  label: "Portfolio",     icon: "◈",  tier: "pro" },
   { href: "/dashboard/alerts",     label: "Alerts",        icon: "🔔", tier: "pro" },
   { href: "/dashboard/congress",   label: "Congress",      icon: "🏛" },
-  { href: "/dashboard/calendar",   label: "Econ Calendar", icon: "📅" },
-  { href: "/dashboard/briefing",   label: "Morning Brief", icon: "☀" },
-  { href: "/dashboard/backtest",    label: "Backtester",    icon: "📊", tier: "pro" },
   { href: "/dashboard/referrals",  label: "Referrals",     icon: "🎁" },
   { href: "/dashboard/allocator",  label: "Allocator",     icon: "◈",  tier: "elite" },
   { href: "/dashboard/pleby",      label: "Pleby AI",      icon: "🤖", tier: "elite" },
@@ -26,15 +23,17 @@ const NAV: {
 
 export default function Sidebar({ tier, billingInterval }: { tier: Tier; billingInterval?: string | null }) {
   const pathname = usePathname();
-  const displayLabel = billingInterval === "lifetime" ? "Lifetime Pro" : `${tier} plan`;
+  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const displayLabel = billingInterval === "lifetime"
+    ? `Lifetime ${capitalize(tier)}`
+    : `${tier} plan`;
 
   return (
     <aside className="hidden lg:flex w-52 flex-shrink-0 bg-zinc-950 border-r border-zinc-800 flex-col">
       {/* Logo */}
       <div className="h-14 flex items-center px-4 border-b border-zinc-800">
-        <span className="font-bold text-white tracking-tight">
-          plebs<span className="text-green-400">.io</span>
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.png" alt="Plebs" className="h-7 w-auto" />
       </div>
 
       {/* Nav */}

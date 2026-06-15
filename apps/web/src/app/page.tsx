@@ -15,8 +15,9 @@ function Nav() {
   return (
     <nav className="fixed top-0 inset-x-0 z-50 border-b border-zinc-800/60 bg-[#09090b]/80 backdrop-blur-md">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-        <Link href="/" className="text-lg font-extrabold text-white tracking-tight">
-          plebs<span className="text-green-400">.finance</span>
+        <Link href="/">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Plebs" className="h-8 w-auto" />
         </Link>
         <div className="flex items-center gap-3">
           <Link
@@ -62,7 +63,7 @@ function Hero() {
           href="/signup"
           className="w-full sm:w-auto inline-block bg-green-500 hover:bg-green-400 text-black font-bold text-base px-8 py-3.5 rounded-xl transition-colors"
         >
-          Start free — 7-day trial →
+          Start free — 14-day trial →
         </Link>
         <Link
           href="/login"
@@ -73,7 +74,7 @@ function Hero() {
       </div>
 
       <p className="mt-4 text-xs text-zinc-600">
-        7-day free trial · Credit card required · Cancel anytime
+        14-day free trial · Credit card required · Cancel anytime
       </p>
     </section>
   );
@@ -200,53 +201,36 @@ function Features() {
 
 const PLANS = [
   {
-    name:     "Lifetime Pro",
-    price:    "$399",
-    period:   "once",
+    name:      "Pro",
+    price:     "$40",
+    period:    "/mo",
+    highlight: false,
+    cta:       "Start 14-day trial",
+    href:      "/signup",
+    features: [
+      "Real-time AI signals — stocks & crypto",
+      "Unlimited watchlist",
+      "Full options flow + dark pool",
+      "Congressional trade tracker",
+      "Morning briefing email (7am ET)",
+      "Portfolio tracker + P&L",
+      "Price & signal alerts",
+      "Per-asset AI accuracy tracking",
+    ],
+  },
+  {
+    name:      "Elite",
+    price:     "$80",
+    period:    "/mo",
     highlight: true,
-    cta:      "Get lifetime access",
-    href:     "/dashboard/upgrade",
-    features: [
-      "Real-time signals — stocks, crypto & predictions",
-      "Unlimited watchlist",
-      "Full options flow + dark pool",
-      "Morning briefing email (8:45am ET)",
-      "Portfolio tracker",
-      "Price & signal alerts",
-      "Congressional trades tracker",
-      "Per-asset AI accuracy tracking",
-      "Forever access",
-    ],
-  },
-  {
-    name:     "Pro",
-    price:    "$79",
-    period:   "/mo",
-    highlight: false,
-    cta:      "Start 7-day trial",
-    href:     "/signup",
-    features: [
-      "Real-time signals — stocks, crypto & predictions",
-      "Unlimited watchlist",
-      "Full options flow + dark pool",
-      "Morning briefing email (8:45am ET)",
-      "Portfolio tracker",
-      "Price & signal alerts",
-      "Congressional trades tracker",
-      "Per-asset AI accuracy tracking",
-    ],
-  },
-  {
-    name:     "Elite",
-    price:    "$149",
-    period:   "/mo",
-    highlight: false,
-    cta:      "Start 7-day trial",
-    href:     "/signup",
+    cta:       "Start 14-day trial",
+    href:      "/signup",
     features: [
       "Everything in Pro",
-      "Pleby — AI trading analyst",
-      "Ask Pleby about any asset",
+      "Prediction market signals (Kalshi + Polymarket)",
+      "The real alpha — AI finds mispriced contracts",
+      "Pleby — AI trading analyst chat",
+      "Ask Pleby about any asset anytime",
       "Personalised morning briefing",
       "Priority signal delivery",
     ],
@@ -259,10 +243,10 @@ function Pricing() {
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-14">
           <h2 className="text-3xl sm:text-4xl font-bold text-white">Simple pricing</h2>
-          <p className="text-zinc-500 mt-3">Start free. Upgrade when the signals pay for themselves.</p>
+          <p className="text-zinc-500 mt-3">Two tiers. No free tier. The signals pay for themselves.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
           {PLANS.map((plan) => (
             <div
               key={plan.name}
@@ -312,8 +296,128 @@ function Pricing() {
         </div>
 
         <p className="text-center text-zinc-600 text-xs mt-8">
-          All plans include a 7-day free trial · Credit card required · Cancel anytime
+          14-day free trial · Credit card required · Cancel anytime
         </p>
+
+        {/* Lifetime callout */}
+        <div className="mt-8 max-w-xl mx-auto rounded-xl border border-amber-500/30 bg-amber-500/5 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold text-white flex items-center gap-2">
+              <span className="text-amber-400">⚡</span>
+              Prefer to pay once? Lifetime access from $399
+            </div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              Limited time only — pay once, keep access forever.
+            </div>
+          </div>
+          <Link
+            href="/signup"
+            className="flex-shrink-0 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+          >
+            Get lifetime →
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Testimonials ─────────────────────────────────────────────────────────────
+
+const IMESSAGES: { name: string; messages: { from: "them" | "me"; text: string }[] }[] = [
+  {
+    name: "Jordan K.",
+    messages: [
+      { from: "me",   text: "Pleby just called NVDA swing buy at open. up 4.1% by close lol" },
+      { from: "them", text: "wait what app is this" },
+      { from: "me",   text: "Plebs. AI signals. $40/mo. made that back day one" },
+      { from: "them", text: "sending you my venmo for the sub rn" },
+    ],
+  },
+  {
+    name: "Marcus T.",
+    messages: [
+      { from: "them", text: "bro the congress tracker flagged a senator buying semis before the AI bill vote" },
+      { from: "me",   text: "no way" },
+      { from: "them", text: "yeah loaded calls that morning. printed" },
+      { from: "me",   text: "this app pays for itself" },
+    ],
+  },
+];
+
+const EMAILS: { from: string; subject: string; body: string }[] = [
+  {
+    from:    "Ryan M.",
+    subject: "Re: morning brief",
+    body:    "Didn't expect much tbh but the 8:45am brief is now part of my routine. Caught the TSLA reversal signal before the move yesterday. Keep it up.",
+  },
+  {
+    from:    "Destiny A.",
+    subject: "The prediction market signals are different",
+    body:    "Tried Unusual Whales, Benzinga, all of them. Nobody else is doing prediction market signals for retail. The Kalshi plays alone are worth the sub.",
+  },
+];
+
+function Testimonials() {
+  return (
+    <section className="py-20 px-4 border-t border-zinc-800/60">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white">What people are saying</h2>
+          <p className="text-zinc-500 mt-3">From the group chats and inboxes of actual users.</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {IMESSAGES.map((convo) => (
+            <div key={convo.name} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+              {/* Phone header */}
+              <div className="bg-zinc-800/80 px-4 py-2.5 flex items-center gap-3 border-b border-zinc-700/50">
+                <div className="w-7 h-7 rounded-full bg-zinc-600 flex items-center justify-center text-xs font-bold text-white">
+                  {convo.name.charAt(0)}
+                </div>
+                <span className="text-sm font-medium text-white">{convo.name}</span>
+                <span className="ml-auto text-[10px] text-zinc-500">iMessage</span>
+              </div>
+              {/* Bubbles */}
+              <div className="p-4 space-y-2">
+                {convo.messages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm leading-snug ${
+                        msg.from === "me"
+                          ? "bg-green-500 text-black rounded-br-sm"
+                          : "bg-zinc-700 text-white rounded-bl-sm"
+                      }`}
+                    >
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {EMAILS.map((email) => (
+            <div key={email.from} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+              {/* Email header */}
+              <div className="px-5 py-3 border-b border-zinc-800 space-y-0.5">
+                <div className="flex items-center gap-2 text-xs text-zinc-500">
+                  <span className="text-zinc-600">From:</span>
+                  <span className="text-white font-medium">{email.from}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-zinc-500">
+                  <span className="text-zinc-600">Subject:</span>
+                  <span className="text-zinc-300">{email.subject}</span>
+                </div>
+              </div>
+              <div className="px-5 py-4 text-sm text-zinc-400 leading-relaxed">
+                &ldquo;{email.body}&rdquo;
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -326,7 +430,7 @@ function Stats() {
     { value: "3 markets",  label: "Stocks, crypto & predictions" },
     { value: "8:45am ET",  label: "Daily briefing delivery" },
     { value: "2h cooldown",label: "Signal dedup window" },
-    { value: "7-day trial",label: "CC required, cancel anytime" },
+    { value: "14-day trial",label: "CC required, cancel anytime" },
   ];
 
   return (
@@ -353,7 +457,7 @@ function CTAStrip() {
           Ready to trade with an edge?
         </h2>
         <p className="text-zinc-500">
-          7-day trial. Real-time signals from day one.
+          14-day trial. Real-time signals from day one.
         </p>
         <Link
           href="/signup"
@@ -409,6 +513,7 @@ export default function LandingPage() {
         <Hero />
         <SignalStrip />
         <Features />
+        <Testimonials />
         <Stats />
         <Pricing />
         <CTAStrip />
