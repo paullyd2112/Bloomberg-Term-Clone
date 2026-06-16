@@ -44,17 +44,16 @@ DATE_TO   = "2026-06-16"
 
 # ─── Signal constants ─────────────────────────────────────────────────────────
 
-HOLD_DAYS              = 5      # trading days per trade
+HOLD_DAYS              = 10     # trading days — capture more of the move
 CIRCUIT_BREAKER        = 8.0    # % single-day gap that overrides signal
-MIN_CONFIDENCE         = 65     # raised from 60 — filter weak signals
-PAPER_MIN_CONFIDENCE   = 68     # paper sim only takes highest conviction
-RSI_DEEPLY_OVERSOLD    = 28     # high conviction BUY zone
-RSI_OVERSOLD           = 35     # moderate BUY zone
-RSI_OVERBOUGHT         = 65     # moderate SELL zone
-RSI_DEEPLY_OVERBOUGHT  = 72     # high conviction SELL zone
-VOLUME_CONFIRM         = 2.0    # raised from 1.5 — require stronger volume
-TREND_SELL_BLOCK_PCT   = 5.0    # suppress SELL when price > 5% above SMA50
-SIGNAL_COOLDOWN_BARS   = 5      # min bars between signals for the same ticker
+MIN_CONFIDENCE         = 65
+PAPER_MIN_CONFIDENCE   = 65
+RSI_ENTRY_MAX          = 60     # don't enter BUY if RSI already above 60
+RSI_OVERSOLD_BOOST     = 35     # extra conviction when RSI is oversold
+VOLUME_CONFIRM         = 1.5    # volume ratio threshold for confirmation
+SIGNAL_COOLDOWN_BARS   = 8      # min bars between signals for the same ticker
+TRAILING_STOP_PCT      = 5.0    # exit if price drops 5% from peak during hold
+LONG_ONLY              = True   # no shorts — align with bull market regime
 
 # ─── Paper trading ────────────────────────────────────────────────────────────
 
@@ -383,14 +382,15 @@ def _generate_signal(
     row: pd.Series, prev_row: pd.Series
 ) -> tuple[Literal["BUY", "SELL", "HOLD"], int]:
     """
-    Score-based signal generator. Requires confluence of multiple indicators.
+    MACD-crossover-first signal generator. Long-only in bull regime.
 
     Core philosophy:
-    - Only extreme RSI readings count (< 35 or > 65). Midrange = noise.
-    - MACD crossovers are the gold standard. Histogram state alone is weak.
-    - SMA50 indicates trend direction — we align with the trend, not fight it.
-    - SELL signals are suppressed when price is well above SMA50 (uptrend).
-    - Two indicators must agree to reach MIN_CONFIDENCE.
+    - The ONLY high-quality entry signal is a MACD bullish crossover (histogram neg→pos).
+    - RSI is a FILTER, not a signal generator. Don't enter overbought (>60).
+    - RSI oversold (<35) BOOSTS conviction on crossover entries.
+    - SMA50 confirms trend direction — above = green light, below = caution.
+    - Volume spike confirms institutional participation.
+    - No short selling — in a bull market, shorts bleed you dry.
     """
     rsi       = row.get("_rsi")
     macd_hist = row.get("_macd_hist")
@@ -399,75 +399,65 @@ def _generate_signal(
     sma50_pct = row.get("price_vs_sma50")
     change_1d = row.get("change_1d")
 
-    bullish = bearish = 0
+    # ── Gate: MACD crossover is REQUIRED for entry ───────────────────────────
+    # No crossover = no trade. This is the single most important filter.
+    has_bullish_crossover = (
+        pd.notna(macd_hist) and pd.notna(prev_hist)
+        and prev_hist < 0 and macd_hist > 0
+    )
+    has_bearish_crossover = (
+        pd.notna(macd_hist) and pd.notna(prev_hist)
+        and prev_hist > 0 and macd_hist < 0
+    )
 
-    # ── RSI: only extreme readings generate signal ────────────────────────────
-    # Mid-range RSI (35-65) is normal — not a setup, do not signal.
-    if pd.notna(rsi):
-        if rsi < RSI_DEEPLY_OVERSOLD:        bullish += 35    # <28: deep oversold
-        elif rsi < RSI_OVERSOLD:             bullish += 20    # 28-35: oversold
-        elif rsi > RSI_DEEPLY_OVERBOUGHT:    bearish += 35    # >72: deep overbought
-        elif rsi > RSI_OVERBOUGHT:           bearish += 20    # 65-72: overbought
-
-    # ── MACD: crossovers are gold, momentum direction is decent ──────────────
-    if pd.notna(macd_hist) and pd.notna(prev_hist):
-        if prev_hist < 0 and macd_hist > 0:
-            bullish += 30                        # bullish crossover — strongest setup
-        elif prev_hist > 0 and macd_hist < 0:
-            bearish += 30                        # bearish crossover — strongest setup
-        elif macd_hist > 0:
-            if macd_hist > prev_hist: bullish += 8   # histogram expanding bullishly
-            else:                     bearish += 5   # histogram shrinking — possible top
-        elif macd_hist < 0:
-            if macd_hist < prev_hist: bearish += 8   # histogram expanding bearishly
-            else:                     bullish += 5   # histogram recovering — possible bottom
-
-    # ── SMA50: trend alignment, NOT mean reversion ───────────────────────────
-    # Price above SMA50 = uptrend = favor BUY. Below = downtrend = favor SELL.
-    # This replaces the old inverted logic that bet against strong trends.
-    if pd.notna(sma50_pct):
-        if sma50_pct > 5:    bullish += 8    # strong uptrend — align long
-        elif sma50_pct > 0:  bullish += 4    # mild uptrend
-        elif sma50_pct < -5: bearish += 8    # strong downtrend — align short
-        else:                bearish += 4    # mild downtrend
-
-    # ── Volume: require 2x average to boost conviction ────────────────────────
-    vol_boost = 15 if (pd.notna(vol_ratio) and vol_ratio > VOLUME_CONFIRM) else 0
-
-    if bullish > bearish:
-        raw = min(50 + bullish + vol_boost, 100)
-        direction: Literal["BUY", "SELL", "HOLD"] = "BUY"
-    elif bearish > bullish:
-        raw = min(50 + bearish + vol_boost, 100)
-        direction = "SELL"
-    else:
+    if not has_bullish_crossover and not has_bearish_crossover:
         return "HOLD", 50
 
-    # ── Trend filter: never short a stock in a clear uptrend ─────────────────
-    # When price is 5%+ above SMA50, the path of least resistance is up.
-    # Shorting uptrends is how retail traders lose money fast.
-    if direction == "SELL" and pd.notna(sma50_pct) and sma50_pct > TREND_SELL_BLOCK_PCT:
-        return "HOLD", min(raw, 55)
+    # ── Long-only mode: skip all SELL signals ────────────────────────────────
+    if LONG_ONLY and has_bearish_crossover and not has_bullish_crossover:
+        return "HOLD", 50
 
-    # ── Anti-knife-catch: don't BUY into confirmed downtrend ─────────────────
-    # RSI oversold + negative MACD + price 5%+ below SMA50 = falling knife.
-    if direction == "BUY" and pd.notna(sma50_pct) and sma50_pct < -5:
-        if pd.notna(macd_hist) and macd_hist < 0 and (
-            prev_hist is None or macd_hist < prev_hist
-        ):
-            return "HOLD", min(raw, 55)
+    if has_bullish_crossover:
+        direction: Literal["BUY", "SELL", "HOLD"] = "BUY"
+    else:
+        direction = "SELL"
 
-    # ── Circuit breaker: avoid counter-trend trades after large gap moves ─────
+    # ── Build confidence from confluence ─────────────────────────────────────
+    confidence = 55  # base: crossover alone is decent
+
+    # RSI filter: don't buy overbought
+    if direction == "BUY" and pd.notna(rsi):
+        if rsi > RSI_ENTRY_MAX:
+            return "HOLD", 50  # already extended, crossover is late
+        if rsi < RSI_OVERSOLD_BOOST:
+            confidence += 20   # oversold + crossover = best setup
+        elif rsi < 50:
+            confidence += 10   # RSI has room to run
+
+    # SMA50 trend alignment
+    if pd.notna(sma50_pct):
+        if direction == "BUY":
+            if sma50_pct > 0:    confidence += 10   # uptrend confirmation
+            elif sma50_pct < -8: confidence -= 10   # deep downtrend, risky entry
+        elif direction == "SELL":
+            if sma50_pct < 0:    confidence += 10
+            elif sma50_pct > 5:  return "HOLD", 50  # don't short uptrends
+
+    # Volume confirmation
+    if pd.notna(vol_ratio) and vol_ratio > VOLUME_CONFIRM:
+        confidence += 10   # institutional participation
+
+    # ── Circuit breaker ──────────────────────────────────────────────────────
     if pd.notna(change_1d):
-        if change_1d <= -CIRCUIT_BREAKER and direction == "BUY":
-            return "HOLD", min(raw, 45)
-        if change_1d >= CIRCUIT_BREAKER and direction == "SELL":
-            return "HOLD", min(raw, 45)
+        if abs(change_1d) >= CIRCUIT_BREAKER:
+            return "HOLD", min(confidence, 45)
 
-    if raw < MIN_CONFIDENCE:
-        return "HOLD", raw
+    confidence = min(confidence, 100)
 
-    return direction, raw
+    if confidence < MIN_CONFIDENCE:
+        return "HOLD", confidence
+
+    return direction, confidence
 
 
 # ─── Outcome evaluation ───────────────────────────────────────────────────────
@@ -519,7 +509,26 @@ def _backtest_ticker(
             last_signal_bar = i
 
         signal_price = float(row["close"])
-        future_price = float(df.iloc[i + HOLD_DAYS]["close"])
+
+        # Trailing stop evaluation: check each bar in the hold period.
+        # Exit at the trailing stop if price drops 5% from peak, otherwise
+        # exit at HOLD_DAYS.
+        exit_price = float(df.iloc[i + HOLD_DAYS]["close"])  # default: end of hold
+        if direction == "BUY":
+            peak = signal_price
+            for k in range(1, HOLD_DAYS + 1):
+                if i + k >= len(df):
+                    break
+                bar_close = float(df.iloc[i + k]["close"])
+                peak = max(peak, bar_close)
+                drop_from_peak = (peak - bar_close) / peak * 100
+                if drop_from_peak >= TRAILING_STOP_PCT:
+                    exit_price = bar_close
+                    break
+            else:
+                exit_price = float(df.iloc[i + HOLD_DAYS]["close"])
+
+        future_price = exit_price
         outcome, fwd_return = _evaluate_outcome(direction, signal_price, future_price)
 
         circuit_fired = (
@@ -638,10 +647,10 @@ def _run_paper_sim(all_records: list[SignalRecord]) -> dict:
             # For SELL (short): win means price went down, fwd_return already flipped positive
             pnl_pct = sig.forward_return_5d  # already sign-corrected in _evaluate_outcome
 
-            # Approximate exit date (5 trading days ≈ 7 calendar days)
+            # Approximate exit date (10 trading days ≈ 14 calendar days)
             from datetime import datetime, timedelta
             entry_dt = datetime.strptime(sig.date, "%Y-%m-%d")
-            exit_dt  = entry_dt + timedelta(days=7)
+            exit_dt  = entry_dt + timedelta(days=14)
             exit_date = exit_dt.strftime("%Y-%m-%d")
 
             exit_price = sig.price * (1 + (sig.forward_return_5d or 0) / 100) if sig.direction == "BUY" \
