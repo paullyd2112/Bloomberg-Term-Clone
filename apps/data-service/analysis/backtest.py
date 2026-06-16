@@ -44,16 +44,14 @@ DATE_TO   = "2026-06-16"
 
 # ─── Signal constants ─────────────────────────────────────────────────────────
 
-HOLD_DAYS              = 10     # trading days — capture more of the move
-CIRCUIT_BREAKER        = 8.0    # % single-day gap that overrides signal
-MIN_CONFIDENCE         = 65
-PAPER_MIN_CONFIDENCE   = 65
-RSI_ENTRY_MAX          = 60     # don't enter BUY if RSI already above 60
-RSI_OVERSOLD_BOOST     = 35     # extra conviction when RSI is oversold
-VOLUME_CONFIRM         = 1.5    # volume ratio threshold for confirmation
-SIGNAL_COOLDOWN_BARS   = 8      # min bars between signals for the same ticker
-TRAILING_STOP_PCT      = 5.0    # exit if price drops 5% from peak during hold
-LONG_ONLY              = True   # no shorts — align with bull market regime
+HOLD_DAYS             = 10     # trading days per position
+CIRCUIT_BREAKER       = 8.0    # % single-day gap that overrides signal
+MIN_CONFIDENCE        = 68     # requires meaningful confluence
+PAPER_MIN_CONFIDENCE  = 68
+VOLUME_CONFIRM        = 1.5    # volume ratio threshold for boost
+SIGNAL_COOLDOWN_BARS  = 8      # min bars between signals per ticker
+TRAILING_STOP_PCT     = 5.0    # exit if price falls 5% from peak
+LONG_ONLY             = True   # no shorts in bull market
 
 # ─── Paper trading ────────────────────────────────────────────────────────────
 
@@ -365,7 +363,7 @@ def _compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["volume_ratio"]   = df["volume"] / df["volume_sma_20"]
 
     def _find(prefix: str) -> str | None:
-        m = [c for c in df.columns if c.startswith(prefix.lower())]
+        m = [c for c in df.columns if c.lower().startswith(prefix.lower())]
         return m[0] if m else None
 
     df["_rsi"]       = df.get(_find("rsi_"))
@@ -382,15 +380,15 @@ def _generate_signal(
     row: pd.Series, prev_row: pd.Series
 ) -> tuple[Literal["BUY", "SELL", "HOLD"], int]:
     """
-    MACD-crossover-first signal generator. Long-only in bull regime.
+    Score-based long-only signal generator.
 
-    Core philosophy:
-    - The ONLY high-quality entry signal is a MACD bullish crossover (histogram neg→pos).
-    - RSI is a FILTER, not a signal generator. Don't enter overbought (>60).
-    - RSI oversold (<35) BOOSTS conviction on crossover entries.
-    - SMA50 confirms trend direction — above = green light, below = caution.
-    - Volume spike confirms institutional participation.
-    - No short selling — in a bull market, shorts bleed you dry.
+    Philosophy:
+    - Additive scoring across MACD, RSI, SMA50, volume — no single hard gate.
+    - MACD crossover is the strongest signal (+30) but not required alone.
+    - RSI modulates conviction: oversold boosts entry, overbought penalises it.
+    - SMA50 used as trend alignment (uptrend = add score, downtrend = subtract).
+    - Long-only: only BUY signals. In a +10% bull market shorts are wealth destruction.
+    - Requires meaningful confluence to reach MIN_CONFIDENCE.
     """
     rsi       = row.get("_rsi")
     macd_hist = row.get("_macd_hist")
@@ -399,60 +397,48 @@ def _generate_signal(
     sma50_pct = row.get("price_vs_sma50")
     change_1d = row.get("change_1d")
 
-    # ── Gate: MACD crossover is REQUIRED for entry ───────────────────────────
-    # No crossover = no trade. This is the single most important filter.
-    has_bullish_crossover = (
-        pd.notna(macd_hist) and pd.notna(prev_hist)
-        and prev_hist < 0 and macd_hist > 0
-    )
-    has_bearish_crossover = (
-        pd.notna(macd_hist) and pd.notna(prev_hist)
-        and prev_hist > 0 and macd_hist < 0
-    )
+    score = 0  # positive = bullish bias
 
-    if not has_bullish_crossover and not has_bearish_crossover:
-        return "HOLD", 50
+    # ── MACD — crossover is gold, but expanding histogram also counts ─────────
+    if pd.notna(macd_hist) and pd.notna(prev_hist):
+        if prev_hist < 0 and macd_hist > 0:    score += 30  # bullish crossover
+        elif prev_hist > 0 and macd_hist < 0:  score -= 20  # bearish crossover (penalise)
+        elif macd_hist > 0:
+            if macd_hist > prev_hist:          score += 8   # histogram expanding bullishly
+            else:                              score += 3   # positive but fading
+        elif macd_hist < 0:
+            if macd_hist < prev_hist:          score -= 8   # expanding bearishly
+            else:                              score += 5   # negative but recovering
 
-    # ── Long-only mode: skip all SELL signals ────────────────────────────────
-    if LONG_ONLY and has_bearish_crossover and not has_bullish_crossover:
-        return "HOLD", 50
+    # ── RSI — oversold = boost, overbought = penalise ────────────────────────
+    if pd.notna(rsi):
+        if rsi < 30:         score += 20   # deep oversold — strong entry
+        elif rsi < 45:       score += 10   # oversold, room to run
+        elif rsi < 55:       score += 4    # neutral
+        elif rsi > 75:       score -= 20   # very overbought — don't chase
+        elif rsi > 65:       score -= 10   # extended — reduce conviction
 
-    if has_bullish_crossover:
-        direction: Literal["BUY", "SELL", "HOLD"] = "BUY"
-    else:
-        direction = "SELL"
-
-    # ── Build confidence from confluence ─────────────────────────────────────
-    confidence = 55  # base: crossover alone is decent
-
-    # RSI filter: don't buy overbought
-    if direction == "BUY" and pd.notna(rsi):
-        if rsi > RSI_ENTRY_MAX:
-            return "HOLD", 50  # already extended, crossover is late
-        if rsi < RSI_OVERSOLD_BOOST:
-            confidence += 20   # oversold + crossover = best setup
-        elif rsi < 50:
-            confidence += 10   # RSI has room to run
-
-    # SMA50 trend alignment
+    # ── SMA50 — trend alignment only, not mean reversion ─────────────────────
     if pd.notna(sma50_pct):
-        if direction == "BUY":
-            if sma50_pct > 0:    confidence += 10   # uptrend confirmation
-            elif sma50_pct < -8: confidence -= 10   # deep downtrend, risky entry
-        elif direction == "SELL":
-            if sma50_pct < 0:    confidence += 10
-            elif sma50_pct > 5:  return "HOLD", 50  # don't short uptrends
+        if sma50_pct > 5:    score += 10   # strong uptrend — align long
+        elif sma50_pct > 0:  score += 5    # mild uptrend
+        elif sma50_pct < -5: score -= 10   # downtrend — risky BUY
+        else:                score -= 5    # mild downtrend
 
-    # Volume confirmation
+    # ── Volume — confirms the directional move ────────────────────────────────
     if pd.notna(vol_ratio) and vol_ratio > VOLUME_CONFIRM:
-        confidence += 10   # institutional participation
+        score += 8   # institutional participation
 
-    # ── Circuit breaker ──────────────────────────────────────────────────────
-    if pd.notna(change_1d):
-        if abs(change_1d) >= CIRCUIT_BREAKER:
-            return "HOLD", min(confidence, 45)
+    # ── Long-only: only positive scores become BUY ────────────────────────────
+    if score <= 0:
+        return "HOLD", 50
 
-    confidence = min(confidence, 100)
+    direction: Literal["BUY", "SELL", "HOLD"] = "BUY"
+    confidence = min(50 + score, 100)
+
+    # ── Circuit breaker ───────────────────────────────────────────────────────
+    if pd.notna(change_1d) and abs(change_1d) >= CIRCUIT_BREAKER:
+        return "HOLD", min(confidence, 45)
 
     if confidence < MIN_CONFIDENCE:
         return "HOLD", confidence
