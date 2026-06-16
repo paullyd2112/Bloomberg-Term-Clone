@@ -5,9 +5,10 @@ httpx==0.27.0
 beautifulsoup4==4.12.0
 
 # Technical analysis
-# NOTE: pin numpy <2.0 — pandas-ta 0.3.14b0 does `from numpy import NaN`,
-# which was removed in numpy 2.0. 1.26.4 keeps it available.
-pandas-ta==0.3.14b0
+# Original pandas-ta 0.3.14b0 was pulled from PyPI; remaining 0.4.x betas
+# require Python 3.12+. pandas-ta-classic is the maintained fork with the
+# same API (import name: pandas_ta_classic) that supports Python 3.11.
+pandas-ta-classic==0.6.20
 pandas==2.2.3
 numpy==1.26.4
 
