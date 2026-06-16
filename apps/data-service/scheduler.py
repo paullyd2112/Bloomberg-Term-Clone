@@ -206,6 +206,62 @@ def health():
     })
 
 
+# ─── Backtest endpoint ────────────────────────────────────────────────────────
+@app.route("/backtest", methods=["POST"])
+def run_backtest_endpoint():
+    """
+    Trigger the historical backtest from Railway.
+    POST /backtest
+    Optional JSON body: {"write_db": true, "output_dir": "/tmp/backtest"}
+    Returns aggregate results JSON.
+    """
+    from flask import request as flask_request
+    from analysis.backtest import run_backtest, _print_report
+    import threading
+
+    body       = flask_request.get_json(silent=True) or {}
+    write_db   = bool(body.get("write_db", False))
+    output_dir = str(body.get("output_dir", "/tmp/backtest"))
+
+    def _run():
+        try:
+            agg = run_backtest(write_db=write_db, output_dir=output_dir)
+            _job_state["backtest"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "ok",
+                "summary": {
+                    "final_portfolio": agg.get("paper_trading", {}).get("final_portfolio"),
+                    "total_return_pct": agg.get("paper_trading", {}).get("total_return_pct"),
+                    "win_rate": agg.get("win_rate"),
+                    "json_path": agg.get("json_path"),
+                },
+            }
+            _print_report(agg)
+        except Exception as e:
+            _job_state["backtest"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "error",
+                "error": str(e),
+            }
+            logger.error("Backtest failed: {}", e)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    return jsonify({
+        "status": "started",
+        "message": "Backtest running in background. Check /backtest/status for results.",
+        "write_db": write_db,
+        "output_dir": output_dir,
+    })
+
+
+@app.route("/backtest/status")
+def backtest_status():
+    state = _job_state.get("backtest", {"status": "never_run"})
+    return jsonify(state)
+
+
 # ─── Entry point ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     logger.info("Starting Plebs data service")
