@@ -21,6 +21,7 @@ instructor>=1.5.0
 
 # Scheduling
 apscheduler==3.10.4
+tzlocal==5.2
 
 # Web (health endpoint)
 flask==3.0.3
