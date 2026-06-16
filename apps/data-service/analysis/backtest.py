@@ -44,12 +44,17 @@ DATE_TO   = "2026-06-16"
 
 # ─── Signal constants ─────────────────────────────────────────────────────────
 
-HOLD_DAYS       = 5      # trading days per trade
-CIRCUIT_BREAKER = 8.0    # % single-day gap that overrides signal
-MIN_CONFIDENCE  = 60
-RSI_OVERSOLD    = 30
-RSI_OVERBOUGHT  = 70
-VOLUME_CONFIRM  = 1.5
+HOLD_DAYS              = 5      # trading days per trade
+CIRCUIT_BREAKER        = 8.0    # % single-day gap that overrides signal
+MIN_CONFIDENCE         = 65     # raised from 60 — filter weak signals
+PAPER_MIN_CONFIDENCE   = 68     # paper sim only takes highest conviction
+RSI_DEEPLY_OVERSOLD    = 28     # high conviction BUY zone
+RSI_OVERSOLD           = 35     # moderate BUY zone
+RSI_OVERBOUGHT         = 65     # moderate SELL zone
+RSI_DEEPLY_OVERBOUGHT  = 72     # high conviction SELL zone
+VOLUME_CONFIRM         = 2.0    # raised from 1.5 — require stronger volume
+TREND_SELL_BLOCK_PCT   = 5.0    # suppress SELL when price > 5% above SMA50
+SIGNAL_COOLDOWN_BARS   = 5      # min bars between signals for the same ticker
 
 # ─── Paper trading ────────────────────────────────────────────────────────────
 
@@ -377,6 +382,16 @@ def _compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
 def _generate_signal(
     row: pd.Series, prev_row: pd.Series
 ) -> tuple[Literal["BUY", "SELL", "HOLD"], int]:
+    """
+    Score-based signal generator. Requires confluence of multiple indicators.
+
+    Core philosophy:
+    - Only extreme RSI readings count (< 35 or > 65). Midrange = noise.
+    - MACD crossovers are the gold standard. Histogram state alone is weak.
+    - SMA50 indicates trend direction — we align with the trend, not fight it.
+    - SELL signals are suppressed when price is well above SMA50 (uptrend).
+    - Two indicators must agree to reach MIN_CONFIDENCE.
+    """
     rsi       = row.get("_rsi")
     macd_hist = row.get("_macd_hist")
     prev_hist = prev_row.get("_macd_hist") if prev_row is not None else None
@@ -386,25 +401,38 @@ def _generate_signal(
 
     bullish = bearish = 0
 
+    # ── RSI: only extreme readings generate signal ────────────────────────────
+    # Mid-range RSI (35-65) is normal — not a setup, do not signal.
     if pd.notna(rsi):
-        if rsi < RSI_OVERSOLD:      bullish += 30
-        elif rsi > RSI_OVERBOUGHT:  bearish += 30
-        elif rsi < 45:              bullish += 10
-        elif rsi > 55:              bearish += 10
+        if rsi < RSI_DEEPLY_OVERSOLD:        bullish += 35    # <28: deep oversold
+        elif rsi < RSI_OVERSOLD:             bullish += 20    # 28-35: oversold
+        elif rsi > RSI_DEEPLY_OVERBOUGHT:    bearish += 35    # >72: deep overbought
+        elif rsi > RSI_OVERBOUGHT:           bearish += 20    # 65-72: overbought
 
+    # ── MACD: crossovers are gold, momentum direction is decent ──────────────
     if pd.notna(macd_hist) and pd.notna(prev_hist):
-        if prev_hist < 0 and macd_hist > 0:   bullish += 25
-        elif prev_hist > 0 and macd_hist < 0: bearish += 25
-        elif macd_hist > 0:                   bullish += 10
-        else:                                 bearish += 10
+        if prev_hist < 0 and macd_hist > 0:
+            bullish += 30                        # bullish crossover — strongest setup
+        elif prev_hist > 0 and macd_hist < 0:
+            bearish += 30                        # bearish crossover — strongest setup
+        elif macd_hist > 0:
+            if macd_hist > prev_hist: bullish += 8   # histogram expanding bullishly
+            else:                     bearish += 5   # histogram shrinking — possible top
+        elif macd_hist < 0:
+            if macd_hist < prev_hist: bearish += 8   # histogram expanding bearishly
+            else:                     bullish += 5   # histogram recovering — possible bottom
 
+    # ── SMA50: trend alignment, NOT mean reversion ───────────────────────────
+    # Price above SMA50 = uptrend = favor BUY. Below = downtrend = favor SELL.
+    # This replaces the old inverted logic that bet against strong trends.
     if pd.notna(sma50_pct):
-        if sma50_pct > 5:    bearish += 8
-        elif sma50_pct < -5: bullish += 8
-        elif sma50_pct > 0:  bullish += 4
-        else:                bearish += 4
+        if sma50_pct > 5:    bullish += 8    # strong uptrend — align long
+        elif sma50_pct > 0:  bullish += 4    # mild uptrend
+        elif sma50_pct < -5: bearish += 8    # strong downtrend — align short
+        else:                bearish += 4    # mild downtrend
 
-    vol_boost = 10 if (pd.notna(vol_ratio) and vol_ratio > VOLUME_CONFIRM) else 0
+    # ── Volume: require 2x average to boost conviction ────────────────────────
+    vol_boost = 15 if (pd.notna(vol_ratio) and vol_ratio > VOLUME_CONFIRM) else 0
 
     if bullish > bearish:
         raw = min(50 + bullish + vol_boost, 100)
@@ -415,10 +443,25 @@ def _generate_signal(
     else:
         return "HOLD", 50
 
+    # ── Trend filter: never short a stock in a clear uptrend ─────────────────
+    # When price is 5%+ above SMA50, the path of least resistance is up.
+    # Shorting uptrends is how retail traders lose money fast.
+    if direction == "SELL" and pd.notna(sma50_pct) and sma50_pct > TREND_SELL_BLOCK_PCT:
+        return "HOLD", min(raw, 55)
+
+    # ── Anti-knife-catch: don't BUY into confirmed downtrend ─────────────────
+    # RSI oversold + negative MACD + price 5%+ below SMA50 = falling knife.
+    if direction == "BUY" and pd.notna(sma50_pct) and sma50_pct < -5:
+        if pd.notna(macd_hist) and macd_hist < 0 and (
+            prev_hist is None or macd_hist < prev_hist
+        ):
+            return "HOLD", min(raw, 55)
+
+    # ── Circuit breaker: avoid counter-trend trades after large gap moves ─────
     if pd.notna(change_1d):
-        if change_1d >= CIRCUIT_BREAKER and direction == "SELL":
-            return "HOLD", min(raw, 45)
         if change_1d <= -CIRCUIT_BREAKER and direction == "BUY":
+            return "HOLD", min(raw, 45)
+        if change_1d >= CIRCUIT_BREAKER and direction == "SELL":
             return "HOLD", min(raw, 45)
 
     if raw < MIN_CONFIDENCE:
@@ -460,10 +503,20 @@ def _backtest_ticker(
         logger.warning("{}: not enough data ({} bars)", ticker, len(df))
         return [], stats
 
+    last_signal_bar = -SIGNAL_COOLDOWN_BARS  # allow first signal immediately
+
     for i in range(start_idx, end_idx):
         row      = df.iloc[i]
         prev_row = df.iloc[i - 1]
         direction, confidence = _generate_signal(row, prev_row)
+
+        # Per-ticker cooldown: suppress signals within SIGNAL_COOLDOWN_BARS of last one.
+        # Prevents re-entering the same setup 5 days in a row when the first one already failed.
+        if direction != "HOLD" and (i - last_signal_bar) < SIGNAL_COOLDOWN_BARS:
+            direction  = "HOLD"
+            confidence = min(confidence, 55)
+        elif direction != "HOLD":
+            last_signal_bar = i
 
         signal_price = float(row["close"])
         future_price = float(df.iloc[i + HOLD_DAYS]["close"])
@@ -516,9 +569,13 @@ def _run_paper_sim(all_records: list[SignalRecord]) -> dict:
     Exit after HOLD_DAYS trading days (using the recorded forward return).
     Short selling is included (SELL signals = short position).
     """
-    # Sort by date — filter to actionable only
+    # Sort by date — only high-conviction actionable signals make it to paper trading.
+    # PAPER_MIN_CONFIDENCE > MIN_CONFIDENCE means we surface setups, not every blip.
     signals = sorted(
-        [r for r in all_records if r.direction != "HOLD" and r.forward_return_5d is not None],
+        [r for r in all_records
+         if r.direction != "HOLD"
+         and r.forward_return_5d is not None
+         and r.confidence >= PAPER_MIN_CONFIDENCE],
         key=lambda r: r.date,
     )
 
@@ -629,6 +686,17 @@ def _run_paper_sim(all_records: list[SignalRecord]) -> dict:
     best    = sorted(completed, key=lambda t: t.return_pct, reverse=True)[:5]
     worst   = sorted(completed, key=lambda t: t.return_pct)[:5]
 
+    buy_trades  = [t for t in completed if t.direction == "BUY"]
+    sell_trades = [t for t in completed if t.direction == "SELL"]
+    buy_wins    = [t for t in buy_trades  if t.outcome == "WIN"]
+    sell_wins   = [t for t in sell_trades if t.outcome == "WIN"]
+
+    def _safe_wr(wins_list: list, total_list: list) -> float | None:
+        return round(len(wins_list) / len(total_list) * 100, 1) if total_list else None
+
+    def _safe_avg(trades: list) -> float | None:
+        return round(sum(t.return_pct for t in trades) / len(trades), 2) if trades else None
+
     return {
         "starting_capital": INITIAL_CAPITAL,
         "final_portfolio":  final,
@@ -639,6 +707,20 @@ def _run_paper_sim(all_records: list[SignalRecord]) -> dict:
         "wins":             len(wins),
         "losses":           len(losses),
         "paper_win_rate":   round(len(wins) / len(completed) * 100, 1) if completed else 0,
+        "by_direction": {
+            "BUY":  {
+                "trades":    len(buy_trades),
+                "wins":      len(buy_wins),
+                "win_rate":  _safe_wr(buy_wins, buy_trades),
+                "avg_return": _safe_avg(buy_trades),
+            },
+            "SELL": {
+                "trades":    len(sell_trades),
+                "wins":      len(sell_wins),
+                "win_rate":  _safe_wr(sell_wins, sell_trades),
+                "avg_return": _safe_avg(sell_trades),
+            },
+        },
         "best_trades": [
             {"ticker": t.ticker, "direction": t.direction, "date": t.entry_date,
              "return_pct": t.return_pct, "pnl": t.pnl}
@@ -890,13 +972,19 @@ def _print_report(agg: dict) -> None:
     final = pt.get("final_portfolio", 0)
     ret   = pt.get("total_return_pct", 0)
     pnl   = pt.get("total_pnl", 0)
-    print(f"\n  💰 PAPER TRADING (${start:,.0f} starting)")
+    print(f"\n  💰 PAPER TRADING (${start:,.0f} starting, ≥{PAPER_MIN_CONFIDENCE}% confidence only)")
     print(f"     Final portfolio : ${final:,.2f}")
     print(f"     Total return    : {ret:+.2f}%  (${pnl:+,.2f})")
     print(f"     Trades taken    : {pt.get('trades_taken', 0)}")
     print(f"     Win rate        : {pt.get('paper_win_rate', 0):.1f}%  "
           f"({pt.get('wins',0)}W / {pt.get('losses',0)}L)")
     print(f"     Max drawdown    : -{pt.get('max_drawdown_pct', 0):.2f}%")
+    by_dir = pt.get("by_direction", {})
+    if by_dir:
+        for d, s in by_dir.items():
+            wr  = f"{s['win_rate']:.1f}%" if s.get("win_rate") is not None else "N/A"
+            avg = f"{s['avg_return']:+.2f}%" if s.get("avg_return") is not None else "N/A"
+            print(f"     {d:4s} trades     : {s['trades']:3d}  wr={wr}  avg={avg}")
 
     print(f"\n{sep}")
     print(f"  SIGNAL ACCURACY  (raw signals, all tickers)")
