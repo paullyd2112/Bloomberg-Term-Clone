@@ -256,7 +256,6 @@ def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
         return df
     logger.debug("{}: FMP miss — trying Alpha Vantage", ticker)
     return _fetch_ohlcv_av(ticker)
-        return None
 
 
 # ─── News fetch ───────────────────────────────────────────────────────────────
