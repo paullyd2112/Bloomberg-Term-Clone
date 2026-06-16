@@ -24,6 +24,7 @@ FINNHUB_KEY    = os.environ.get("FINNHUB_API_KEY", "")
 FMP_KEY        = os.environ.get("FMP_API_KEY", "")
 AV_KEY         = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
 FINNHUB_URL    = "https://finnhub.io/api/v1/company-news"
+FINNHUB_CANDLE = "https://finnhub.io/api/v1/stock/candle"
 FMP_QUOTE_URL  = "https://financialmodelingprep.com/api/v3/quote"
 AV_URL         = "https://www.alphavantage.co/query"
 TICKER_DELAY_S = 0.5   # stay well under rate limits
@@ -154,6 +155,37 @@ def _fetch_ohlcv_yfinance(ticker: str) -> pd.DataFrame | None:
         return None
 
 
+def _fetch_ohlcv_finnhub(ticker: str) -> pd.DataFrame | None:
+    """Finnhub stock candles — we already have the key, use it."""
+    if not FINNHUB_KEY:
+        return None
+    try:
+        end   = int(datetime.now(timezone.utc).timestamp())
+        start = int((datetime.now(timezone.utc) - timedelta(days=90)).timestamp())
+        resp = httpx.get(
+            FINNHUB_CANDLE,
+            params={"symbol": ticker, "resolution": "D",
+                    "from": start, "to": end, "token": FINNHUB_KEY},
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("s") != "ok" or not data.get("t"):
+            return None
+        df = pd.DataFrame({
+            "date":   pd.to_datetime(data["t"], unit="s", utc=True).tz_localize(None),
+            "open":   data["o"],
+            "high":   data["h"],
+            "low":    data["l"],
+            "close":  data["c"],
+            "volume": data["v"],
+        }).set_index("date").sort_index()
+        return df
+    except Exception as e:
+        logger.debug("{}: Finnhub candle failed — {}", ticker, e)
+        return None
+
+
 def _fetch_ohlcv_fmp(ticker: str) -> pd.DataFrame | None:
     """FMP historical daily — fallback when yfinance is unavailable."""
     if not FMP_KEY:
@@ -210,11 +242,15 @@ def _fetch_ohlcv_av(ticker: str) -> pd.DataFrame | None:
 
 
 def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
-    """yfinance → FMP → Alpha Vantage, whichever returns data first."""
+    """yfinance → Finnhub → FMP → Alpha Vantage, first that returns data wins."""
     df = _fetch_ohlcv_yfinance(ticker)
     if df is not None and not df.empty:
         return df
-    logger.debug("{}: yfinance miss — trying FMP", ticker)
+    logger.debug("{}: yfinance miss — trying Finnhub", ticker)
+    df = _fetch_ohlcv_finnhub(ticker)
+    if df is not None and not df.empty:
+        return df
+    logger.debug("{}: Finnhub miss — trying FMP", ticker)
     df = _fetch_ohlcv_fmp(ticker)
     if df is not None and not df.empty:
         return df
