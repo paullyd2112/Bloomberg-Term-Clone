@@ -42,12 +42,21 @@ RSI_OVERSOLD      = 30
 RSI_OVERBOUGHT    = 70
 VOLUME_CONFIRM    = 1.5           # volume_ratio threshold to confirm move
 
-DEFAULT_TICKERS = [
+# Stocks Plebs covers
+DEFAULT_STOCKS = [
     "AAPL", "TSLA", "NVDA", "MSFT", "AMZN",
     "META", "GOOGL", "AMD",  "COIN", "PLTR",
     "SPY",  "QQQ",  "ARKK", "GME",  "AMC",
     "HOOD", "SOFI", "MSTR", "ARM",  "SMCI",
 ]
+
+# Crypto — yfinance tickers (mapped to Plebs identifiers)
+DEFAULT_CRYPTO = [
+    "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD",
+    "DOGE-USD", "ADA-USD", "AVAX-USD", "LINK-USD",
+]
+
+DEFAULT_TICKERS = DEFAULT_STOCKS + DEFAULT_CRYPTO
 
 
 # ─── Data classes ─────────────────────────────────────────────────────────────
@@ -349,14 +358,29 @@ def _aggregate(all_stats: list[TickerStats], all_records: list[SignalRecord]) ->
         [r for r in all_records if r.forward_return_5d is not None],
         key=lambda r: r.forward_return_5d or 0,
     )
-    best  = sorted_rec[-5:][::-1] if sorted_rec else []
-    worst = sorted_rec[:5] if sorted_rec else []
+    best  = sorted_rec[-10:][::-1] if sorted_rec else []
+    worst = sorted_rec[:10] if sorted_rec else []
 
     # Win rate breakdown by direction
     buy_wins  = sum(1 for r in all_records if r.direction == "BUY"  and r.outcome == "WIN")
     sell_wins = sum(1 for r in all_records if r.direction == "SELL" and r.outcome == "WIN")
     buy_wr    = buy_wins  / total_buys  if total_buys  else None
     sell_wr   = sell_wins / total_sells if total_sells else None
+
+    # Crypto vs stock breakdown
+    crypto_tickers = set(DEFAULT_CRYPTO)
+    crypto_stats = [s for s in all_stats if s.ticker in crypto_tickers]
+    stock_stats  = [s for s in all_stats if s.ticker not in crypto_tickers]
+
+    def _group_stats(group: list[TickerStats]) -> dict:
+        g_wins = sum(s.wins for s in group)
+        g_act  = sum(s.actionable for s in group)
+        g_rets = [r for s in group for r in s.returns]
+        return {
+            "actionable": g_act,
+            "win_rate":   round(g_wins / g_act * 100, 1) if g_act else None,
+            "avg_return": round(float(np.mean(g_rets)), 3) if g_rets else None,
+        }
 
     return {
         "total_bars_evaluated": total_signals,
@@ -371,6 +395,10 @@ def _aggregate(all_stats: list[TickerStats], all_records: list[SignalRecord]) ->
         "sell_win_rate": round(sell_wr * 100, 1) if sell_wr is not None else None,
         "avg_return_pct": round(avg_return, 3),
         "sharpe_ratio":   round(sharpe, 3) if sharpe is not None else None,
+        "by_asset_class": {
+            "stocks": _group_stats(stock_stats),
+            "crypto": _group_stats(crypto_stats),
+        },
         "best_trades": [
             {"ticker": r.ticker, "date": r.date, "direction": r.direction,
              "return_pct": r.forward_return_5d}
@@ -384,6 +412,7 @@ def _aggregate(all_stats: list[TickerStats], all_records: list[SignalRecord]) ->
         "per_ticker": [
             {
                 "ticker":        s.ticker,
+                "asset_class":   "crypto" if s.ticker in crypto_tickers else "stock",
                 "signals":       s.actionable,
                 "win_rate":      round(s.win_rate * 100, 1) if s.win_rate is not None else None,
                 "avg_return":    round(s.avg_return_pct, 3) if s.avg_return_pct is not None else None,
@@ -523,7 +552,8 @@ def _print_report(agg: dict) -> None:
     sep = "─" * 60
     print(f"\n{sep}")
     print("  PLEBS HISTORICAL BACKTEST REPORT")
-    print(f"  {LOOKBACK_PERIOD} lookback · {HOLD_DAYS}-day hold · {len(DEFAULT_TICKERS)} tickers")
+    print(f"  {LOOKBACK_PERIOD} lookback · {HOLD_DAYS}-day hold")
+    print(f"  {len(DEFAULT_STOCKS)} stocks + {len(DEFAULT_CRYPTO)} crypto")
     print(sep)
     print(f"  Bars evaluated:    {agg['total_bars_evaluated']:,}")
     print(f"  Actionable signals:{agg['actionable_signals']:,}")
@@ -538,19 +568,29 @@ def _print_report(agg: dict) -> None:
     print(f"\n  Avg return/signal: {agg['avg_return_pct']:+.3f}%")
     if agg.get("sharpe_ratio") is not None:
         print(f"  Sharpe ratio:      {agg['sharpe_ratio']:.3f} (annualized)")
+
+    by_class = agg.get("by_asset_class", {})
+    if by_class:
+        print(f"\n  ── By asset class ──")
+        for cls, stats in by_class.items():
+            wr = f"{stats['win_rate']:.1f}%" if stats.get("win_rate") is not None else "N/A"
+            ar = f"{stats['avg_return']:+.3f}%" if stats.get("avg_return") is not None else "N/A"
+            print(f"  {cls.upper():8s}  signals={stats['actionable']:4d}  wr={wr:6s}  avg={ar}")
+
     print(f"\n{sep}")
-    print("  TOP 5 TRADES")
+    print("  TOP 10 TRADES")
     for t in agg.get("best_trades", []):
-        print(f"  {t['ticker']:6s} {t['date']}  {t['direction']:4s}  {t['return_pct']:+.2f}%")
-    print(f"\n  WORST 5 TRADES")
+        print(f"  {t['ticker']:8s} {t['date']}  {t['direction']:4s}  {t['return_pct']:+.2f}%")
+    print(f"\n  WORST 10 TRADES")
     for t in agg.get("worst_trades", []):
-        print(f"  {t['ticker']:6s} {t['date']}  {t['direction']:4s}  {t['return_pct']:+.2f}%")
+        print(f"  {t['ticker']:8s} {t['date']}  {t['direction']:4s}  {t['return_pct']:+.2f}%")
     print(f"\n{sep}")
     print("  WIN RATE BY TICKER")
     for s in agg.get("per_ticker", []):
         wr = f"{s['win_rate']:.1f}%" if s["win_rate"] is not None else "  N/A "
         ar = f"{s['avg_return']:+.2f}%" if s["avg_return"] is not None else "  N/A "
-        print(f"  {s['ticker']:6s}  signals={s['signals']:3d}  wr={wr}  avg={ar}")
+        cls = "crypto" if s.get("asset_class") == "crypto" else "stock "
+        print(f"  [{cls}] {s['ticker']:8s}  signals={s['signals']:3d}  wr={wr}  avg={ar}")
     print(sep)
     if agg.get("csv_path"):
         print(f"\n  Signals log  → {agg['csv_path']}")
