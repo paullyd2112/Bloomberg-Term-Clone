@@ -6,7 +6,7 @@ import TickerBar from "@/components/TickerBar";
 export const metadata: Metadata = {
   title: "Plebs.finance — Trading Intelligence for Retail Traders",
   description:
-    "Real-time AI signals for stocks, crypto, and prediction markets. Congressional trade tracker, options flow, morning briefing — everything Bloomberg has, built for the WSB crowd.",
+    "AI signals for stocks, crypto, and prediction markets. Unusual options flow, morning briefing, and per-asset accuracy tracking — everything Bloomberg has, built for the WSB crowd.",
 };
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ function Hero() {
 
       <p className="mt-6 text-lg text-zinc-400 max-w-xl mx-auto leading-relaxed">
         AI-generated signals for stocks, crypto, and prediction markets.
-        Options flow, congressional trades, and a morning briefing — all in one terminal.
+        Unusual options flow, prediction-market edges, and a morning briefing — all in one terminal.
       </p>
 
       <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -137,18 +137,18 @@ function SignalStrip() {
 const FEATURES = [
   {
     icon: "⚡",
-    title: "Real-time AI signals",
+    title: "AI trading signals",
     desc: "Claude-powered analysis across stocks, crypto, and Polymarket / Kalshi contracts. BUY, SELL, YES, NO — with confidence scores and reasoning.",
   },
   {
-    icon: "🏛",
-    title: "Congressional trade tracker",
-    desc: "STOCK Act disclosures for every House and Senate member. See what politicians are buying before the news breaks.",
+    icon: "🌊",
+    title: "Unusual options flow",
+    desc: "Call/put activity screened for unusual volume and outsized premium. Spot where the size is positioning before retail catches on.",
   },
   {
-    icon: "🌊",
-    title: "Options flow + dark pool",
-    desc: "Unusual call/put sweeps and block trades flagged in real time. Follow the smart money before retail catches on.",
+    icon: "🎯",
+    title: "Prediction market edges",
+    desc: "AI scans Polymarket and Kalshi contracts for mispriced odds — the alpha nobody else is surfacing for retail.",
   },
   {
     icon: "☀️",
@@ -208,11 +208,10 @@ const PLANS = [
     cta:       "Start 14-day trial",
     href:      "/signup",
     features: [
-      "Real-time AI signals — stocks & crypto",
+      "AI signals — stocks & crypto",
       "Unlimited watchlist",
-      "Full options flow + dark pool",
-      "Congressional trade tracker",
-      "Morning briefing email (7am ET)",
+      "Unusual options flow",
+      "Morning briefing email (8:45am ET)",
       "Portfolio tracker + P&L",
       "Price & signal alerts",
       "Per-asset AI accuracy tracking",
@@ -337,7 +336,7 @@ const IMESSAGES: { name: string; messages: { from: "them" | "me"; text: string }
   {
     name: "Marcus T.",
     messages: [
-      { from: "them", text: "bro the congress tracker flagged a senator buying semis before the AI bill vote" },
+      { from: "them", text: "the options flow screen flagged unusual call sweeps on SMCI before it ran" },
       { from: "me",   text: "no way" },
       { from: "them", text: "yeah loaded calls that morning. printed" },
       { from: "me",   text: "this app pays for itself" },

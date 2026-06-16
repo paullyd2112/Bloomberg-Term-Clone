@@ -13,7 +13,9 @@ from sentry_setup import init_sentry
 from ingestion.prediction_markets import ingest_prediction_markets
 from ingestion.stocks import ingest_stocks
 from ingestion.crypto import ingest_crypto
-from ingestion.congressional import ingest_congressional
+# Congressional ingestion disabled until a data source is wired (Quiver is paid).
+# Re-enable by uncommenting this import + the scheduled job + job function below.
+# from ingestion.congressional import ingest_congressional
 from ingestion.options_flow import ingest_options_flow
 from ingestion.short_interest import ingest_short_interest
 from ingestion.earnings import ingest_earnings
@@ -93,8 +95,8 @@ def job_ingest_earnings():
 def job_seed_macro_events():
     return seed_macro_events()
 
-def job_ingest_congressional():
-    return ingest_congressional()
+# def job_ingest_congressional():
+#     return ingest_congressional()
 
 def job_generate_newsletter():
     return generate_newsletter()
@@ -145,9 +147,9 @@ scheduler.add_job(lambda: _run_job("ingest_earnings", job_ingest_earnings),
 scheduler.add_job(lambda: _run_job("seed_macro_events", job_seed_macro_events),
                   CronTrigger(hour=6, minute=30, day_of_week="mon-fri"), id="seed_macro_events")
 
-# Congressional — daily
-scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressional),
-                  CronTrigger(hour=8, minute=0), id="ingest_congressional")
+# Congressional — disabled (no free data source; Quiver is paid). Re-enable above + here.
+# scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressional),
+#                   CronTrigger(hour=8, minute=0), id="ingest_congressional")
 
 # Newsletter — generate at 6:30am, send at 7:00am ET weekdays
 scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newsletter),

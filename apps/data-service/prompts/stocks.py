@@ -47,8 +47,7 @@ def build_user_prompt(context: dict) -> str:
         lines += [
             "",
             f"⚠️  EARNINGS IN {e.get('hours_until', '?')}h ({e.get('report_time', '')})",
-            f"  Consensus EPS: {e.get('consensus_eps', 'N/A')} | Whisper EPS: {e.get('whisper_eps', 'N/A')}",
-            f"  Whisper vs consensus: {e.get('whisper_vs_consensus_pct', 'N/A')}%",
+            f"  Consensus EPS: {e.get('consensus_eps', 'N/A')}",
         ]
 
     if context.get("options_context"):

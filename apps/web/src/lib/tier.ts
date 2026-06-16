@@ -1,6 +1,6 @@
 export type Tier = "free" | "pro" | "elite";
 
-export const TRIAL_DAYS = 7;
+export const TRIAL_DAYS = 14;
 
 export const WATCHLIST_LIMIT: Record<Tier, number> = {
   free:  0,
@@ -11,11 +11,10 @@ export const WATCHLIST_LIMIT: Record<Tier, number> = {
 // free tier is not a marketed plan — it's the expired/unsubscribed state
 export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
   pro: [
-    "Real-time AI signals — stocks & crypto",
+    "AI signals — stocks & crypto",
     "Unlimited watchlist",
-    "Full options flow + dark pool",
-    "Congressional trade tracker",
-    "Morning briefing email (7am ET)",
+    "Unusual options flow",
+    "Morning briefing email (8:45am ET)",
     "Portfolio tracker + P&L",
     "Price & signal alerts",
     "Per-asset AI accuracy tracking",

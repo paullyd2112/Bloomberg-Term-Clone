@@ -21,7 +21,7 @@ export default function TermsOfService() {
         <h2 className="text-xl font-semibold text-white mb-3">1. The Service</h2>
         <p>
           Plebs.io is a market intelligence platform that provides AI-generated trading signals,
-          market data, congressional trade disclosures, prediction market data, portfolio tracking,
+          market data, prediction market data, portfolio tracking,
           and related financial information tools. The Service is provided for informational and
           educational purposes only.
         </p>
@@ -57,8 +57,8 @@ export default function TermsOfService() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-white mb-3">4. Subscriptions & Payments</h2>
         <ul className="list-disc pl-5 space-y-2">
-          <li><strong>Free trial:</strong> New accounts receive a 7-day free trial with full access. No charge during the trial period.</li>
-          <li><strong>Billing:</strong> After the trial, your selected plan is billed automatically via Stripe on a monthly, quarterly, or annual basis depending on your selection.</li>
+          <li><strong>Free trial:</strong> New accounts receive a 14-day free trial with full access on monthly plans. A valid payment method is required to start the trial. No charge during the trial period.</li>
+          <li><strong>Billing:</strong> After the trial, your selected plan is billed automatically via Stripe on a monthly or quarterly basis depending on your selection.</li>
           <li><strong>Lifetime access:</strong> Lifetime Pro purchases are one-time payments that grant perpetual access to Pro features as they exist at time of purchase. We reserve the right to add new features to higher tiers.</li>
           <li><strong>Price changes:</strong> We may change subscription prices with 30 days notice. Existing subscribers on locked-in rates will not be affected.</li>
           <li><strong>Cancellation:</strong> You may cancel your subscription at any time. Access continues until the end of your current billing period.</li>

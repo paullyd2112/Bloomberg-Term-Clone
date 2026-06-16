@@ -15,7 +15,6 @@ const NAV: {
   { href: "/dashboard/watchlist",  label: "Watchlist",     icon: "★" },
   { href: "/dashboard/portfolio",  label: "Portfolio",     icon: "◈",  tier: "pro" },
   { href: "/dashboard/alerts",     label: "Alerts",        icon: "🔔", tier: "pro" },
-  { href: "/dashboard/congress",   label: "Congress",      icon: "🏛" },
   { href: "/dashboard/referrals",  label: "Referrals",     icon: "🎁" },
   { href: "/dashboard/allocator",  label: "Allocator",     icon: "◈",  tier: "elite" },
   { href: "/dashboard/pleby",      label: "Pleby AI",      icon: "🤖", tier: "elite" },

@@ -185,7 +185,7 @@ export default function OnboardingPage() {
             <div>
               <h1 className="text-2xl font-bold text-white">You&apos;re all set!</h1>
               <p className="text-zinc-400 text-sm mt-2">
-                Your 7-day trial is active. Full access starts now.
+                Your 14-day trial is active. Full access starts now.
               </p>
             </div>
 
@@ -194,11 +194,11 @@ export default function OnboardingPage() {
                 Included in your trial
               </p>
               {[
-                "Real-time signals — stocks, crypto & predictions",
+                "AI signals — stocks, crypto & predictions",
                 "Unlimited watchlist",
-                "Full options flow + dark pool",
+                "Unusual options flow",
                 "Morning briefing email (8:45am ET)",
-                "Congressional trades tracker",
+                "Per-asset AI accuracy tracking",
               ].map((f) => (
                 <div key={f} className="flex items-center gap-2 text-sm text-zinc-300">
                   <span className="text-green-400">✓</span>

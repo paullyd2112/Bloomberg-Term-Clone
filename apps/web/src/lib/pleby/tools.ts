@@ -75,18 +75,6 @@ export const PLEBY_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: "get_congressional_trades",
-    description: "Get recent congressional trades for a stock ticker.",
-    input_schema: {
-      type: "object",
-      properties: {
-        ticker: { type: "string" },
-        limit: { type: "integer", description: "Max trades (default 10)" },
-      },
-      required: ["ticker"],
-    },
-  },
-  {
     name: "get_upcoming_earnings",
     description: "Get the next upcoming earnings event for a stock ticker.",
     input_schema: {
@@ -201,17 +189,6 @@ export async function executeTool(
           .eq("ticker", ticker.toUpperCase())
           .eq("is_unusual", true)
           .order("premium_usd", { ascending: false })
-          .limit(limit);
-        return JSON.stringify(data ?? []);
-      }
-
-      case "get_congressional_trades": {
-        const { ticker, limit = 10 } = input as { ticker: string; limit?: number };
-        const { data } = await supabase
-          .from("congressional_trades")
-          .select("politician, party, transaction, amount_range, trade_date, report_date")
-          .eq("ticker", ticker.toUpperCase())
-          .order("trade_date", { ascending: false })
           .limit(limit);
         return JSON.stringify(data ?? []);
       }
