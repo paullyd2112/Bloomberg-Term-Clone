@@ -42,18 +42,52 @@ RSI_OVERSOLD      = 30
 RSI_OVERBOUGHT    = 70
 VOLUME_CONFIRM    = 1.5           # volume_ratio threshold to confirm move
 
-# Stocks Plebs covers
+# Stocks Plebs covers — matches ingestion/stocks.py DEFAULT_WATCHLIST
 DEFAULT_STOCKS = [
-    "AAPL", "TSLA", "NVDA", "MSFT", "AMZN",
-    "META", "GOOGL", "AMD",  "COIN", "PLTR",
-    "SPY",  "QQQ",  "ARKK", "GME",  "AMC",
-    "HOOD", "SOFI", "MSTR", "ARM",  "SMCI",
+    # Mega-cap tech
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "NFLX",
+
+    # Semiconductors & hardware
+    "AMD", "INTC", "MU", "MRVL", "QCOM", "AVGO", "ARM", "SMCI",
+    "LRCX", "AMAT", "ALAB",
+
+    # AI / cloud / SaaS
+    "PLTR", "SNOW", "DDOG", "NET", "CRWD", "ZS", "COIN",
+
+    # Fintech
+    "HOOD", "SOFI", "SQ", "PYPL", "AFRM", "UPST",
+
+    # Space, defense & hard tech
+    "RKLB", "ASTS", "LUNR", "KTOS", "HII", "LMT",
+
+    # EV & clean energy
+    "RIVN", "LCID", "NIO", "ENPH", "FSLR", "VRT",
+
+    # Biotech
+    "MRNA", "BNTX", "RXRX", "CELH",
+
+    # Consumer / retail tech
+    "SHOP", "MELI", "CHWY", "RDDT",
+
+    # Quantum & emerging AI
+    "IONQ", "RGTI", "SOUN",
+
+    # Momentum / meme
+    "GME", "AMC", "MSTR",
+
+    # Sector ETFs
+    "SPY", "QQQ", "ARKK", "SOXX", "XBI",
 ]
 
-# Crypto — yfinance tickers (mapped to Plebs identifiers)
+# Crypto — yfinance tickers (mapped from Plebs identifiers, top coins + mid-caps)
 DEFAULT_CRYPTO = [
-    "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD",
-    "DOGE-USD", "ADA-USD", "AVAX-USD", "LINK-USD",
+    # Large cap
+    "BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD",
+    # Mid cap momentum
+    "DOGE-USD", "ADA-USD", "AVAX-USD", "LINK-USD", "DOT-USD",
+    "MATIC-USD", "UNI-USD", "LTC-USD", "ATOM-USD",
+    # High-vol / narrative plays
+    "PEPE-USD", "WIF-USD", "SHIB-USD", "APT-USD", "SUI-USD",
 ]
 
 DEFAULT_TICKERS = DEFAULT_STOCKS + DEFAULT_CRYPTO
@@ -553,7 +587,7 @@ def _print_report(agg: dict) -> None:
     print(f"\n{sep}")
     print("  PLEBS HISTORICAL BACKTEST REPORT")
     print(f"  {LOOKBACK_PERIOD} lookback · {HOLD_DAYS}-day hold")
-    print(f"  {len(DEFAULT_STOCKS)} stocks + {len(DEFAULT_CRYPTO)} crypto")
+    print(f"  {len(DEFAULT_STOCKS)} stocks · {len(DEFAULT_CRYPTO)} crypto · {len(DEFAULT_TICKERS)} total")
     print(sep)
     print(f"  Bars evaluated:    {agg['total_bars_evaluated']:,}")
     print(f"  Actionable signals:{agg['actionable_signals']:,}")

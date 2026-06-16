@@ -24,10 +24,39 @@ FINNHUB_URL    = "https://finnhub.io/api/v1/company-news"
 TICKER_DELAY_S = 0.5   # stay well under rate limits
 
 DEFAULT_WATCHLIST = [
-    "AAPL", "TSLA", "NVDA", "MSFT", "AMZN",
-    "META", "GOOGL", "AMD",  "COIN", "PLTR",
-    "SPY",  "QQQ",  "ARKK", "GME",  "AMC",
-    "HOOD", "SOFI", "MSTR", "ARM",  "SMCI",
+    # Mega-cap tech
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "NFLX",
+
+    # Semiconductors & hardware
+    "AMD", "INTC", "MU", "MRVL", "QCOM", "AVGO", "ARM", "SMCI",
+    "LRCX", "AMAT", "ALAB",
+
+    # AI / cloud / SaaS
+    "PLTR", "SNOW", "DDOG", "NET", "CRWD", "ZS", "COIN",
+
+    # Fintech
+    "HOOD", "SOFI", "SQ", "PYPL", "AFRM", "UPST",
+
+    # Space, defense & hard tech
+    "RKLB", "ASTS", "LUNR", "KTOS", "HII", "LMT",
+
+    # EV & clean energy
+    "RIVN", "LCID", "NIO", "ENPH", "FSLR", "VRT",
+
+    # Biotech
+    "MRNA", "BNTX", "RXRX", "CELH",
+
+    # Consumer / retail tech
+    "SHOP", "MELI", "CHWY", "RDDT",
+
+    # Quantum & emerging AI
+    "IONQ", "RGTI", "SOUN",
+
+    # Momentum / meme
+    "GME", "AMC", "MSTR",
+
+    # Sector ETFs (give macro context)
+    "SPY", "QQQ", "ARKK", "SOXX", "XBI",
 ]
 
 
