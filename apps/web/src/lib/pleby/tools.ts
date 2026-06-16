@@ -95,6 +95,22 @@ export const PLEBY_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "get_congressional_trades",
+    description:
+      "Get recent congressional stock trades (STOCK Act disclosures). Use when the user asks about congress members trading, politicians buying/selling stocks, or insider activity from senators or representatives.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticker: {
+          type: "string",
+          description: "Optional: filter by stock ticker (e.g. 'NVDA')",
+        },
+        limit: { type: "integer", description: "Max trades to return (default 20)" },
+      },
+      required: [],
+    },
+  },
+  {
     name: "rebuild_portfolio_allocation",
     description: "Generate a new portfolio allocation for the user based on their goal, risk tolerance, and investment amount. Use when the user asks to rebuild, update, or create a new allocation.",
     input_schema: {
@@ -217,6 +233,19 @@ export async function executeTool(
           .limit(1)
           .maybeSingle();
         if (!data) return JSON.stringify({ message: "No allocation found. Ask the user for their goal, risk tolerance, and investment amount to generate one." });
+        return JSON.stringify(data);
+      }
+
+      case "get_congressional_trades": {
+        const { ticker, limit = 20 } = input as { ticker?: string; limit?: number };
+        let query = supabase
+          .from("congressional_trades")
+          .select("politician, party, ticker, transaction, amount_range, trade_date, report_date")
+          .order("trade_date", { ascending: false })
+          .limit(limit);
+        if (ticker) query = query.eq("ticker", (ticker as string).toUpperCase());
+        const { data } = await query;
+        if (!data?.length) return JSON.stringify({ message: "No congressional trades found" + (ticker ? ` for ${ticker}` : "") });
         return JSON.stringify(data);
       }
 

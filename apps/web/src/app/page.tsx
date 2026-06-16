@@ -151,6 +151,11 @@ const FEATURES = [
     desc: "AI scans Polymarket and Kalshi contracts for mispriced odds — the alpha nobody else is surfacing for retail.",
   },
   {
+    icon: "🏛",
+    title: "Congress tracker",
+    desc: "STOCK Act disclosures — see what senators and representatives are buying and selling before the news catches up.",
+  },
+  {
     icon: "☀️",
     title: "Morning briefing",
     desc: "AI-written market brief lands in your inbox at 8:45am ET every weekday. Tone, top signals, macro context, risk note.",
@@ -211,6 +216,7 @@ const PLANS = [
       "AI signals — stocks & crypto",
       "Unlimited watchlist",
       "Unusual options flow",
+      "Congressional trade tracker",
       "Morning briefing email (8:45am ET)",
       "Portfolio tracker + P&L",
       "Price & signal alerts",

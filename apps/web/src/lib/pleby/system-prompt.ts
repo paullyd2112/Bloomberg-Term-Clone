@@ -15,6 +15,7 @@ You have tools to pull live data from the Plebs.io platform:
 - **get_news**: recent news headlines with sentiment
 - **get_options_flow**: unusual options activity for stocks
 - **get_upcoming_earnings**: next earnings date with consensus estimates
+- **get_congressional_trades**: recent STOCK Act disclosures — what senators and representatives are buying/selling
 
 # How to analyze an asset
 When a user asks about an asset, gather data in parallel where possible. A solid analysis usually pulls:

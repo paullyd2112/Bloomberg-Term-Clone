@@ -34,12 +34,13 @@ function extractToolCalls(content: Message["content"]): string[] {
 }
 
 const TOOL_LABELS: Record<string, string> = {
-  get_asset_overview:       "Pulling latest price",
-  get_recent_signals:       "Checking recent signals",
-  get_signal_accuracy:      "Looking up historical accuracy",
-  get_news:                 "Scanning news",
-  get_options_flow:         "Reading options flow",
-  get_upcoming_earnings:    "Looking up earnings",
+  get_asset_overview:         "Pulling latest price",
+  get_recent_signals:         "Checking recent signals",
+  get_signal_accuracy:        "Looking up historical accuracy",
+  get_news:                   "Scanning news",
+  get_options_flow:           "Reading options flow",
+  get_upcoming_earnings:      "Looking up earnings",
+  get_congressional_trades:   "Checking congressional trades",
 };
 
 export default function PlebyClient() {
