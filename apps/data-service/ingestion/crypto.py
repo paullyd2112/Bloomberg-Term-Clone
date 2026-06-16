@@ -1,6 +1,6 @@
 """
-Crypto ingestion — CoinGecko (market data) + CCXT/Binance (OHLCV) +
-Fear & Greed index + Finnhub news.
+Crypto ingestion — CoinGecko (primary) + Messari (enrichment/fallback) +
+CCXT/Binance (OHLCV indicators) + Fear & Greed index + Finnhub news.
 Runs every 60 minutes all hours via scheduler.
 """
 
@@ -21,10 +21,12 @@ from supabase_client import supabase
 
 load_dotenv()
 
-FINNHUB_KEY      = os.environ.get("FINNHUB_API_KEY", "")
-COINGECKO_KEY    = os.environ.get("COINGECKO_API_KEY", "")
+FINNHUB_KEY    = os.environ.get("FINNHUB_API_KEY", "")
+COINGECKO_KEY  = os.environ.get("COINGECKO_API_KEY", "")
+MESSARI_KEY    = os.environ.get("MESSARI_API_KEY", "")
 
 COINGECKO_URL  = "https://api.coingecko.com/api/v3/coins/markets"
+MESSARI_URL    = "https://data.messari.io/api/v1/assets"
 FEAR_GREED_URL = "https://api.alternative.me/fng/?limit=1"
 FINNHUB_NEWS   = "https://finnhub.io/api/v1/news"
 
@@ -101,6 +103,59 @@ def _fetch_coingecko_markets() -> list[dict]:
 
 def _coingecko_to_symbol(coin: dict) -> str:
     return coin.get("symbol", "").upper()
+
+
+# ─── Messari enrichment ───────────────────────────────────────────────────────
+
+# CoinGecko symbol → Messari slug
+_MESSARI_SLUGS: dict[str, str] = {
+    "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana", "BNB": "binancecoin",
+    "XRP": "xrp", "ADA": "cardano", "DOGE": "dogecoin", "AVAX": "avalanche",
+    "LINK": "chainlink", "DOT": "polkadot", "MATIC": "polygon", "UNI": "uniswap",
+    "LTC": "litecoin", "ATOM": "cosmos", "PEPE": "pepe", "SHIB": "shiba-inu",
+    "APT": "aptos", "SUI": "sui",
+}
+
+
+def _fetch_messari_metrics(symbol: str) -> dict | None:
+    """
+    Fetch Messari asset metrics — developer activity, token supply, ROI.
+    Returns a dict of extra metadata to merge into the coin record.
+    Messari free tier works without a key; key increases rate limits.
+    """
+    slug = _MESSARI_SLUGS.get(symbol.upper())
+    if not slug:
+        return None
+
+    headers: dict = {}
+    if MESSARI_KEY:
+        headers["x-messari-api-key"] = MESSARI_KEY
+
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT, headers=headers) as client:
+            resp = client.get(f"{MESSARI_URL}/{slug}/metrics")
+            if resp.status_code == 429:
+                logger.debug("Messari rate limit hit for {}", symbol)
+                return None
+            resp.raise_for_status()
+            data = resp.json().get("data", {})
+    except Exception as e:
+        logger.debug("{}: Messari fetch failed — {}", symbol, e)
+        return None
+
+    market = data.get("market_data", {})
+    supply = data.get("supply", {})
+    roi    = data.get("roi_data", {})
+    dev    = data.get("developer_activity", {})
+
+    return {
+        "messari_real_volume_24h":    market.get("real_volume_last_24_hours"),
+        "messari_liquid_supply_pct":  supply.get("liquid") and supply.get("max") and
+                                      round(supply["liquid"] / supply["max"] * 100, 2),
+        "messari_roi_30d":            roi.get("percent_change_last_1_month"),
+        "messari_roi_90d":            roi.get("percent_change_last_3_months"),
+        "messari_dev_commits_30d":    dev.get("commit_count_30_days"),
+    }
 
 
 # ─── CCXT / Binance OHLCV ────────────────────────────────────────────────────
@@ -265,6 +320,14 @@ def _ingest_coin(cg_data: dict) -> bool:
             record["metadata"].update(indicators)
         except Exception as e:
             logger.warning("{}: indicator computation failed — {}", symbol, e)
+
+    # Enrich with Messari metrics (developer activity, real volume, ROI)
+    messari = _fetch_messari_metrics(symbol)
+    if messari:
+        record["metadata"].update(messari)
+        record["metadata"]["sources"] = "coingecko+messari"
+    else:
+        record["metadata"]["sources"] = "coingecko"
 
     try:
         supabase.table("raw_prices").insert(record).execute()

@@ -1,5 +1,6 @@
 """
-Stocks ingestion — yfinance + Pandas-TA indicators + Finnhub news.
+Stocks ingestion — yfinance (OHLCV) + FMP (fundamentals fallback) +
+Alpha Vantage (price fallback) + Finnhub (news) + Pandas-TA indicators.
 Runs every 60 minutes weekdays 9am-5pm ET via scheduler.
 """
 
@@ -20,7 +21,11 @@ from supabase_client import supabase
 load_dotenv()
 
 FINNHUB_KEY    = os.environ.get("FINNHUB_API_KEY", "")
+FMP_KEY        = os.environ.get("FMP_API_KEY", "")
+AV_KEY         = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
 FINNHUB_URL    = "https://finnhub.io/api/v1/company-news"
+FMP_QUOTE_URL  = "https://financialmodelingprep.com/api/v3/quote"
+AV_URL         = "https://www.alphavantage.co/query"
 TICKER_DELAY_S = 0.5   # stay well under rate limits
 
 DEFAULT_WATCHLIST = [
@@ -132,30 +137,89 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
     }
 
 
-# ─── Price fetch ──────────────────────────────────────────────────────────────
+# ─── Price fetch (yfinance → FMP → Alpha Vantage) ────────────────────────────
 
-def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
-    """Fetch 90 days of daily OHLCV via yfinance."""
+def _fetch_ohlcv_yfinance(ticker: str) -> pd.DataFrame | None:
     try:
-        df = yf.download(
-            ticker,
-            period="90d",
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-        )
+        df = yf.download(ticker, period="90d", interval="1d",
+                         auto_adjust=True, progress=False)
         if df.empty:
-            logger.warning("{}: empty OHLCV response", ticker)
             return None
-        # yfinance returns MultiIndex columns when downloading single ticker
-        # with some versions — flatten if needed
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         df.columns = [c.lower() for c in df.columns]
         return df
     except Exception as e:
-        logger.error("{}: OHLCV fetch failed — {}", ticker, e)
-        sentry_sdk.capture_exception(e)
+        logger.debug("{}: yfinance failed — {}", ticker, e)
+        return None
+
+
+def _fetch_ohlcv_fmp(ticker: str) -> pd.DataFrame | None:
+    """FMP historical daily — fallback when yfinance is unavailable."""
+    if not FMP_KEY:
+        return None
+    try:
+        from datetime import timedelta
+        end   = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        start = (datetime.now(timezone.utc) - timedelta(days=90)).strftime("%Y-%m-%d")
+        resp = httpx.get(
+            f"https://financialmodelingprep.com/api/v3/historical-price-full/{ticker}",
+            params={"from": start, "to": end, "apikey": FMP_KEY},
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        hist = resp.json().get("historical", [])
+        if not hist:
+            return None
+        df = pd.DataFrame(hist)
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.sort_values("date").set_index("date")
+        df.columns = [c.lower() for c in df.columns]
+        return df[["open", "high", "low", "close", "volume"]]
+    except Exception as e:
+        logger.debug("{}: FMP OHLCV failed — {}", ticker, e)
+        return None
+
+
+def _fetch_ohlcv_av(ticker: str) -> pd.DataFrame | None:
+    """Alpha Vantage daily adjusted — last-resort fallback."""
+    if not AV_KEY:
+        return None
+    try:
+        resp = httpx.get(
+            AV_URL,
+            params={"function": "TIME_SERIES_DAILY_ADJUSTED", "symbol": ticker,
+                    "outputsize": "compact", "apikey": AV_KEY},
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        ts = resp.json().get("Time Series (Daily)", {})
+        if not ts:
+            return None
+        rows = [
+            {"date": pd.Timestamp(d), "open": float(v["1. open"]),
+             "high": float(v["2. high"]), "low": float(v["3. low"]),
+             "close": float(v["5. adjusted close"]), "volume": float(v["6. volume"])}
+            for d, v in ts.items()
+        ]
+        df = pd.DataFrame(rows).sort_values("date").set_index("date")
+        return df[["open", "high", "low", "close", "volume"]]
+    except Exception as e:
+        logger.debug("{}: Alpha Vantage failed — {}", ticker, e)
+        return None
+
+
+def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
+    """yfinance → FMP → Alpha Vantage, whichever returns data first."""
+    df = _fetch_ohlcv_yfinance(ticker)
+    if df is not None and not df.empty:
+        return df
+    logger.debug("{}: yfinance miss — trying FMP", ticker)
+    df = _fetch_ohlcv_fmp(ticker)
+    if df is not None and not df.empty:
+        return df
+    logger.debug("{}: FMP miss — trying Alpha Vantage", ticker)
+    return _fetch_ohlcv_av(ticker)
         return None
 
 
