@@ -366,10 +366,16 @@ def _compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
         m = [c for c in df.columns if c.lower().startswith(prefix.lower())]
         return m[0] if m else None
 
-    df["_rsi"]       = df.get(_find("rsi_"))
-    df["_macd_line"] = df.get(_find("macd_"))
-    df["_macd_sig"]  = df.get(_find("macds_"))
-    df["_macd_hist"] = df.get(_find("macdh_"))
+    def _safe_col(prefix: str):
+        col = _find(prefix)
+        if col is not None:
+            return df[col]
+        return pd.Series(np.nan, index=df.index)
+
+    df["_rsi"]       = _safe_col("rsi_14")
+    df["_macd_line"] = _safe_col("macd_12")
+    df["_macd_sig"]  = _safe_col("macds_")
+    df["_macd_hist"] = _safe_col("macdh_")
 
     return df
 
