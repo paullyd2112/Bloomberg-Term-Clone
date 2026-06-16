@@ -5,7 +5,9 @@ httpx==0.27.0
 beautifulsoup4==4.12.0
 
 # Technical analysis
-pandas-ta @ git+https://github.com/twopirllc/pandas-ta.git@development
+# NOTE: pin numpy <2.0 — pandas-ta 0.3.14b0 does `from numpy import NaN`,
+# which was removed in numpy 2.0. 1.26.4 keeps it available.
+pandas-ta==0.3.14b0
 pandas==2.2.3
 numpy==1.26.4
 
