@@ -370,13 +370,17 @@ def _compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["_macd_line"] = _safe_col("macd_12")
     df["_macd_sig"]  = _safe_col("macds_")
     df["_macd_hist"] = _safe_col("macdh_")
+    df["_bb_upper"]  = _safe_col("bbu_")
+    df["_bb_middle"] = _safe_col("bbm_")
+    df["_bb_lower"]  = _safe_col("bbl_")
 
     return df
 
 
 # ─── Build context for Claude (mirrors live engine) ─────────────────────────
 
-def _build_stock_context(ticker: str, row: pd.Series, df: pd.DataFrame) -> dict:
+def _build_stock_context(ticker: str, row: pd.Series, df: pd.DataFrame,
+                         benchmarks: dict | None = None) -> dict:
     return {
         "identifier":     ticker,
         "current_price":  float(row["close"]),
@@ -386,17 +390,53 @@ def _build_stock_context(ticker: str, row: pd.Series, df: pd.DataFrame) -> dict:
             "macd_line":         round(float(row["_macd_line"]), 4) if pd.notna(row.get("_macd_line")) else None,
             "macd_signal":       round(float(row["_macd_sig"]), 4)  if pd.notna(row.get("_macd_sig")) else None,
             "macd_hist":         round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
-            "bb_upper":          None,
-            "bb_middle":         None,
-            "bb_lower":          None,
+            "bb_upper":          round(float(row["_bb_upper"]), 2)  if pd.notna(row.get("_bb_upper")) else None,
+            "bb_middle":         round(float(row["_bb_middle"]), 2) if pd.notna(row.get("_bb_middle")) else None,
+            "bb_lower":          round(float(row["_bb_lower"]), 2)  if pd.notna(row.get("_bb_lower")) else None,
             "price_vs_sma50_pct": round(float(row["price_vs_sma50"]), 2) if pd.notna(row.get("price_vs_sma50")) else None,
             "volume_ratio":      round(float(row["volume_ratio"]), 2)    if pd.notna(row.get("volume_ratio")) else None,
         },
+        "market_benchmarks": benchmarks or {},
         "news_headlines": [],
     }
 
 
-def _build_crypto_context(symbol: str, row: pd.Series) -> dict:
+def _fetch_fear_greed_history() -> dict[str, dict]:
+    """Fetch historical Fear & Greed index from Alternative.me. Free, no key needed.
+    Returns {date_str: {"value": int, "value_classification": str}}."""
+    url = "https://api.alternative.me/fng/?limit=200&format=json"
+    data = _get_json(url)
+    if not data or "data" not in data:
+        logger.warning("[claude_backtest] Fear & Greed history fetch failed — will use neutral fallback")
+        return {}
+    history: dict[str, dict] = {}
+    for entry in data["data"]:
+        ts = int(entry.get("timestamp", 0))
+        if ts == 0:
+            continue
+        date_str = datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d")
+        history[date_str] = {
+            "value": int(entry.get("value", 50)),
+            "value_classification": entry.get("value_classification", "Neutral"),
+        }
+    return history
+
+
+def _lookup_fear_greed(history: dict[str, dict], date_str: str) -> dict:
+    """Find the Fear & Greed value for a date, or nearest prior date."""
+    if date_str in history:
+        return history[date_str]
+    target = pd.Timestamp(date_str)
+    best_date, best_val = None, None
+    for d in sorted(history.keys(), reverse=True):
+        if pd.Timestamp(d) <= target:
+            best_date = d
+            best_val = history[d]
+            break
+    return best_val or {"value": 50, "value_classification": "Neutral"}
+
+
+def _build_crypto_context(symbol: str, row: pd.Series, fear_greed: dict | None = None) -> dict:
     return {
         "identifier":     symbol,
         "current_price":  float(row["close"]),
@@ -409,7 +449,7 @@ def _build_crypto_context(symbol: str, row: pd.Series) -> dict:
             "volume_ratio": round(float(row["volume_ratio"]), 2) if pd.notna(row.get("volume_ratio")) else None,
             "volume_24h":   None,
         },
-        "fear_greed":    {"value": 50, "value_classification": "Neutral"},
+        "fear_greed":    fear_greed or {"value": 50, "value_classification": "Neutral"},
         "market_cap":    None,
         "news_headlines": [],
     }
@@ -530,8 +570,32 @@ def run_claude_backtest(
             stock_data[ticker] = _compute_indicators(df)
             logger.info("[claude_backtest] {} → {} rows ({} to {})", ticker, len(df), df.index[0].date(), df.index[-1].date())
         else:
-            logger.warning("[claude_backtest] {} → no data returned from FMP", ticker)
+            logger.warning("[claude_backtest] {} → no data returned from any source", ticker)
         time.sleep(0.3)
+
+    benchmark_data: dict[str, pd.DataFrame] = {}
+    for bm_ticker in ("SPY", "QQQ"):
+        if bm_ticker not in stock_data:
+            logger.info("[claude_backtest] Fetching benchmark: {}", bm_ticker)
+            df = _fetch_stock_ohlcv(bm_ticker)
+            if df is not None and not df.empty:
+                benchmark_data[bm_ticker] = _compute_indicators(df)
+            time.sleep(0.3)
+        else:
+            benchmark_data[bm_ticker] = stock_data[bm_ticker]
+
+    def _get_benchmarks_for_date(date_str: str) -> dict:
+        bm: dict = {}
+        for sym, bdf in benchmark_data.items():
+            target = pd.Timestamp(date_str)
+            bidx = bdf.index.get_indexer([target], method="ffill")[0]
+            if bidx >= 0:
+                brow = bdf.iloc[bidx]
+                bm[sym] = {
+                    "price": round(float(brow["close"]), 2),
+                    "change_24h": round(float(brow["change_1d"]), 2) if pd.notna(brow.get("change_1d")) else None,
+                }
+        return bm
 
     for ticker, df in stock_data.items():
         for date_str in sample_dates:
@@ -543,7 +607,8 @@ def run_claude_backtest(
 
             row = df.iloc[idx]
             actual_date = str(df.index[idx].date())
-            context = _build_stock_context(ticker, row, df)
+            benchmarks = _get_benchmarks_for_date(actual_date)
+            context = _build_stock_context(ticker, row, df, benchmarks=benchmarks)
 
             logger.info("[claude_backtest] Scoring {}/{} on {}", "stock", ticker, actual_date)
             signal = _score_with_claude("stock", ticker, context, claude_client)
@@ -580,6 +645,8 @@ def run_claude_backtest(
         if df is not None and not df.empty:
             crypto_data[symbol] = _compute_indicators(df)
 
+    fg_history = _fetch_fear_greed_history() if crypto_data else {}
+
     for symbol, df in crypto_data.items():
         for date_str in sample_dates:
             target = pd.Timestamp(date_str)
@@ -589,7 +656,8 @@ def run_claude_backtest(
 
             row = df.iloc[idx]
             actual_date = str(df.index[idx].date())
-            context = _build_crypto_context(symbol, row)
+            fg = _lookup_fear_greed(fg_history, actual_date)
+            context = _build_crypto_context(symbol, row, fear_greed=fg)
 
             logger.info("[claude_backtest] Scoring {}/{} on {}", "crypto", symbol, actual_date)
             signal = _score_with_claude("crypto", symbol, context, claude_client)
