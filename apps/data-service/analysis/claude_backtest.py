@@ -711,3 +711,34 @@ def _aggregate_claude_results(
         "by_time_horizon": by_horizon,
         "signals": signal_details,
     }
+
+
+# ─── CLI entrypoint ──────────────────────────────────────────────────────────
+# Run locally:
+#   python -m analysis.claude_backtest --diag           # free: data check only
+#   python -m analysis.claude_backtest --stocks-only    # ~$0.50: stocks via Claude
+#   python -m analysis.claude_backtest                  # full: stocks + crypto
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Plebs Claude backtest")
+    parser.add_argument("--diag", action="store_true",
+                        help="Free data-source check only — no Claude calls, no cost")
+    parser.add_argument("--stocks-only", action="store_true",
+                        help="Backtest stocks only (skip crypto)")
+    parser.add_argument("--tickers", default="",
+                        help="Comma-separated tickers to override the default sample")
+    args = parser.parse_args()
+
+    override = [t.strip().upper() for t in args.tickers.split(",") if t.strip()] or None
+
+    if args.diag:
+        out = diagnose_stock_sources(override)
+    else:
+        out = run_claude_backtest(
+            stocks=override,
+            crypto=[] if args.stocks_only else None,
+        )
+
+    print(json.dumps(out, indent=2, default=str))
