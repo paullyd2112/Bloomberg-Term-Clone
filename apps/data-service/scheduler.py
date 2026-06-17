@@ -515,6 +515,12 @@ def run_claude_backtest_endpoint():
     stocks_only = bool(body.get("stocks_only", False)) or flask_request.args.get("stocks_only") == "true"
 
     def _run():
+        import traceback
+        _job_state["claude_backtest"] = {
+            "status": "running",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "mode": "stocks_only" if stocks_only else "full",
+        }
         try:
             crypto_list = [] if stocks_only else None
             agg = run_claude_backtest(output_dir=output_dir, crypto=crypto_list)
@@ -536,6 +542,7 @@ def run_claude_backtest_endpoint():
                 "last_run": datetime.now(timezone.utc).isoformat(),
                 "status": "error",
                 "error": str(e),
+                "traceback": traceback.format_exc(),
             }
             logger.error("Claude backtest failed: {}", e)
 

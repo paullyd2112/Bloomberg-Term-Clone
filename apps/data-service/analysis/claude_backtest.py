@@ -47,7 +47,7 @@ CG_KEY   = os.environ.get("COINGECKO_API_KEY", "")
 FMP_BASE = "https://financialmodelingprep.com/api/v3"
 CG_BASE  = "https://api.coingecko.com/api/v3"
 
-DATE_FROM = "2026-05-01"
+DATE_FROM = "2026-02-01"
 DATE_TO   = "2026-06-16"
 
 SAMPLE_DATES = ["2026-05-05", "2026-05-14", "2026-05-27", "2026-06-04"]
@@ -373,6 +373,9 @@ def run_claude_backtest(
         df = _fetch_stock_ohlcv(ticker)
         if df is not None and not df.empty:
             stock_data[ticker] = _compute_indicators(df)
+            logger.info("[claude_backtest] {} → {} rows ({} to {})", ticker, len(df), df.index[0].date(), df.index[-1].date())
+        else:
+            logger.warning("[claude_backtest] {} → no data returned from FMP", ticker)
         time.sleep(0.3)
 
     for ticker, df in stock_data.items():
@@ -380,6 +383,7 @@ def run_claude_backtest(
             target = pd.Timestamp(date_str)
             idx = df.index.get_indexer([target], method="ffill")[0]
             if idx < 0 or idx < 50:
+                logger.debug("[claude_backtest] Skipping {}/{}: idx={} (need >= 50 for indicators)", ticker, date_str, idx)
                 continue
 
             row = df.iloc[idx]
