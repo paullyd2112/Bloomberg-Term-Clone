@@ -193,9 +193,15 @@ def score_now():
     Runs in background since it takes a few minutes.
     """
     import threading
+    import traceback
 
     def _run():
         try:
+            _job_state["score_now"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "running",
+            }
+
             from ingestion.stocks import ingest_stocks
             from ingestion.crypto import ingest_crypto
             from ingestion.prediction_markets import ingest_prediction_markets
@@ -216,12 +222,14 @@ def score_now():
             }
             logger.info("Manual score-now complete: {}", results)
         except Exception as e:
+            tb = traceback.format_exc()
             _job_state["score_now"] = {
                 "last_run": datetime.now(timezone.utc).isoformat(),
                 "status": "error",
                 "error": str(e),
+                "traceback": tb,
             }
-            logger.error("Manual score-now failed: {}", e)
+            logger.error("Manual score-now failed: {}\n{}", e, tb)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
@@ -236,6 +244,30 @@ def score_now():
 def score_now_status():
     state = _job_state.get("score_now", {"status": "never_run"})
     return jsonify(state)
+
+
+@app.route("/score-now/debug")
+def score_now_debug():
+    """
+    Run just crypto ingestion + scoring in foreground so errors are visible.
+    """
+    import traceback
+    steps = {}
+    try:
+        from ingestion.crypto import ingest_crypto
+        steps["ingest_crypto"] = ingest_crypto()
+    except Exception as e:
+        steps["ingest_crypto_error"] = traceback.format_exc()
+        return jsonify({"status": "error", "steps": steps})
+
+    try:
+        from scoring.engine import score_crypto
+        steps["score_crypto"] = score_crypto()
+    except Exception as e:
+        steps["score_crypto_error"] = traceback.format_exc()
+        return jsonify({"status": "error", "steps": steps})
+
+    return jsonify({"status": "ok", "steps": steps})
 
 
 @app.route("/resolve-now", methods=["GET", "POST"])
