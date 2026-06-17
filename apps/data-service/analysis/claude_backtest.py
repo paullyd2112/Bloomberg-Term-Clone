@@ -258,6 +258,52 @@ def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
     return None
 
 
+def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
+    """
+    Zero-cost data-layer diagnostic. For each ticker, try all 4 sources and
+    report exactly what each returned (row count or error). No Claude calls.
+
+    This answers definitively: can we get historical stock data on this host,
+    and from which source — without spending anything or guessing from logs.
+    """
+    tickers = tickers or SAMPLE_STOCKS[:3]
+    sources = [
+        ("yfinance",      _stock_yfinance),
+        ("finnhub",       _stock_finnhub),
+        ("fmp",           _stock_fmp),
+        ("alpha_vantage", _stock_alphavantage),
+    ]
+
+    report: dict = {
+        "date_range": f"{DATE_FROM} → {DATE_TO}",
+        "keys_present": {
+            "finnhub":       bool(FINNHUB_KEY),
+            "fmp":           bool(FMP_KEY),
+            "alpha_vantage": bool(AV_KEY),
+        },
+        "tickers": {},
+    }
+
+    for ticker in tickers:
+        per_source: dict = {}
+        for name, fn in sources:
+            try:
+                df = fn(ticker)
+                if df is None:
+                    per_source[name] = "no data (None)"
+                elif df.empty:
+                    per_source[name] = "empty dataframe"
+                else:
+                    first = str(df.index[0].date())
+                    last  = str(df.index[-1].date())
+                    per_source[name] = f"OK — {len(df)} rows ({first} → {last})"
+            except Exception as e:
+                per_source[name] = f"ERROR: {type(e).__name__}: {str(e)[:120]}"
+        report["tickers"][ticker] = per_source
+
+    return report
+
+
 def _fetch_crypto_ohlcv(cg_id: str) -> pd.DataFrame | None:
     start_ts = int(datetime.strptime(DATE_FROM, "%Y-%m-%d").timestamp())
     end_ts   = int(datetime.strptime(DATE_TO,   "%Y-%m-%d").timestamp())

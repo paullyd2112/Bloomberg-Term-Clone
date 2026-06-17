@@ -562,6 +562,26 @@ def claude_backtest_status():
     return jsonify(state)
 
 
+@app.route("/backtest/diag")
+def backtest_data_diagnostic():
+    """
+    Zero-cost data-layer check — tries all 4 stock sources for a few tickers
+    and reports exactly what each returns. No Claude calls, no cost.
+    Use ?tickers=AAPL,NVDA to override the default sample.
+    """
+    from flask import request as flask_request
+    from analysis.claude_backtest import diagnose_stock_sources
+
+    raw = flask_request.args.get("tickers", "")
+    tickers = [t.strip().upper() for t in raw.split(",") if t.strip()] or None
+    try:
+        return jsonify(diagnose_stock_sources(tickers))
+    except Exception as e:
+        import traceback
+        return jsonify({"status": "error", "error": str(e),
+                        "traceback": traceback.format_exc()}), 500
+
+
 # ─── Entry point ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     logger.info("Starting Plebs data service")
