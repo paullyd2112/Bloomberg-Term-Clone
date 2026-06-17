@@ -69,6 +69,15 @@ EVAL_WINDOWS = {
     "longterm": 15,
 }
 
+LOSS_THRESHOLDS = {
+    ("stock", "intraday"):  0.015,
+    ("stock", "swing"):     0.05,
+    ("stock", "longterm"):  0.10,
+    ("crypto", "intraday"): 0.03,
+    ("crypto", "swing"):    0.10,
+    ("crypto", "longterm"): 0.20,
+}
+
 WIN_THRESHOLDS = {
     ("stock", "intraday"):  0.005,
     ("stock", "swing"):     0.02,
@@ -319,21 +328,21 @@ def _evaluate_claude_signal(
     pct_change = (exit_price - signal.entry_price) / signal.entry_price
     signal.return_pct = round(pct_change * 100, 4)
 
-    win_thresh = WIN_THRESHOLDS.get(
-        (signal.asset_class, signal.time_horizon), 0.02
-    )
+    key = (signal.asset_class, signal.time_horizon)
+    win_thresh  = WIN_THRESHOLDS.get(key, 0.02)
+    loss_thresh = LOSS_THRESHOLDS.get(key, 0.05)
 
     if signal.direction == "BUY":
         if pct_change >= win_thresh:
             signal.outcome = "WIN"
-        elif pct_change <= -win_thresh:
+        elif pct_change <= -loss_thresh:
             signal.outcome = "LOSS"
         else:
             signal.outcome = "NEUTRAL"
     elif signal.direction == "SELL":
         if pct_change <= -win_thresh:
             signal.outcome = "WIN"
-        elif pct_change >= win_thresh:
+        elif pct_change >= loss_thresh:
             signal.outcome = "LOSS"
         else:
             signal.outcome = "NEUTRAL"
