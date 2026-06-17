@@ -3,7 +3,7 @@ export type Tier = "free" | "pro" | "elite";
 export const TRIAL_DAYS = 14;
 
 export const WATCHLIST_LIMIT: Record<Tier, number> = {
-  free:  0,
+  free:  5,
   pro:   Infinity,
   elite: Infinity,
 };
