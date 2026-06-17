@@ -242,20 +242,38 @@ def _stock_alphavantage(ticker: str) -> pd.DataFrame | None:
 
 
 def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
-    """yfinance → Finnhub → FMP → Alpha Vantage. First source with data wins."""
-    for name, fn in (
+    """Fetch from ALL 4 sources, merge for best date coverage."""
+    sources = [
         ("yfinance",      _stock_yfinance),
         ("Finnhub",       _stock_finnhub),
         ("FMP",           _stock_fmp),
         ("Alpha Vantage", _stock_alphavantage),
-    ):
-        df = fn(ticker)
-        if df is not None and not df.empty:
-            logger.info("[claude_backtest] {} OHLCV from {} ({} rows)", ticker, name, len(df))
-            return df
-        logger.debug("[claude_backtest] {} miss on {} — trying next source", ticker, name)
-    logger.warning("[claude_backtest] {} — ALL 4 sources failed", ticker)
-    return None
+    ]
+    frames: list[pd.DataFrame] = []
+    for name, fn in sources:
+        try:
+            df = fn(ticker)
+            if df is not None and not df.empty:
+                logger.info("[claude_backtest] {} — {} returned {} rows", ticker, name, len(df))
+                frames.append(df)
+            else:
+                logger.debug("[claude_backtest] {} — {} no data", ticker, name)
+        except Exception as e:
+            logger.debug("[claude_backtest] {} — {} error: {}", ticker, name, e)
+
+    if not frames:
+        logger.warning("[claude_backtest] {} — ALL 4 sources returned no data", ticker)
+        return None
+
+    merged = frames[0]
+    for extra in frames[1:]:
+        new_dates = extra.index.difference(merged.index)
+        if len(new_dates) > 0:
+            merged = pd.concat([merged, extra.loc[new_dates]]).sort_index()
+            logger.info("[claude_backtest] {} — filled {} gap dates from additional source", ticker, len(new_dates))
+
+    logger.info("[claude_backtest] {} — merged OHLCV: {} total rows from {} sources", ticker, len(merged), len(frames))
+    return merged
 
 
 def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:

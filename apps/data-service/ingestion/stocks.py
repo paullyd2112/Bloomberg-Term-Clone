@@ -242,20 +242,39 @@ def _fetch_ohlcv_av(ticker: str) -> pd.DataFrame | None:
 
 
 def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
-    """yfinance → Finnhub → FMP → Alpha Vantage, first that returns data wins."""
-    df = _fetch_ohlcv_yfinance(ticker)
-    if df is not None and not df.empty:
-        return df
-    logger.debug("{}: yfinance miss — trying Finnhub", ticker)
-    df = _fetch_ohlcv_finnhub(ticker)
-    if df is not None and not df.empty:
-        return df
-    logger.debug("{}: Finnhub miss — trying FMP", ticker)
-    df = _fetch_ohlcv_fmp(ticker)
-    if df is not None and not df.empty:
-        return df
-    logger.debug("{}: FMP miss — trying Alpha Vantage", ticker)
-    return _fetch_ohlcv_av(ticker)
+    """Fetch from ALL 4 sources, merge into one DataFrame for best coverage."""
+    sources = [
+        ("yfinance",      _fetch_ohlcv_yfinance),
+        ("Finnhub",       _fetch_ohlcv_finnhub),
+        ("FMP",           _fetch_ohlcv_fmp),
+        ("Alpha Vantage", _fetch_ohlcv_av),
+    ]
+    frames: list[pd.DataFrame] = []
+    for name, fn in sources:
+        try:
+            df = fn(ticker)
+            if df is not None and not df.empty:
+                df.columns = [c.lower() for c in df.columns]
+                logger.debug("{}: {} returned {} rows", ticker, name, len(df))
+                frames.append(df[["open", "high", "low", "close", "volume"]])
+            else:
+                logger.debug("{}: {} — no data", ticker, name)
+        except Exception as e:
+            logger.debug("{}: {} — error: {}", ticker, name, e)
+
+    if not frames:
+        logger.warning("{}: ALL 4 sources returned no data", ticker)
+        return None
+
+    merged = frames[0]
+    for extra in frames[1:]:
+        new_dates = extra.index.difference(merged.index)
+        if len(new_dates) > 0:
+            merged = pd.concat([merged, extra.loc[new_dates]]).sort_index()
+            logger.debug("{}: filled {} gap dates from additional source", ticker, len(new_dates))
+
+    logger.info("{}: merged OHLCV — {} rows from {} sources", ticker, len(merged), len(frames))
+    return merged
 
 
 # ─── News fetch ───────────────────────────────────────────────────────────────
