@@ -76,6 +76,20 @@ def build_user_prompt(context: dict) -> str:
             f"  Trend: {s.get('vs_previous', 'N/A')}",
         ]
 
+    benchmarks = context.get("market_benchmarks", {})
+    if benchmarks:
+        lines += ["", "Broad market context:"]
+        for sym, bm in benchmarks.items():
+            if bm.get("price") is not None:
+                chg = f"{bm['change_24h']:+.2f}%" if bm.get("change_24h") is not None else "N/A"
+                lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg})")
+
+    macro = context.get("upcoming_macro", [])
+    if macro:
+        lines += ["", "Upcoming macro events (next 48h):"]
+        for m in macro:
+            lines.append(f"  - {m}")
+
     if context.get("news_headlines"):
         lines += ["", "Recent news:"]
         for h in context["news_headlines"]:

@@ -213,6 +213,83 @@ def health():
     })
 
 
+# ─── Accuracy dashboard endpoint ─────────────────────────────────────────────
+
+@app.route("/accuracy")
+def accuracy_dashboard():
+    """
+    Live accuracy dashboard — win rate by asset class, top/bottom tickers,
+    overall stats. Reads from asset_accuracy table (refreshed nightly).
+    """
+    from supabase_client import supabase
+
+    try:
+        result = (
+            supabase.table("asset_accuracy")
+            .select("*")
+            .order("last_updated", desc=True)
+            .execute()
+        )
+        rows = result.data or []
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    if not rows:
+        return jsonify({"message": "No accuracy data yet — resolver hasn't run"})
+
+    total_wins    = sum(r.get("wins", 0) for r in rows)
+    total_losses  = sum(r.get("losses", 0) for r in rows)
+    total_neutral = sum(r.get("neutrals", 0) for r in rows)
+    total_signals = sum(r.get("total_signals", 0) for r in rows)
+    decisive      = total_wins + total_losses
+
+    by_class = {}
+    for asset_type in ("stock", "crypto", "prediction"):
+        class_rows  = [r for r in rows if r.get("asset_type") == asset_type]
+        class_wins  = sum(r.get("wins", 0) for r in class_rows)
+        class_loss  = sum(r.get("losses", 0) for r in class_rows)
+        class_dec   = class_wins + class_loss
+        class_sigs  = sum(r.get("total_signals", 0) for r in class_rows)
+
+        ranked = sorted(
+            [r for r in class_rows if (r.get("wins", 0) + r.get("losses", 0)) >= 3],
+            key=lambda r: r.get("win_rate") or 0,
+            reverse=True,
+        )
+
+        by_class[asset_type] = {
+            "total_signals":  class_sigs,
+            "wins":           class_wins,
+            "losses":         class_loss,
+            "win_rate":       round(class_wins / class_dec * 100, 1) if class_dec else None,
+            "tracked_assets": len(class_rows),
+            "top_5": [
+                {"identifier": r["identifier"], "win_rate": r.get("win_rate"),
+                 "signals": r.get("total_signals")}
+                for r in ranked[:5]
+            ],
+            "bottom_5": [
+                {"identifier": r["identifier"], "win_rate": r.get("win_rate"),
+                 "signals": r.get("total_signals")}
+                for r in ranked[-5:]
+            ] if len(ranked) > 5 else [],
+        }
+
+    return jsonify({
+        "overall": {
+            "total_signals":   total_signals,
+            "wins":            total_wins,
+            "losses":          total_losses,
+            "neutral":         total_neutral,
+            "decisive":        decisive,
+            "win_rate":        round(total_wins / decisive * 100, 1) if decisive else None,
+            "tracked_assets":  len(rows),
+        },
+        "by_asset_class": by_class,
+        "last_updated": rows[0].get("last_updated") if rows else None,
+    })
+
+
 # ─── Backtest endpoint ────────────────────────────────────────────────────────
 @app.route("/backtest", methods=["GET", "POST"])
 def run_backtest_endpoint():
@@ -266,6 +343,62 @@ def run_backtest_endpoint():
 @app.route("/backtest/status")
 def backtest_status():
     state = _job_state.get("backtest", {"status": "never_run"})
+    return jsonify(state)
+
+
+# ─── Claude backtest endpoint ────────────────────────────────────────────────
+
+@app.route("/backtest/claude", methods=["GET", "POST"])
+def run_claude_backtest_endpoint():
+    """
+    Run sampled Claude backtest — calls the real scoring engine on historical
+    data points. ~40 API calls, ~$0.50.
+    POST /backtest/claude
+    """
+    from flask import request as flask_request
+    from analysis.claude_backtest import run_claude_backtest
+    import threading
+
+    body       = flask_request.get_json(silent=True) or {}
+    output_dir = str(body.get("output_dir", "/tmp/claude_backtest"))
+
+    def _run():
+        try:
+            agg = run_claude_backtest(output_dir=output_dir)
+            _job_state["claude_backtest"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "ok",
+                "summary": {
+                    "total_signals": agg.get("total_signals", 0),
+                    "win_rate":      agg.get("win_rate", 0),
+                    "api_calls":     agg.get("api_calls", 0),
+                    "avg_return":    agg.get("avg_return_pct", 0),
+                    "by_asset_class": agg.get("by_asset_class", {}),
+                    "by_time_horizon": agg.get("by_time_horizon", {}),
+                },
+                "signals": agg.get("signals", []),
+            }
+        except Exception as e:
+            _job_state["claude_backtest"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "error",
+                "error": str(e),
+            }
+            logger.error("Claude backtest failed: {}", e)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    return jsonify({
+        "status": "started",
+        "message": "Claude backtest running in background. Check /backtest/claude/status for results.",
+        "output_dir": output_dir,
+    })
+
+
+@app.route("/backtest/claude/status")
+def claude_backtest_status():
+    state = _job_state.get("claude_backtest", {"status": "never_run"})
     return jsonify(state)
 
 

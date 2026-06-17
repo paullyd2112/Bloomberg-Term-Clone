@@ -233,6 +233,46 @@ def _get_short_interest_context(ticker: str) -> dict | None:
         return None
 
 
+# ─── Macro context ───────────────────────────────────────────────────────────
+
+def _get_market_benchmark() -> dict:
+    """Fetch SPY + QQQ 24h change to give Claude broad market context."""
+    benchmarks = {}
+    for sym in ("SPY", "QQQ"):
+        try:
+            result = (
+                supabase.table("raw_prices")
+                .select("price, change_24h")
+                .eq("asset_type", "stock")
+                .eq("identifier", sym)
+                .order("captured_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                row = result.data[0]
+                benchmarks[sym] = {
+                    "price":     float(row["price"]) if row.get("price") else None,
+                    "change_24h": float(row["change_24h"]) if row.get("change_24h") else None,
+                }
+        except Exception:
+            pass
+    return benchmarks
+
+
+def _get_upcoming_macro(days: int = 2) -> list[str]:
+    """Fetch macro events within next N days as short strings for context."""
+    from ingestion.macro_events import get_upcoming_events
+    events = get_upcoming_events(days=days)
+    lines = []
+    for e in events[:5]:
+        name = e.get("event_name", "")
+        importance = e.get("importance", "")
+        event_date = e.get("event_date", "")
+        lines.append(f"{event_date} — {name} ({importance})")
+    return lines
+
+
 # ─── Signal writer ────────────────────────────────────────────────────────────
 
 def _write_signal(asset_type: str, identifier: str, price: float | None, signal) -> dict:
@@ -281,6 +321,10 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
 
     # ── Build asset-specific context & call Claude ──────────────────────────
 
+    # Fetch macro context once, share across asset types
+    benchmarks  = _get_market_benchmark()
+    macro_events = _get_upcoming_macro(days=2)
+
     try:
         if asset_type == "stock":
             context = {
@@ -292,6 +336,8 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
                 "earnings_context":     _get_earnings_context(identifier),
                 "options_context":      _get_options_context(identifier),
                 "short_interest_context": _get_short_interest_context(identifier),
+                "market_benchmarks":    benchmarks,
+                "upcoming_macro":       macro_events,
             }
             signal: StockSignal = client.chat.completions.create(
                 model=MODEL,
@@ -310,6 +356,8 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
                 "fear_greed":          _get_fear_greed(),
                 "market_cap":          meta.get("market_cap"),
                 "news_headlines":      news,
+                "market_benchmarks":   benchmarks,
+                "upcoming_macro":      macro_events,
             }
             signal: CryptoSignal = client.chat.completions.create(
                 model=MODEL,
