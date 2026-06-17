@@ -206,7 +206,7 @@ def resolve_outcomes() -> str:
     except Exception as e:
         logger.error("resolve_outcomes: failed to fetch pending signals — {}", e)
         sentry_sdk.capture_exception(e)
-        return "failed to fetch pending signals"
+        return f"failed to fetch pending signals: {e}"
 
     if not pending:
         logger.info("resolve_outcomes: no pending signals to resolve")

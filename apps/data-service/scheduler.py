@@ -194,6 +194,23 @@ def resolve_now():
     """
     from scoring.resolver import resolve_outcomes
     from scoring.accuracy import refresh_asset_accuracy
+    from supabase_client import supabase
+
+    # Diagnostic: count signals by outcome
+    diag = {}
+    try:
+        for outcome in ("PENDING", "WIN", "LOSS", "NEUTRAL"):
+            r = (
+                supabase.table("signals")
+                .select("id", count="exact")
+                .eq("outcome", outcome)
+                .eq("is_backtest", False)
+                .execute()
+            )
+            diag[outcome] = r.count or 0
+        diag["total"] = sum(diag.values())
+    except Exception as e:
+        diag = {"error": str(e)}
 
     resolver_result = resolve_outcomes()
     accuracy_result = refresh_asset_accuracy()
@@ -208,6 +225,7 @@ def resolve_now():
         "status": "ok",
         "resolver": resolver_result,
         "accuracy": accuracy_result,
+        "signal_counts": diag,
     })
 
 @app.route("/health")
