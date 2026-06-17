@@ -55,9 +55,11 @@ LONG_ONLY             = True   # no shorts in bull market
 
 # ─── Paper trading ────────────────────────────────────────────────────────────
 
-INITIAL_CAPITAL   = 1_000.0
-POSITION_SIZE_PCT = 0.10    # 10 % of portfolio per trade
-MAX_POSITIONS     = 8       # max concurrent open positions
+INITIAL_CAPITAL     = 1_000.0
+POSITION_SIZE_PCT   = 0.10    # base 10 % of portfolio per trade
+POSITION_SIZE_MIN   = 0.05    # 5% for low-confidence signals
+POSITION_SIZE_MAX   = 0.15    # 15% for high-confidence signals
+MAX_POSITIONS       = 8       # max concurrent open positions
 
 # ─── API keys ─────────────────────────────────────────────────────────────────
 
@@ -137,6 +139,7 @@ class SignalRecord:
     macd_hist:  float | None
     vol_ratio:  float | None
     change_1d:  float | None
+    archetype:  str = "mixed"
     circuit_breaker_fired: bool = False
     forward_return_5d: float | None = None
     outcome: Literal["WIN", "LOSS", "HOLD", "PENDING"] = "PENDING"
@@ -384,17 +387,17 @@ def _compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def _generate_signal(
     row: pd.Series, prev_row: pd.Series
-) -> tuple[Literal["BUY", "SELL", "HOLD"], int]:
+) -> tuple[Literal["BUY", "SELL", "HOLD"], int, str]:
     """
-    Score-based long-only signal generator.
+    Score-based long-only signal generator. Returns (direction, confidence, archetype).
 
-    Philosophy:
-    - Additive scoring across MACD, RSI, SMA50, volume — no single hard gate.
-    - MACD crossover is the strongest signal (+30) but not required alone.
-    - RSI modulates conviction: oversold boosts entry, overbought penalises it.
-    - SMA50 used as trend alignment (uptrend = add score, downtrend = subtract).
-    - Long-only: only BUY signals. In a +10% bull market shorts are wealth destruction.
-    - Requires meaningful confluence to reach MIN_CONFIDENCE.
+    Archetypes:
+      macd_crossover     — MACD histogram crossed from neg to pos
+      oversold_bounce    — RSI < 30 with trend support
+      trend_continuation — uptrend + expanding MACD
+      volume_breakout    — volume spike + bullish technicals
+      recovery           — MACD recovering from negative
+      mixed              — multiple weak signals combining
     """
     rsi       = row.get("_rsi")
     macd_hist = row.get("_macd_hist")
@@ -403,53 +406,67 @@ def _generate_signal(
     sma50_pct = row.get("price_vs_sma50")
     change_1d = row.get("change_1d")
 
-    score = 0  # positive = bullish bias
+    score = 0
+    tags: list[str] = []
 
-    # ── MACD — crossover is gold, but expanding histogram also counts ─────────
+    # ── MACD ─────────────────────────────────────────────────────────────────
     if pd.notna(macd_hist) and pd.notna(prev_hist):
-        if prev_hist < 0 and macd_hist > 0:    score += 30  # bullish crossover
-        elif prev_hist > 0 and macd_hist < 0:  score -= 20  # bearish crossover (penalise)
+        if prev_hist < 0 and macd_hist > 0:
+            score += 30
+            tags.append("macd_crossover")
+        elif prev_hist > 0 and macd_hist < 0:
+            score -= 20
         elif macd_hist > 0:
-            if macd_hist > prev_hist:          score += 8   # histogram expanding bullishly
-            else:                              score += 3   # positive but fading
+            if macd_hist > prev_hist:
+                score += 8
+                tags.append("trend_continuation")
+            else:
+                score += 3
         elif macd_hist < 0:
-            if macd_hist < prev_hist:          score -= 8   # expanding bearishly
-            else:                              score += 5   # negative but recovering
+            if macd_hist < prev_hist:
+                score -= 8
+            else:
+                score += 5
+                tags.append("recovery")
 
-    # ── RSI — oversold = boost, overbought = penalise ────────────────────────
+    # ── RSI ──────────────────────────────────────────────────────────────────
     if pd.notna(rsi):
-        if rsi < 30:         score += 20   # deep oversold — strong entry
-        elif rsi < 45:       score += 10   # oversold, room to run
-        elif rsi < 55:       score += 4    # neutral
-        elif rsi > 75:       score -= 20   # very overbought — don't chase
-        elif rsi > 65:       score -= 10   # extended — reduce conviction
+        if rsi < 30:
+            score += 20
+            tags.append("oversold_bounce")
+        elif rsi < 45:       score += 10
+        elif rsi < 55:       score += 4
+        elif rsi > 75:       score -= 20
+        elif rsi > 65:       score -= 10
 
-    # ── SMA50 — trend alignment only, not mean reversion ─────────────────────
+    # ── SMA50 ────────────────────────────────────────────────────────────────
     if pd.notna(sma50_pct):
-        if sma50_pct > 5:    score += 10   # strong uptrend — align long
-        elif sma50_pct > 0:  score += 5    # mild uptrend
-        elif sma50_pct < -5: score -= 10   # downtrend — risky BUY
-        else:                score -= 5    # mild downtrend
+        if sma50_pct > 5:    score += 10
+        elif sma50_pct > 0:  score += 5
+        elif sma50_pct < -5: score -= 10
+        else:                score -= 5
 
-    # ── Volume — confirms the directional move ────────────────────────────────
+    # ── Volume ───────────────────────────────────────────────────────────────
     if pd.notna(vol_ratio) and vol_ratio > VOLUME_CONFIRM:
-        score += 8   # institutional participation
+        score += 8
+        tags.append("volume_breakout")
 
-    # ── Long-only: only positive scores become BUY ────────────────────────────
+    # ── Long-only ────────────────────────────────────────────────────────────
     if score <= 0:
-        return "HOLD", 50
+        return "HOLD", 50, "none"
 
     direction: Literal["BUY", "SELL", "HOLD"] = "BUY"
     confidence = min(50 + score, 100)
 
-    # ── Circuit breaker ───────────────────────────────────────────────────────
+    # ── Circuit breaker ──────────────────────────────────────────────────────
     if pd.notna(change_1d) and abs(change_1d) >= CIRCUIT_BREAKER:
-        return "HOLD", min(confidence, 45)
+        return "HOLD", min(confidence, 45), "circuit_breaker"
 
     if confidence < MIN_CONFIDENCE:
-        return "HOLD", confidence
+        return "HOLD", confidence, "low_confidence"
 
-    return direction, confidence
+    archetype = tags[0] if tags else "mixed"
+    return direction, confidence, archetype
 
 
 # ─── Outcome evaluation ───────────────────────────────────────────────────────
@@ -490,7 +507,7 @@ def _backtest_ticker(
     for i in range(start_idx, end_idx):
         row      = df.iloc[i]
         prev_row = df.iloc[i - 1]
-        direction, confidence = _generate_signal(row, prev_row)
+        direction, confidence, archetype = _generate_signal(row, prev_row)
 
         # Per-ticker cooldown: suppress signals within SIGNAL_COOLDOWN_BARS of last one.
         # Prevents re-entering the same setup 5 days in a row when the first one already failed.
@@ -540,6 +557,7 @@ def _backtest_ticker(
             macd_hist=float(row["_macd_hist"]) if pd.notna(row.get("_macd_hist")) else None,
             vol_ratio=float(row["volume_ratio"]) if pd.notna(row.get("volume_ratio")) else None,
             change_1d=float(row["change_1d"]) if pd.notna(row.get("change_1d")) else None,
+            archetype=archetype,
             circuit_breaker_fired=circuit_fired,
             forward_return_5d=fwd_return,
             outcome=outcome,
@@ -630,7 +648,10 @@ def _run_paper_sim(all_records: list[SignalRecord]) -> dict:
             if any(p["ticker"] == sig.ticker for p in open_pos):
                 continue
 
-            invest = portfolio * POSITION_SIZE_PCT
+            # Confidence-weighted sizing: 68→5%, 84→10%, 100→15%
+            conf_frac = max(0, min(1, (sig.confidence - MIN_CONFIDENCE) / (100 - MIN_CONFIDENCE)))
+            size_pct = POSITION_SIZE_MIN + conf_frac * (POSITION_SIZE_MAX - POSITION_SIZE_MIN)
+            invest = portfolio * size_pct
             if invest < 1:
                 continue
 
@@ -698,6 +719,10 @@ def _run_paper_sim(all_records: list[SignalRecord]) -> dict:
     def _safe_avg(trades: list) -> float | None:
         return round(sum(t.return_pct for t in trades) / len(trades), 2) if trades else None
 
+    avg_size = (
+        round(sum(t.invested for t in completed) / len(completed), 2) if completed else 0
+    )
+
     return {
         "starting_capital": INITIAL_CAPITAL,
         "final_portfolio":  final,
@@ -708,6 +733,8 @@ def _run_paper_sim(all_records: list[SignalRecord]) -> dict:
         "wins":             len(wins),
         "losses":           len(losses),
         "paper_win_rate":   round(len(wins) / len(completed) * 100, 1) if completed else 0,
+        "position_sizing":  "confidence-weighted (5%-15%)",
+        "avg_position_size": avg_size,
         "by_direction": {
             "BUY":  {
                 "trades":    len(buy_trades),
@@ -782,6 +809,34 @@ def _aggregate(
             "avg_return": round(float(np.mean(g_rets)), 3) if g_rets else None,
         }
 
+    # ── Archetype breakdown ─────────────────────────────────────────────────
+    archetype_map: dict[str, dict] = {}
+    for r in all_records:
+        if r.direction == "HOLD":
+            continue
+        a = r.archetype
+        if a not in archetype_map:
+            archetype_map[a] = {"signals": 0, "wins": 0, "losses": 0, "returns": []}
+        archetype_map[a]["signals"] += 1
+        if r.outcome == "WIN":
+            archetype_map[a]["wins"] += 1
+        elif r.outcome == "LOSS":
+            archetype_map[a]["losses"] += 1
+        if r.forward_return_5d is not None:
+            archetype_map[a]["returns"].append(r.forward_return_5d)
+
+    by_archetype = {}
+    for a, stats_a in archetype_map.items():
+        dec = stats_a["wins"] + stats_a["losses"]
+        rets = stats_a["returns"]
+        by_archetype[a] = {
+            "signals":    stats_a["signals"],
+            "wins":       stats_a["wins"],
+            "losses":     stats_a["losses"],
+            "win_rate":   round(stats_a["wins"] / dec * 100, 1) if dec else None,
+            "avg_return": round(float(np.mean(rets)), 3) if rets else None,
+        }
+
     return {
         "date_range":           f"{DATE_FROM} → {DATE_TO}",
         "total_bars_evaluated": total_signals,
@@ -800,6 +855,7 @@ def _aggregate(
             "stocks": _group([s for s in all_stats if s.asset_class == "stock"]),
             "crypto": _group([s for s in all_stats if s.asset_class == "crypto"]),
         },
+        "by_archetype": by_archetype,
         "best_individual_signals": [
             {"ticker": r.ticker, "date": r.date, "direction": r.direction,
              "return_pct": r.forward_return_5d, "asset_class": r.asset_class}
@@ -833,7 +889,8 @@ def _export_csv(records: list[SignalRecord], path: str) -> None:
             "ticker": r.ticker, "asset_class": r.asset_class, "date": r.date,
             "direction": r.direction, "confidence": r.confidence, "price": r.price,
             "rsi": r.rsi, "macd_hist": r.macd_hist, "vol_ratio": r.vol_ratio,
-            "change_1d": r.change_1d, "circuit_breaker": r.circuit_breaker_fired,
+            "change_1d": r.change_1d, "archetype": r.archetype,
+            "circuit_breaker": r.circuit_breaker_fired,
             "forward_return_5d": r.forward_return_5d, "outcome": r.outcome,
         }
         for r in records
@@ -1006,6 +1063,14 @@ def _print_report(agg: dict) -> None:
             wr = f"{s['win_rate']:.1f}%" if s.get("win_rate") is not None else "N/A"
             ar = f"{s['avg_return']:+.3f}%" if s.get("avg_return") is not None else "N/A"
             print(f"  {cls.upper():8s}  signals={s['actionable']:5,}  wr={wr:6s}  avg={ar}")
+
+    arch = agg.get("by_archetype", {})
+    if arch:
+        print(f"\n  ── By archetype ──")
+        for a, s in sorted(arch.items(), key=lambda x: x[1]["signals"], reverse=True):
+            wr = f"{s['win_rate']:.1f}%" if s.get("win_rate") is not None else "N/A"
+            ar = f"{s['avg_return']:+.3f}%" if s.get("avg_return") is not None else "N/A"
+            print(f"  {a:22s}  signals={s['signals']:5,}  wr={wr:6s}  avg={ar}")
 
     print(f"\n{sep}")
     print("  BEST PAPER TRADES")
