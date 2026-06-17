@@ -41,11 +41,14 @@ load_dotenv()
 MODEL      = "claude-sonnet-4-6"
 MAX_TOKENS = 1024
 
-FMP_KEY  = os.environ.get("FMP_API_KEY", "")
-AV_KEY   = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
-CG_KEY   = os.environ.get("COINGECKO_API_KEY", "")
-FMP_BASE = "https://financialmodelingprep.com/api/v3"
-CG_BASE  = "https://api.coingecko.com/api/v3"
+FMP_KEY     = os.environ.get("FMP_API_KEY", "")
+AV_KEY      = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
+CG_KEY      = os.environ.get("COINGECKO_API_KEY", "")
+FINNHUB_KEY = os.environ.get("FINNHUB_API_KEY", "")
+FMP_BASE    = "https://financialmodelingprep.com/api/v3"
+CG_BASE     = "https://api.coingecko.com/api/v3"
+FINNHUB_CANDLE = "https://finnhub.io/api/v1/stock/candle"
+AV_URL         = "https://www.alphavantage.co/query"
 
 DATE_FROM = "2026-02-01"
 DATE_TO   = "2026-06-16"
@@ -141,26 +144,118 @@ def _get_json(url: str, headers: dict | None = None) -> dict | None:
         return None
 
 
-def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
+_NEEDED_COLS = {"open", "high", "low", "close", "volume"}
+
+
+def _normalize_ohlcv(df: pd.DataFrame | None) -> pd.DataFrame | None:
+    """Lower-case cols, strip tz, validate required columns, clip to date range."""
+    if df is None or df.empty:
+        return None
+    df = df.copy()
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    df.columns = [c.lower() for c in df.columns]
+    if not _NEEDED_COLS.issubset(df.columns):
+        return None
+    df.index = pd.to_datetime(df.index).tz_localize(None)
+    df = df.sort_index()
+    df = df[(df.index >= pd.Timestamp(DATE_FROM)) & (df.index <= pd.Timestamp(DATE_TO))]
+    if df.empty:
+        return None
+    return df[list(_NEEDED_COLS)].astype(float)
+
+
+def _stock_yfinance(ticker: str) -> pd.DataFrame | None:
+    try:
+        import yfinance as yf
+        df = yf.download(ticker, start=DATE_FROM, end=DATE_TO, interval="1d",
+                         auto_adjust=True, progress=False)
+        return _normalize_ohlcv(df)
+    except Exception as e:
+        logger.debug("[claude_backtest] {} yfinance failed — {}", ticker, e)
+        return None
+
+
+def _stock_finnhub(ticker: str) -> pd.DataFrame | None:
+    if not FINNHUB_KEY:
+        return None
+    try:
+        start = int(datetime.strptime(DATE_FROM, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
+        end   = int(datetime.strptime(DATE_TO,   "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
+        url = (f"{FINNHUB_CANDLE}?symbol={ticker}&resolution=D"
+               f"&from={start}&to={end}&token={FINNHUB_KEY}")
+        data = _get_json(url)
+        if not data or data.get("s") != "ok" or not data.get("t"):
+            return None
+        df = pd.DataFrame({
+            "date":   pd.to_datetime(data["t"], unit="s", utc=True).tz_localize(None),
+            "open":   data["o"], "high": data["h"], "low": data["l"],
+            "close":  data["c"], "volume": data["v"],
+        }).set_index("date")
+        return _normalize_ohlcv(df)
+    except Exception as e:
+        logger.debug("[claude_backtest] {} Finnhub failed — {}", ticker, e)
+        return None
+
+
+def _stock_fmp(ticker: str) -> pd.DataFrame | None:
     if not FMP_KEY:
         return None
-    url = (
-        f"{FMP_BASE}/historical-price-full/{ticker}"
-        f"?from={DATE_FROM}&to={DATE_TO}&apikey={FMP_KEY}"
-    )
-    data = _get_json(url)
-    if not data:
+    try:
+        url = (f"{FMP_BASE}/historical-price-full/{ticker}"
+               f"?from={DATE_FROM}&to={DATE_TO}&apikey={FMP_KEY}")
+        data = _get_json(url)
+        hist = (data or {}).get("historical", [])
+        if not hist:
+            return None
+        df = pd.DataFrame(hist)
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.set_index("date")
+        return _normalize_ohlcv(df)
+    except Exception as e:
+        logger.debug("[claude_backtest] {} FMP failed — {}", ticker, e)
         return None
-    hist = data.get("historical", [])
-    if not hist:
+
+
+def _stock_alphavantage(ticker: str) -> pd.DataFrame | None:
+    if not AV_KEY:
         return None
-    df = pd.DataFrame(hist)
-    df["date"] = pd.to_datetime(df["date"])
-    df = df.sort_values("date").set_index("date")
-    needed = {"open", "high", "low", "close", "volume"}
-    if not needed.issubset(df.columns):
+    try:
+        # outputsize=full gives 20+ years — needed for a historical range
+        url = (f"{AV_URL}?function=TIME_SERIES_DAILY_ADJUSTED&symbol={ticker}"
+               f"&outputsize=full&apikey={AV_KEY}")
+        data = _get_json(url)
+        ts = (data or {}).get("Time Series (Daily)", {})
+        if not ts:
+            return None
+        rows = [
+            {"date": pd.Timestamp(d), "open": float(v["1. open"]),
+             "high": float(v["2. high"]), "low": float(v["3. low"]),
+             "close": float(v["5. adjusted close"]), "volume": float(v["6. volume"])}
+            for d, v in ts.items()
+        ]
+        df = pd.DataFrame(rows).set_index("date")
+        return _normalize_ohlcv(df)
+    except Exception as e:
+        logger.debug("[claude_backtest] {} Alpha Vantage failed — {}", ticker, e)
         return None
-    return df[list(needed)].astype(float)
+
+
+def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
+    """yfinance → Finnhub → FMP → Alpha Vantage. First source with data wins."""
+    for name, fn in (
+        ("yfinance",      _stock_yfinance),
+        ("Finnhub",       _stock_finnhub),
+        ("FMP",           _stock_fmp),
+        ("Alpha Vantage", _stock_alphavantage),
+    ):
+        df = fn(ticker)
+        if df is not None and not df.empty:
+            logger.info("[claude_backtest] {} OHLCV from {} ({} rows)", ticker, name, len(df))
+            return df
+        logger.debug("[claude_backtest] {} miss on {} — trying next source", ticker, name)
+    logger.warning("[claude_backtest] {} — ALL 4 sources failed", ticker)
+    return None
 
 
 def _fetch_crypto_ohlcv(cg_id: str) -> pd.DataFrame | None:
