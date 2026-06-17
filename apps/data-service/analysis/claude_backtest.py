@@ -349,9 +349,9 @@ def run_claude_backtest(
     sample_dates: list[str] | None = None,
     output_dir: str | None = None,
 ) -> dict:
-    stocks       = stocks or SAMPLE_STOCKS
-    crypto       = crypto or CRYPTO_ASSETS
-    sample_dates = sample_dates or SAMPLE_DATES
+    stocks       = SAMPLE_STOCKS if stocks is None else stocks
+    crypto       = CRYPTO_ASSETS if crypto is None else crypto
+    sample_dates = SAMPLE_DATES if sample_dates is None else sample_dates
     output_dir   = output_dir or "/tmp/claude_backtest"
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -365,6 +365,11 @@ def run_claude_backtest(
     results: list[ClaudeSignalResult] = []
     api_calls = 0
     errors = 0
+
+    logger.info(
+        "[claude_backtest] Starting — {} stocks, {} crypto, {} sample dates, DATE_FROM={}",
+        len(stocks), len(crypto), len(sample_dates), DATE_FROM,
+    )
 
     # ── Stocks ───────────────────────────────────────────────────────────────
     stock_data: dict[str, pd.DataFrame] = {}
