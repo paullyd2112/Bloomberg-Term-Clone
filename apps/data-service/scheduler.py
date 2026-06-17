@@ -186,6 +186,30 @@ def add_cors(response):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
+@app.route("/resolve-now", methods=["GET", "POST"])
+def resolve_now():
+    """
+    Manually trigger resolver + accuracy refresh right now.
+    Runs in foreground so you get results immediately.
+    """
+    from scoring.resolver import resolve_outcomes
+    from scoring.accuracy import refresh_asset_accuracy
+
+    resolver_result = resolve_outcomes()
+    accuracy_result = refresh_asset_accuracy()
+
+    _job_state["manual_resolve"] = {
+        "last_run": datetime.now(timezone.utc).isoformat(),
+        "resolver": resolver_result,
+        "accuracy": accuracy_result,
+    }
+
+    return jsonify({
+        "status": "ok",
+        "resolver": resolver_result,
+        "accuracy": accuracy_result,
+    })
+
 @app.route("/health")
 def health():
     from supabase_client import supabase
