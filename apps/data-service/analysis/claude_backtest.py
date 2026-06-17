@@ -47,10 +47,10 @@ CG_KEY   = os.environ.get("COINGECKO_API_KEY", "")
 FMP_BASE = "https://financialmodelingprep.com/api/v3"
 CG_BASE  = "https://api.coingecko.com/api/v3"
 
-DATE_FROM = "2026-02-01"
+DATE_FROM = "2026-05-01"
 DATE_TO   = "2026-06-16"
 
-SAMPLE_DATES = ["2026-03-03", "2026-04-01", "2026-05-01", "2026-06-02"]
+SAMPLE_DATES = ["2026-05-05", "2026-05-14", "2026-05-27", "2026-06-04"]
 
 SAMPLE_STOCKS = ["AAPL", "NVDA", "TSLA", "PLTR", "AMD",
                  "META", "GOOGL", "COIN", "SOFI", "HOOD"]

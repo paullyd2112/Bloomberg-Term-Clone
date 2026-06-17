@@ -510,12 +510,14 @@ def run_claude_backtest_endpoint():
     from analysis.claude_backtest import run_claude_backtest
     import threading
 
-    body       = flask_request.get_json(silent=True) or {}
-    output_dir = str(body.get("output_dir", "/tmp/claude_backtest"))
+    body        = flask_request.get_json(silent=True) or {}
+    output_dir  = str(body.get("output_dir", "/tmp/claude_backtest"))
+    stocks_only = bool(body.get("stocks_only", False)) or flask_request.args.get("stocks_only") == "true"
 
     def _run():
         try:
-            agg = run_claude_backtest(output_dir=output_dir)
+            crypto_list = [] if stocks_only else None
+            agg = run_claude_backtest(output_dir=output_dir, crypto=crypto_list)
             _job_state["claude_backtest"] = {
                 "last_run": datetime.now(timezone.utc).isoformat(),
                 "status": "ok",
