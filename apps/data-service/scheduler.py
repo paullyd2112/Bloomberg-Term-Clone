@@ -186,6 +186,58 @@ def add_cors(response):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
+@app.route("/score-now", methods=["GET", "POST"])
+def score_now():
+    """
+    Manually trigger ingestion + scoring for all asset types.
+    Runs in background since it takes a few minutes.
+    """
+    import threading
+
+    def _run():
+        try:
+            from ingestion.stocks import ingest_stocks
+            from ingestion.crypto import ingest_crypto
+            from ingestion.prediction_markets import ingest_prediction_markets
+            from scoring.engine import score_stocks, score_crypto, score_prediction_markets
+
+            results = {}
+            results["ingest_stocks"] = ingest_stocks()
+            results["ingest_crypto"] = ingest_crypto()
+            results["ingest_predictions"] = ingest_prediction_markets()
+            results["score_stocks"] = score_stocks()
+            results["score_crypto"] = score_crypto()
+            results["score_predictions"] = score_prediction_markets()
+
+            _job_state["score_now"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "ok",
+                "results": results,
+            }
+            logger.info("Manual score-now complete: {}", results)
+        except Exception as e:
+            _job_state["score_now"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "error",
+                "error": str(e),
+            }
+            logger.error("Manual score-now failed: {}", e)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    return jsonify({
+        "status": "started",
+        "message": "Ingestion + scoring running in background. Check /score-now/status for results.",
+    })
+
+
+@app.route("/score-now/status")
+def score_now_status():
+    state = _job_state.get("score_now", {"status": "never_run"})
+    return jsonify(state)
+
+
 @app.route("/resolve-now", methods=["GET", "POST"])
 def resolve_now():
     """
