@@ -151,17 +151,17 @@ scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressio
 
 # Newsletter — generate at 6:30am, send at 7:00am ET weekdays
 scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newsletter),
-                  CronTrigger(hour=6, minute=30, day_of_week="mon-fri", timezone="America/New_York"), id="generate_newsletter")
+                  CronTrigger(hour=9, minute=30, day_of_week="mon-fri", timezone="America/New_York"), id="generate_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter", job_send_newsletter),
-                  CronTrigger(hour=7, minute=0, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
+                  CronTrigger(hour=9, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
 scheduler.add_job(lambda: _run_job("send_welcome_sequence", job_send_welcome_sequence),
                   CronTrigger(hour=9, minute=0, timezone="America/New_York"), id="send_welcome_sequence")
 
-# Resolution & accuracy — nightly
+# Resolution & accuracy — every 4 hours so intraday signals resolve same-day
 scheduler.add_job(lambda: _run_job("resolve_outcomes", job_resolve_outcomes),
-                  CronTrigger(hour=0, minute=0, timezone="UTC"), id="resolve_outcomes")
+                  CronTrigger(hour="0,4,8,12,16,20", minute=0, timezone="UTC"), id="resolve_outcomes")
 scheduler.add_job(lambda: _run_job("refresh_asset_accuracy", job_refresh_asset_accuracy),
-                  CronTrigger(hour=1, minute=0, timezone="UTC"), id="refresh_asset_accuracy")
+                  CronTrigger(hour="1,5,9,13,17,21", minute=0, timezone="UTC"), id="refresh_asset_accuracy")
 
 # Alerts — every 30 min
 scheduler.add_job(lambda: _run_job("evaluate_alerts", job_evaluate_alerts),
