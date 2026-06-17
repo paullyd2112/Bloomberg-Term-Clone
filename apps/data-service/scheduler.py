@@ -252,22 +252,47 @@ def score_now_debug():
     Run just crypto ingestion + scoring in foreground so errors are visible.
     """
     import traceback
+
+    # Show what the app sees for Supabase config (redacted)
+    env_diag = {}
+    url = os.environ.get("SUPABASE_URL", "")
+    key1 = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    key2 = os.environ.get("SUPABASE_SERVICE_ROLE_KEY_", "")
+    env_diag["SUPABASE_URL"] = f"{url[:30]}..." if url else "NOT SET"
+    env_diag["SUPABASE_SERVICE_ROLE_KEY"] = f"{key1[:10]}...({len(key1)} chars)" if key1 else "NOT SET"
+    env_diag["SUPABASE_SERVICE_ROLE_KEY_"] = f"{key2[:10]}...({len(key2)} chars)" if key2 else "NOT SET"
+    env_diag["key_used"] = "SUPABASE_SERVICE_ROLE_KEY" if key1 else ("SUPABASE_SERVICE_ROLE_KEY_" if key2 else "NONE")
+
+    # Test a direct Supabase insert
+    db_test = {}
+    try:
+        from supabase_client import supabase
+        supabase.table("raw_prices").insert({
+            "asset_type": "crypto", "identifier": "DIAG_TEST",
+            "price": 1.0, "volume": 1.0, "change_24h": 0.0,
+            "metadata": {"test": True},
+        }).execute()
+        supabase.table("raw_prices").delete().eq("identifier", "DIAG_TEST").execute()
+        db_test["insert"] = "OK"
+    except Exception as e:
+        db_test["insert"] = f"FAILED: {e}"
+
     steps = {}
     try:
         from ingestion.crypto import ingest_crypto
         steps["ingest_crypto"] = ingest_crypto()
     except Exception as e:
         steps["ingest_crypto_error"] = traceback.format_exc()
-        return jsonify({"status": "error", "steps": steps})
+        return jsonify({"status": "error", "env": env_diag, "db_test": db_test, "steps": steps})
 
     try:
         from scoring.engine import score_crypto
         steps["score_crypto"] = score_crypto()
     except Exception as e:
         steps["score_crypto_error"] = traceback.format_exc()
-        return jsonify({"status": "error", "steps": steps})
+        return jsonify({"status": "error", "env": env_diag, "db_test": db_test, "steps": steps})
 
-    return jsonify({"status": "ok", "steps": steps})
+    return jsonify({"status": "ok", "env": env_diag, "db_test": db_test, "steps": steps})
 
 
 @app.route("/resolve-now", methods=["GET", "POST"])
