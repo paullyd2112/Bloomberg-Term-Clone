@@ -1,1 +1,1 @@
-web: python scheduler.py
+web: python -u scheduler.py
