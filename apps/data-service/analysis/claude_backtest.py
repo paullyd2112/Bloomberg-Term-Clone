@@ -18,12 +18,12 @@ from __future__ import annotations
 import json
 import os
 import time
-import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
+import httpx
 import numpy as np
 import pandas as pd
 import pandas_ta_classic as ta
@@ -136,9 +136,9 @@ class ClaudeSignalResult:
 
 def _get_json(url: str, headers: dict | None = None) -> dict | None:
     try:
-        req = urllib.request.Request(url, headers=headers or {})
-        with urllib.request.urlopen(req, timeout=15) as r:
-            return json.loads(r.read())
+        resp = httpx.get(url, headers=headers or {}, timeout=15.0)
+        resp.raise_for_status()
+        return resp.json()
     except Exception as e:
         logger.debug("HTTP fetch failed: {} — {}", url[:80], e)
         return None
@@ -168,7 +168,7 @@ def _normalize_ohlcv(df: pd.DataFrame | None) -> pd.DataFrame | None:
 def _stock_yfinance(ticker: str) -> pd.DataFrame | None:
     try:
         import yfinance as yf
-        df = yf.download(ticker, start=DATE_FROM, end=DATE_TO, interval="1d",
+        df = yf.download(ticker, period="6mo", interval="1d",
                          auto_adjust=True, progress=False)
         return _normalize_ohlcv(df)
     except Exception as e:
@@ -221,8 +221,7 @@ def _stock_alphavantage(ticker: str) -> pd.DataFrame | None:
     if not AV_KEY:
         return None
     try:
-        # outputsize=full gives 20+ years — needed for a historical range
-        url = (f"{AV_URL}?function=TIME_SERIES_DAILY_ADJUSTED&symbol={ticker}"
+        url = (f"{AV_URL}?function=TIME_SERIES_DAILY&symbol={ticker}"
                f"&outputsize=full&apikey={AV_KEY}")
         data = _get_json(url)
         ts = (data or {}).get("Time Series (Daily)", {})
@@ -231,7 +230,7 @@ def _stock_alphavantage(ticker: str) -> pd.DataFrame | None:
         rows = [
             {"date": pd.Timestamp(d), "open": float(v["1. open"]),
              "high": float(v["2. high"]), "low": float(v["3. low"]),
-             "close": float(v["5. adjusted close"]), "volume": float(v["6. volume"])}
+             "close": float(v["4. close"]), "volume": float(v["5. volume"])}
             for d, v in ts.items()
         ]
         df = pd.DataFrame(rows).set_index("date")
@@ -334,7 +333,7 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
 
     if AV_KEY:
         try:
-            url = f"{AV_URL}?function=TIME_SERIES_DAILY_ADJUSTED&symbol={ticker_0}&outputsize=compact&apikey={AV_KEY}"
+            url = f"{AV_URL}?function=TIME_SERIES_DAILY&symbol={ticker_0}&outputsize=compact&apikey={AV_KEY}"
             data = _get_json(url)
             ts = (data or {}).get("Time Series (Daily)", {})
             raw_tests["alpha_vantage"] = f"got {len(ts)} daily rows, keys={list((data or {}).keys())}, sample={str(data)[:300]}"
