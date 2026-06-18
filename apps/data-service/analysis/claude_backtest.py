@@ -45,10 +45,12 @@ FMP_KEY     = os.environ.get("FMP_API_KEY", "")
 AV_KEY      = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
 CG_KEY      = os.environ.get("COINGECKO_API_KEY", "")
 FINNHUB_KEY = os.environ.get("FINNHUB_API_KEY", "")
+MASSIVE_KEY = os.environ.get("MASSIVE_API_KEY", "")
 FMP_BASE    = "https://financialmodelingprep.com/api/v3"
 CG_BASE     = "https://api.coingecko.com/api/v3"
 FINNHUB_CANDLE = "https://finnhub.io/api/v1/stock/candle"
 AV_URL         = "https://www.alphavantage.co/query"
+MASSIVE_BASE   = "https://api.massive.com"
 
 DATE_FROM = "2026-02-01"
 DATE_TO   = "2026-06-16"
@@ -168,9 +170,13 @@ def _normalize_ohlcv(df: pd.DataFrame | None) -> pd.DataFrame | None:
 def _stock_yfinance(ticker: str) -> pd.DataFrame | None:
     try:
         import yfinance as yf
-        df = yf.download(ticker, period="6mo", interval="1d",
-                         auto_adjust=True, progress=False)
-        return _normalize_ohlcv(df)
+        for period in ("ytd", "6mo", "1y"):
+            df = yf.download(ticker, period=period, interval="1d",
+                             auto_adjust=True, progress=False)
+            if df is not None and not df.empty:
+                logger.debug("[claude_backtest] {} yfinance worked with period={}", ticker, period)
+                return _normalize_ohlcv(df)
+        return None
     except Exception as e:
         logger.debug("[claude_backtest] {} yfinance failed — {}", ticker, e)
         return None
@@ -201,19 +207,48 @@ def _stock_finnhub(ticker: str) -> pd.DataFrame | None:
 def _stock_fmp(ticker: str) -> pd.DataFrame | None:
     if not FMP_KEY:
         return None
+    endpoints = [
+        f"https://financialmodelingprep.com/stable/historical-price-eod/full?symbol={ticker}&from={DATE_FROM}&to={DATE_TO}&apikey={FMP_KEY}",
+        f"https://financialmodelingprep.com/api/v3/historical-price-full/{ticker}?from={DATE_FROM}&to={DATE_TO}&apikey={FMP_KEY}",
+    ]
+    for url in endpoints:
+        try:
+            data = _get_json(url)
+            if not data:
+                continue
+            hist = data.get("historical", []) if isinstance(data, dict) else data if isinstance(data, list) else []
+            if not hist:
+                continue
+            df = pd.DataFrame(hist)
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
+            result = _normalize_ohlcv(df)
+            if result is not None:
+                return result
+        except Exception as e:
+            logger.debug("[claude_backtest] {} FMP endpoint failed — {}", ticker, e)
+    return None
+
+
+def _stock_massive(ticker: str) -> pd.DataFrame | None:
+    if not MASSIVE_KEY:
+        return None
     try:
-        url = (f"{FMP_BASE}/historical-price-full/{ticker}"
-               f"?from={DATE_FROM}&to={DATE_TO}&apikey={FMP_KEY}")
+        url = (f"{MASSIVE_BASE}/v2/aggs/ticker/{ticker}/range/1/day"
+               f"/{DATE_FROM}/{DATE_TO}?adjusted=true&sort=asc&apiKey={MASSIVE_KEY}")
         data = _get_json(url)
-        hist = (data or {}).get("historical", [])
-        if not hist:
+        if not data or data.get("resultsCount", 0) == 0:
             return None
-        df = pd.DataFrame(hist)
-        df["date"] = pd.to_datetime(df["date"])
+        results = data.get("results", [])
+        if not results:
+            return None
+        df = pd.DataFrame(results)
+        df["date"] = pd.to_datetime(df["t"], unit="ms", utc=True).dt.tz_localize(None)
+        df = df.rename(columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"})
         df = df.set_index("date")
         return _normalize_ohlcv(df)
     except Exception as e:
-        logger.debug("[claude_backtest] {} FMP failed — {}", ticker, e)
+        logger.debug("[claude_backtest] {} Massive failed — {}", ticker, e)
         return None
 
 
@@ -241,11 +276,12 @@ def _stock_alphavantage(ticker: str) -> pd.DataFrame | None:
 
 
 def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
-    """Fetch from ALL 4 sources, merge for best date coverage."""
+    """Fetch from ALL 5 sources, merge for best date coverage."""
     sources = [
         ("yfinance",      _stock_yfinance),
         ("Finnhub",       _stock_finnhub),
         ("FMP",           _stock_fmp),
+        ("Massive",       _stock_massive),
         ("Alpha Vantage", _stock_alphavantage),
     ]
     frames: list[pd.DataFrame] = []
@@ -261,7 +297,7 @@ def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
             logger.debug("[claude_backtest] {} — {} error: {}", ticker, name, e)
 
     if not frames:
-        logger.warning("[claude_backtest] {} — ALL 4 sources returned no data", ticker)
+        logger.warning("[claude_backtest] {} — ALL sources returned no data", ticker)
         return None
 
     merged = frames[0]
@@ -288,6 +324,7 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
         ("yfinance",      _stock_yfinance),
         ("finnhub",       _stock_finnhub),
         ("fmp",           _stock_fmp),
+        ("massive",       _stock_massive),
         ("alpha_vantage", _stock_alphavantage),
     ]
 
@@ -296,6 +333,7 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
         "keys_present": {
             "finnhub":       bool(FINNHUB_KEY),
             "fmp":           bool(FMP_KEY),
+            "massive":       bool(MASSIVE_KEY),
             "alpha_vantage": bool(AV_KEY),
         },
         "tickers": {},
@@ -306,9 +344,14 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
 
     try:
         import yfinance as yf
-        df = yf.download(ticker_0, start=DATE_FROM, end=DATE_TO, interval="1d",
-                         auto_adjust=True, progress=False)
-        raw_tests["yfinance"] = f"returned {len(df)} rows, cols={list(df.columns)}" if not df.empty else "empty DataFrame"
+        for p in ("ytd", "6mo", "1y"):
+            df = yf.download(ticker_0, period=p, interval="1d",
+                             auto_adjust=True, progress=False)
+            if df is not None and not df.empty:
+                raw_tests["yfinance"] = f"period={p} returned {len(df)} rows"
+                break
+        else:
+            raw_tests["yfinance"] = "empty DataFrame (tried ytd, 6mo, 1y)"
     except Exception as e:
         raw_tests["yfinance"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
 
@@ -324,11 +367,19 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
 
     if FMP_KEY:
         try:
-            url = f"{FMP_BASE}/historical-price-full/{ticker_0}?from={DATE_FROM}&to={DATE_TO}&apikey={FMP_KEY}"
-            resp = httpx.get(url, timeout=15.0)
-            raw_tests["fmp"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
+            stable_url = f"https://financialmodelingprep.com/stable/historical-price-eod/full?symbol={ticker_0}&from={DATE_FROM}&to={DATE_TO}&apikey={FMP_KEY}"
+            resp = httpx.get(stable_url, timeout=15.0)
+            raw_tests["fmp_stable"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
         except Exception as e:
-            raw_tests["fmp"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
+            raw_tests["fmp_stable"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
+
+    if MASSIVE_KEY:
+        try:
+            url = f"{MASSIVE_BASE}/v2/aggs/ticker/{ticker_0}/range/1/day/{DATE_FROM}/{DATE_TO}?adjusted=true&sort=asc&apiKey={MASSIVE_KEY}"
+            resp = httpx.get(url, timeout=15.0)
+            raw_tests["massive"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
+        except Exception as e:
+            raw_tests["massive"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
 
     if AV_KEY:
         try:
