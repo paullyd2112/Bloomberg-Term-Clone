@@ -222,7 +222,7 @@ def _stock_alphavantage(ticker: str) -> pd.DataFrame | None:
         return None
     try:
         url = (f"{AV_URL}?function=TIME_SERIES_DAILY&symbol={ticker}"
-               f"&outputsize=full&apikey={AV_KEY}")
+               f"&outputsize=compact&apikey={AV_KEY}")
         data = _get_json(url)
         ts = (data or {}).get("Time Series (Daily)", {})
         if not ts:
@@ -317,17 +317,16 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
             start_ts = int(datetime.strptime(DATE_FROM, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
             end_ts = int(datetime.strptime(DATE_TO, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
             url = f"{FINNHUB_CANDLE}?symbol={ticker_0}&resolution=D&from={start_ts}&to={end_ts}&token={FINNHUB_KEY}"
-            data = _get_json(url)
-            raw_tests["finnhub"] = f"status={data.get('s') if data else 'None'}, rows={len(data.get('t', [])) if data else 0}, keys={list(data.keys()) if data else 'None'}"
+            resp = httpx.get(url, timeout=15.0)
+            raw_tests["finnhub"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
         except Exception as e:
             raw_tests["finnhub"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
 
     if FMP_KEY:
         try:
             url = f"{FMP_BASE}/historical-price-full/{ticker_0}?from={DATE_FROM}&to={DATE_TO}&apikey={FMP_KEY}"
-            data = _get_json(url)
-            hist = (data or {}).get("historical", [])
-            raw_tests["fmp"] = f"got {len(hist)} historical rows, keys={list((data or {}).keys())}, sample={str(data)[:300]}"
+            resp = httpx.get(url, timeout=15.0)
+            raw_tests["fmp"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
         except Exception as e:
             raw_tests["fmp"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
 
