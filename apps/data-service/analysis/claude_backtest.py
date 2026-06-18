@@ -170,12 +170,17 @@ def _normalize_ohlcv(df: pd.DataFrame | None) -> pd.DataFrame | None:
 def _stock_yfinance(ticker: str) -> pd.DataFrame | None:
     try:
         import yfinance as yf
-        for period in ("ytd", "6mo", "1y"):
+        for period in ("200d", "90d", "ytd", "6mo", "1y"):
             df = yf.download(ticker, period=period, interval="1d",
                              auto_adjust=True, progress=False)
             if df is not None and not df.empty:
-                logger.debug("[claude_backtest] {} yfinance worked with period={}", ticker, period)
+                logger.debug("[claude_backtest] {} yfinance download worked with period={}", ticker, period)
                 return _normalize_ohlcv(df)
+        t = yf.Ticker(ticker)
+        df = t.history(period="6mo", auto_adjust=True)
+        if df is not None and not df.empty:
+            logger.debug("[claude_backtest] {} yfinance Ticker.history worked", ticker)
+            return _normalize_ohlcv(df)
         return None
     except Exception as e:
         logger.debug("[claude_backtest] {} yfinance failed — {}", ticker, e)
@@ -344,14 +349,22 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
 
     try:
         import yfinance as yf
-        for p in ("ytd", "6mo", "1y"):
+        yf_results = []
+        for p in ("200d", "90d", "ytd", "6mo", "1y"):
             df = yf.download(ticker_0, period=p, interval="1d",
                              auto_adjust=True, progress=False)
             if df is not None and not df.empty:
-                raw_tests["yfinance"] = f"period={p} returned {len(df)} rows"
+                yf_results.append(f"download({p})={len(df)}rows")
                 break
+            else:
+                yf_results.append(f"download({p})=empty")
+        t = yf.Ticker(ticker_0)
+        df2 = t.history(period="6mo", auto_adjust=True)
+        if df2 is not None and not df2.empty:
+            yf_results.append(f"Ticker.history(6mo)={len(df2)}rows")
         else:
-            raw_tests["yfinance"] = "empty DataFrame (tried ytd, 6mo, 1y)"
+            yf_results.append("Ticker.history(6mo)=empty")
+        raw_tests["yfinance"] = " | ".join(yf_results)
     except Exception as e:
         raw_tests["yfinance"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
 
