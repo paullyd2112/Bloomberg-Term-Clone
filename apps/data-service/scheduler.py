@@ -115,34 +115,80 @@ def job_evaluate_alerts():
     return evaluate_alerts()
 
 
+# ─── US Market Holiday Guard ──────────────────────────────────────────────────
+
+US_MARKET_HOLIDAYS_2026 = {
+    "2026-01-01",  # New Year's Day
+    "2026-01-19",  # MLK Day
+    "2026-02-16",  # Presidents' Day
+    "2026-04-03",  # Good Friday
+    "2026-05-25",  # Memorial Day
+    "2026-06-19",  # Juneteenth
+    "2026-07-03",  # Independence Day (observed)
+    "2026-09-07",  # Labor Day
+    "2026-11-26",  # Thanksgiving
+    "2026-12-25",  # Christmas
+}
+
+US_MARKET_HOLIDAYS_2027 = {
+    "2027-01-01",  # New Year's Day
+    "2027-01-18",  # MLK Day
+    "2027-02-15",  # Presidents' Day
+    "2027-03-26",  # Good Friday
+    "2027-05-31",  # Memorial Day
+    "2027-06-18",  # Juneteenth (observed)
+    "2027-07-05",  # Independence Day (observed)
+    "2027-09-06",  # Labor Day
+    "2027-11-25",  # Thanksgiving
+    "2027-12-24",  # Christmas (observed)
+}
+
+US_MARKET_HOLIDAYS = US_MARKET_HOLIDAYS_2026 | US_MARKET_HOLIDAYS_2027
+
+
+def _is_market_open() -> bool:
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if today in US_MARKET_HOLIDAYS:
+        logger.info("Market holiday — skipping stock jobs for {}", today)
+        return False
+    return True
+
+
+def _run_stock_job(name: str, fn):
+    if not _is_market_open():
+        logger.info("Skipping {} — market closed (holiday)", name)
+        return
+    _run_job(name, fn)
+
+
 # ─── Schedule ─────────────────────────────────────────────────────────────────
 
-# Prediction markets — every 30 min, all hours
+# Prediction markets — every 2 hours (was every 30 min)
 scheduler.add_job(lambda: _run_job("ingest_prediction_markets", job_ingest_prediction_markets),
                   IntervalTrigger(minutes=30), id="ingest_prediction_markets")
 scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
-                  CronTrigger(minute="15,45"), id="score_prediction_markets")
+                  CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
 
-# Stocks — every 60 min, weekdays 9am-5pm ET
-scheduler.add_job(lambda: _run_job("ingest_stocks", job_ingest_stocks),
-                  CronTrigger(minute=0, hour="9-16", day_of_week="mon-fri"), id="ingest_stocks")
-scheduler.add_job(lambda: _run_job("score_stocks", job_score_stocks),
-                  CronTrigger(minute=20, hour="9-16", day_of_week="mon-fri"), id="score_stocks")
+# Stocks — every 2 hours during market hours, weekdays only, skip holidays
+scheduler.add_job(lambda: _run_stock_job("ingest_stocks", job_ingest_stocks),
+                  CronTrigger(minute=0, hour="9,11,13,15", day_of_week="mon-fri"), id="ingest_stocks")
+scheduler.add_job(lambda: _run_stock_job("score_stocks", job_score_stocks),
+                  CronTrigger(minute=20, hour="9,11,13,15", day_of_week="mon-fri"), id="score_stocks")
 
-# Crypto — every 60 min, all hours
+# Crypto — every 2 hours (was every 60 min)
 scheduler.add_job(lambda: _run_job("ingest_crypto", job_ingest_crypto),
-                  IntervalTrigger(hours=1), id="ingest_crypto")
+                  IntervalTrigger(hours=2), id="ingest_crypto")
 scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
-                  CronTrigger(minute=20), id="score_crypto")
+                  CronTrigger(hour="*/2", minute=20), id="score_crypto")
 
-# Enrichment — weekdays
-scheduler.add_job(lambda: _run_job("ingest_options_flow", job_ingest_options_flow),
-                  CronTrigger(minute=0, hour="9-16", day_of_week="mon-fri"), id="ingest_options_flow")
-scheduler.add_job(lambda: _run_job("ingest_short_interest", job_ingest_short_interest),
+# Enrichment — weekdays, skip holidays
+scheduler.add_job(lambda: _run_stock_job("ingest_options_flow", job_ingest_options_flow),
+                  CronTrigger(minute=0, hour="9,12,15", day_of_week="mon-fri"), id="ingest_options_flow")
+scheduler.add_job(lambda: _run_stock_job("ingest_short_interest", job_ingest_short_interest),
                   CronTrigger(hour=7, minute=0, day_of_week="mon-fri"), id="ingest_short_interest")
-scheduler.add_job(lambda: _run_job("ingest_earnings", job_ingest_earnings),
+scheduler.add_job(lambda: _run_stock_job("ingest_earnings", job_ingest_earnings),
                   CronTrigger(hour=6, minute=0, day_of_week="mon-fri"), id="ingest_earnings")
-scheduler.add_job(lambda: _run_job("seed_macro_events", job_seed_macro_events),
+scheduler.add_job(lambda: _run_stock_job("seed_macro_events", job_seed_macro_events),
                   CronTrigger(hour=6, minute=30, day_of_week="mon-fri"), id="seed_macro_events")
 
 # Congressional — daily at 8am ET (FMP Basic API)

@@ -22,7 +22,7 @@ from prompts import prediction_markets as pred_prompt
 load_dotenv()
 
 MODEL              = "claude-sonnet-4-6"
-SIGNAL_COOLDOWN_H  = 2      # skip if signal generated within this many hours
+SIGNAL_COOLDOWN_H  = 4      # skip if signal generated within this many hours
 MAX_TOKENS         = 1024
 
 _anthropic = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
@@ -486,10 +486,9 @@ def score_crypto() -> str:
             .eq("asset_type", "crypto")
             .neq("identifier", "MARKET_SENTIMENT")
             .order("captured_at", desc=True)
-            .limit(60)
+            .limit(20)
             .execute()
         )
-        # Deduplicate preserving order
         seen, identifiers = set(), []
         for r in result.data:
             sym = r["identifier"]
@@ -525,7 +524,7 @@ def score_prediction_markets() -> str:
             .select("identifier")
             .eq("asset_type", "prediction")
             .order("volume", desc=True)
-            .limit(40)
+            .limit(20)
             .execute()
         )
         seen, identifiers = set(), []
