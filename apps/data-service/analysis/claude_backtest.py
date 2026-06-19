@@ -306,6 +306,7 @@ def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
             merged = pd.concat([merged, extra.loc[new_dates]]).sort_index()
             logger.info("[claude_backtest] {} — filled {} gap dates from additional source", ticker, len(new_dates))
 
+    merged = merged[~merged.index.duplicated(keep="first")]
     logger.info("[claude_backtest] {} — merged OHLCV: {} total rows from {} sources", ticker, len(merged), len(frames))
     return merged
 
@@ -484,7 +485,8 @@ def _compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def _build_stock_context(ticker: str, row: pd.Series, df: pd.DataFrame,
                          benchmarks: dict | None = None) -> dict:
-    idx = df.index.get_loc(row.name)
+    loc = df.index.get_loc(row.name)
+    idx = loc if isinstance(loc, int) else (loc.start if isinstance(loc, slice) else int(np.argmax(loc)))
     prev_macd_hist = None
     if idx >= 1:
         prev_row = df.iloc[idx - 1]
