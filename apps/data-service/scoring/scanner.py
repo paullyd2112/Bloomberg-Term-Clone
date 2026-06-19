@@ -88,15 +88,27 @@ ALL_FILTERS = [
 ]
 
 
-def scan_stocks(tickers: list[str] | None = None) -> list[dict]:
+def scan_stocks(tickers: list[str] | None = None, use_movers: bool = True) -> list[dict]:
     """
     Pre-screen stocks from raw_prices for technical setups.
     Returns list of {ticker, triggers: [...], trigger_count} for stocks
     that pass MIN_FILTERS_TO_QUALIFY or more filters.
+
+    When use_movers=True, expands the scan universe with market movers
+    (top gainers, losers, most active) for whole-market coverage.
     """
     if tickers is None:
-        from ingestion.stocks import get_default_watchlist
-        tickers = get_default_watchlist()
+        if use_movers:
+            try:
+                from ingestion.market_movers import get_expanded_scan_universe
+                tickers = get_expanded_scan_universe()
+            except Exception as e:
+                logger.warning("Market movers fetch failed, falling back to watchlist: {}", e)
+                from ingestion.stocks import get_default_watchlist
+                tickers = get_default_watchlist()
+        else:
+            from ingestion.stocks import get_default_watchlist
+            tickers = get_default_watchlist()
 
     qualified: list[dict] = []
 

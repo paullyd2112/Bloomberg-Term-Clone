@@ -618,16 +618,20 @@ def claude_backtest_status():
 def scanner_endpoint():
     """
     Run market scanner — shows which stocks have active technical setups.
-    Zero Claude cost. Use ?min=N to change minimum trigger count (default 2).
+    Scans watchlist + market movers (gainers/losers/most active).
+    Zero Claude cost. Use ?watchlist_only=true to skip movers.
     """
     from flask import request as flask_request
     from scoring.scanner import scan_stocks
 
+    watchlist_only = flask_request.args.get("watchlist_only", "false").lower() == "true"
+
     try:
-        results = scan_stocks()
+        results = scan_stocks(use_movers=not watchlist_only)
         return jsonify({
             "status": "ok",
             "qualified": len(results),
+            "mode": "watchlist_only" if watchlist_only else "full_market",
             "stocks": results,
         })
     except Exception as e:

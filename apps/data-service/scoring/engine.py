@@ -447,35 +447,73 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
 # ─── Batch scoring functions (called by scheduler) ───────────────────────────
 
 def score_stocks() -> str:
-    from ingestion.stocks import get_default_watchlist
-    from scoring.scanner import get_scan_tickers
+    from scoring.scanner import scan_stocks
+    from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
 
-    all_tickers = get_default_watchlist()
-    scan_qualified = get_scan_tickers(all_tickers)
-
+    scan_results = scan_stocks(use_movers=True)
     core_always_score = {"AAPL", "NVDA", "TSLA", "GOOGL", "META", "AMZN", "MSFT", "SPY", "QQQ"}
-    tickers = list(set(scan_qualified) | core_always_score)
 
-    logger.info(
-        "Scoring {} stocks ({} from scanner + {} core) — saved {} Claude calls vs full watchlist",
-        len(tickers), len(scan_qualified), len(core_always_score & set(tickers)),
-        len(all_tickers) - len(tickers),
-    )
+    haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
 
-    for ticker in tickers:
+    for item in scan_results:
+        ticker = item["ticker"]
+
+        if ticker in core_always_score:
+            try:
+                result = score_asset("stock", ticker)
+                sonnet_calls += 1
+                if result is None:
+                    skipped += 1
+                else:
+                    success += 1
+            except Exception as e:
+                logger.error("score_stocks error for {}: {}", ticker, e)
+                sentry_sdk.capture_exception(e)
+                failed += 1
+            continue
+
+        meta = {
+            "rsi_14": item.get("rsi"),
+            "volume_ratio": item.get("volume_ratio"),
+            "change_24h": item.get("change_24h"),
+        }
+        quick = prescreen_stock(ticker, meta, price=item.get("price"),
+                                change_24h=item.get("change_24h"))
+        haiku_calls += 1
+
+        if not should_escalate_to_sonnet(quick):
+            skipped += 1
+            continue
+
         try:
             result = score_asset("stock", ticker)
+            sonnet_calls += 1
             if result is None:
                 skipped += 1
             else:
                 success += 1
         except Exception as e:
-            logger.error("score_stocks unhandled error for {}: {}", ticker, e)
+            logger.error("score_stocks error for {}: {}", ticker, e)
             sentry_sdk.capture_exception(e)
             failed += 1
 
-    return f"{success} scored, {skipped} skipped (cooldown), {failed} failed — {len(all_tickers) - len(tickers)} filtered by scanner"
+    for core_ticker in core_always_score:
+        if not any(s["ticker"] == core_ticker for s in scan_results):
+            try:
+                result = score_asset("stock", core_ticker)
+                sonnet_calls += 1
+                if result is None:
+                    skipped += 1
+                else:
+                    success += 1
+            except Exception as e:
+                logger.error("score_stocks error for {}: {}", core_ticker, e)
+                sentry_sdk.capture_exception(e)
+                failed += 1
+
+    return (f"{success} scored, {skipped} skipped, {failed} failed — "
+            f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet")
 
 
 def score_crypto() -> str:
