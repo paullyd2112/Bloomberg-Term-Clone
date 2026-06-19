@@ -118,11 +118,26 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
     volume_sma = float(volume_sma_raw) if pd.notna(volume_sma_raw) and volume_sma_raw else None
     vol_ratio  = (float(latest["volume"]) / volume_sma) if volume_sma else None
 
+    def _prev_col(prefix: str) -> float | None:
+        match = [c for c in df.columns if c.startswith(prefix.lower())]
+        if not match:
+            return None
+        val = prev[match[0]]
+        return float(val) if pd.notna(val) else None
+
+    week_return = None
+    if len(df) >= 6:
+        week_ago = df.iloc[-6]
+        week_return = round(
+            (float(latest["close"]) - float(week_ago["close"])) / float(week_ago["close"]) * 100, 2
+        )
+
     return {
         "rsi_14":              _col("rsi_"),
         "macd_line":           _col("macd_"),
         "macd_signal":         _col("macds_"),
         "macd_hist":           _col("macdh_"),
+        "prev_macd_hist":      _prev_col("macdh_"),
         "bb_upper":            _col("bbu_"),
         "bb_middle":           _col("bbm_"),
         "bb_lower":            _col("bbl_"),
@@ -132,6 +147,7 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
         "sma_50":              float(latest["sma_50"]) if pd.notna(latest["sma_50"]) else None,
         "price_vs_sma50_pct":  round(float(latest["price_vs_sma50_pct"]), 2)
                                if pd.notna(latest["price_vs_sma50_pct"]) else None,
+        "week_return_pct":     week_return,
         "close":               float(latest["close"]),
         "volume":              float(latest["volume"]),
         "change_1d_pct":       round(

@@ -94,12 +94,14 @@ WIN_THRESHOLDS = {
 # ─── Pydantic models (mirror scoring/engine.py) ─────────────────────────────
 
 class StockSignal(BaseModel):
-    direction:    Literal["BUY", "SELL", "HOLD"]
-    confidence:   int    = Field(..., ge=0, le=100)
-    reasoning:    str    = Field(..., min_length=20)
-    time_horizon: Literal["intraday", "swing", "longterm"]
-    key_risk:     str
-    news_context: list[str] = Field(default_factory=list, max_length=3)
+    direction:       Literal["BUY", "SELL", "HOLD"]
+    confidence:      int    = Field(..., ge=0, le=100)
+    reasoning:       str    = Field(..., min_length=20)
+    time_horizon:    Literal["intraday", "swing", "longterm"]
+    stop_loss_pct:   float  = Field(default=4.0, ge=0.5, le=15.0)
+    take_profit_pct: float  = Field(default=8.0, ge=1.0, le=50.0)
+    key_risk:        str
+    news_context:    list[str] = Field(default_factory=list, max_length=3)
 
 
 class CryptoSignal(BaseModel):
@@ -115,21 +117,27 @@ class CryptoSignal(BaseModel):
 
 @dataclass
 class ClaudeSignalResult:
-    ticker:       str
-    asset_class:  str
-    sample_date:  str
-    direction:    str
-    confidence:   int
-    time_horizon: str
-    reasoning:    str
-    entry_price:  float
-    exit_price:   float | None = None
-    return_pct:   float | None = None
-    outcome:      str = "PENDING"
-    rsi:          float | None = None
-    macd_hist:    float | None = None
-    volume_ratio: float | None = None
-    change_24h:   float | None = None
+    ticker:          str
+    asset_class:     str
+    sample_date:     str
+    direction:       str
+    confidence:      int
+    time_horizon:    str
+    reasoning:       str
+    entry_price:     float
+    stop_loss_pct:   float = 4.0
+    take_profit_pct: float = 8.0
+    exit_price:      float | None = None
+    return_pct:      float | None = None
+    outcome:         str = "PENDING"
+    exit_reason:     str = ""
+    max_favorable:   float | None = None
+    max_adverse:     float | None = None
+    position_weight: float = 1.0
+    rsi:             float | None = None
+    macd_hist:       float | None = None
+    volume_ratio:    float | None = None
+    change_24h:      float | None = None
 
 
 # ─── Data fetching (reuse from backtest.py) ──────────────────────────────────
@@ -476,6 +484,18 @@ def _compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def _build_stock_context(ticker: str, row: pd.Series, df: pd.DataFrame,
                          benchmarks: dict | None = None) -> dict:
+    idx = df.index.get_loc(row.name)
+    prev_macd_hist = None
+    if idx >= 1:
+        prev_row = df.iloc[idx - 1]
+        if pd.notna(prev_row.get("_macd_hist")):
+            prev_macd_hist = round(float(prev_row["_macd_hist"]), 4)
+
+    week_return = None
+    if idx >= 5:
+        week_ago_close = float(df.iloc[idx - 5]["close"])
+        week_return = round((float(row["close"]) - week_ago_close) / week_ago_close * 100, 2)
+
     return {
         "identifier":     ticker,
         "current_price":  float(row["close"]),
@@ -485,11 +505,13 @@ def _build_stock_context(ticker: str, row: pd.Series, df: pd.DataFrame,
             "macd_line":         round(float(row["_macd_line"]), 4) if pd.notna(row.get("_macd_line")) else None,
             "macd_signal":       round(float(row["_macd_sig"]), 4)  if pd.notna(row.get("_macd_sig")) else None,
             "macd_hist":         round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
+            "prev_macd_hist":    prev_macd_hist,
             "bb_upper":          round(float(row["_bb_upper"]), 2)  if pd.notna(row.get("_bb_upper")) else None,
             "bb_middle":         round(float(row["_bb_middle"]), 2) if pd.notna(row.get("_bb_middle")) else None,
             "bb_lower":          round(float(row["_bb_lower"]), 2)  if pd.notna(row.get("_bb_lower")) else None,
             "price_vs_sma50_pct": round(float(row["price_vs_sma50"]), 2) if pd.notna(row.get("price_vs_sma50")) else None,
             "volume_ratio":      round(float(row["volume_ratio"]), 2)    if pd.notna(row.get("volume_ratio")) else None,
+            "week_return_pct":   week_return,
         },
         "market_benchmarks": benchmarks or {},
         "news_headlines": [],
@@ -582,6 +604,8 @@ def _score_with_claude(
 
 # ─── Evaluate outcome against actual future prices ──────────────────────────
 
+MAX_HOLD_DAYS = {"intraday": 2, "swing": 10, "longterm": 25}
+
 def _evaluate_claude_signal(
     signal: ClaudeSignalResult,
     df: pd.DataFrame,
@@ -591,38 +615,101 @@ def _evaluate_claude_signal(
         signal.outcome = "HOLD"
         return signal
 
-    eval_days = EVAL_WINDOWS.get(signal.time_horizon, 5)
-    exit_idx = min(sample_idx + eval_days, len(df) - 1)
+    max_days = MAX_HOLD_DAYS.get(signal.time_horizon, 10)
+    end_idx = min(sample_idx + max_days, len(df) - 1)
 
-    if exit_idx <= sample_idx:
+    if end_idx <= sample_idx:
         signal.outcome = "PENDING"
         return signal
 
-    exit_price = float(df.iloc[exit_idx]["close"])
-    signal.exit_price = exit_price
+    stop_pct = signal.stop_loss_pct / 100.0
+    tp_pct = signal.take_profit_pct / 100.0
+    entry = signal.entry_price
 
-    pct_change = (exit_price - signal.entry_price) / signal.entry_price
-    signal.return_pct = round(pct_change * 100, 4)
+    max_favorable = 0.0
+    max_adverse = 0.0
+    trailing_activated = False
+    trailing_peak = 0.0
 
-    key = (signal.asset_class, signal.time_horizon)
-    win_thresh  = WIN_THRESHOLDS.get(key, 0.02)
-    loss_thresh = LOSS_THRESHOLDS.get(key, 0.05)
+    for i in range(sample_idx + 1, end_idx + 1):
+        high = float(df.iloc[i]["high"])
+        low = float(df.iloc[i]["low"])
+        close = float(df.iloc[i]["close"])
 
-    if signal.direction == "BUY":
-        if pct_change >= win_thresh:
+        if signal.direction == "BUY":
+            run_up = (high - entry) / entry
+            drawdown = (entry - low) / entry
+            current_pnl = (close - entry) / entry
+            max_favorable = max(max_favorable, run_up)
+            max_adverse = max(max_adverse, drawdown)
+
+            if drawdown >= stop_pct:
+                signal.exit_price = round(entry * (1 - stop_pct), 4)
+                signal.return_pct = round(-stop_pct * 100, 4)
+                signal.outcome = "LOSS"
+                signal.exit_reason = f"stop_loss at -{signal.stop_loss_pct}%"
+                break
+
+            if run_up >= tp_pct:
+                trailing_activated = True
+                trailing_peak = max(trailing_peak, run_up)
+
+            if trailing_activated:
+                trailing_peak = max(trailing_peak, run_up)
+                trail_stop = trailing_peak * 0.5
+                if current_pnl < trailing_peak - trail_stop:
+                    signal.exit_price = close
+                    signal.return_pct = round(current_pnl * 100, 4)
+                    signal.outcome = "WIN"
+                    signal.exit_reason = f"trailing_stop at +{signal.return_pct}% (peak +{round(trailing_peak*100,1)}%)"
+                    break
+
+        elif signal.direction == "SELL":
+            run_up = (entry - low) / entry
+            drawdown = (high - entry) / entry
+            current_pnl = (entry - close) / entry
+            max_favorable = max(max_favorable, run_up)
+            max_adverse = max(max_adverse, drawdown)
+
+            if drawdown >= stop_pct:
+                signal.exit_price = round(entry * (1 + stop_pct), 4)
+                signal.return_pct = round(-stop_pct * 100, 4)
+                signal.outcome = "LOSS"
+                signal.exit_reason = f"stop_loss at -{signal.stop_loss_pct}%"
+                break
+
+            if run_up >= tp_pct:
+                trailing_activated = True
+                trailing_peak = max(trailing_peak, run_up)
+
+            if trailing_activated:
+                trailing_peak = max(trailing_peak, run_up)
+                trail_stop = trailing_peak * 0.5
+                if current_pnl < trailing_peak - trail_stop:
+                    signal.exit_price = close
+                    signal.return_pct = round(current_pnl * 100, 4)
+                    signal.outcome = "WIN"
+                    signal.exit_reason = f"trailing_stop at +{signal.return_pct}% (peak +{round(trailing_peak*100,1)}%)"
+                    break
+
+    else:
+        close = float(df.iloc[end_idx]["close"])
+        if signal.direction == "BUY":
+            pnl = (close - entry) / entry
+        else:
+            pnl = (entry - close) / entry
+        signal.exit_price = close
+        signal.return_pct = round(pnl * 100, 4)
+        signal.exit_reason = f"max_hold_{max_days}d"
+        if pnl > 0.005:
             signal.outcome = "WIN"
-        elif pct_change <= -loss_thresh:
+        elif pnl < -0.005:
             signal.outcome = "LOSS"
         else:
             signal.outcome = "NEUTRAL"
-    elif signal.direction == "SELL":
-        if pct_change <= -win_thresh:
-            signal.outcome = "WIN"
-        elif pct_change >= loss_thresh:
-            signal.outcome = "LOSS"
-        else:
-            signal.outcome = "NEUTRAL"
 
+    signal.max_favorable = round(max_favorable * 100, 2)
+    signal.max_adverse = round(max_adverse * 100, 2)
     return signal
 
 
@@ -713,6 +800,15 @@ def run_claude_backtest(
                 errors += 1
                 continue
 
+            sl_pct = getattr(signal, "stop_loss_pct", 4.0)
+            tp_pct = getattr(signal, "take_profit_pct", 8.0)
+
+            weight = 1.0
+            if signal.confidence >= 75:
+                weight = 2.0
+            elif signal.confidence >= 65:
+                weight = 1.5
+
             result = ClaudeSignalResult(
                 ticker=ticker,
                 asset_class="stock",
@@ -722,6 +818,9 @@ def run_claude_backtest(
                 time_horizon=signal.time_horizon,
                 reasoning=signal.reasoning,
                 entry_price=float(row["close"]),
+                stop_loss_pct=sl_pct,
+                take_profit_pct=tp_pct,
+                position_weight=weight,
                 rsi=round(float(row["_rsi"]), 2)       if pd.notna(row.get("_rsi")) else None,
                 macd_hist=round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
                 volume_ratio=round(float(row["volume_ratio"]), 2) if pd.notna(row.get("volume_ratio")) else None,
@@ -762,6 +861,12 @@ def run_claude_backtest(
                 errors += 1
                 continue
 
+            weight = 1.0
+            if signal.confidence >= 75:
+                weight = 2.0
+            elif signal.confidence >= 65:
+                weight = 1.5
+
             result = ClaudeSignalResult(
                 ticker=symbol,
                 asset_class="crypto",
@@ -771,6 +876,9 @@ def run_claude_backtest(
                 time_horizon=signal.time_horizon,
                 reasoning=signal.reasoning,
                 entry_price=float(row["close"]),
+                stop_loss_pct=6.0,
+                take_profit_pct=12.0,
+                position_weight=weight,
                 rsi=round(float(row["_rsi"]), 2)       if pd.notna(row.get("_rsi")) else None,
                 macd_hist=round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
                 volume_ratio=round(float(row["volume_ratio"]), 2) if pd.notna(row.get("volume_ratio")) else None,
@@ -826,22 +934,34 @@ def _aggregate_claude_results(
             "win_rate": round(len(h_wins) / len(h_decided) * 100, 1) if h_decided else None,
         }
 
+    avg_win = float(np.mean([r.return_pct for r in wins])) if wins else 0
+    avg_loss = float(np.mean([abs(r.return_pct) for r in losses])) if losses else 0
+    profit_factor = round(sum(r.return_pct for r in wins) / abs(sum(r.return_pct for r in losses)), 2) if losses else float("inf")
+
+    portfolio_sim = _simulate_portfolio(actionable)
+
     signal_details = []
     for r in results:
         signal_details.append({
-            "ticker":       r.ticker,
-            "asset_class":  r.asset_class,
-            "date":         r.sample_date,
-            "direction":    r.direction,
-            "confidence":   r.confidence,
-            "time_horizon": r.time_horizon,
-            "entry_price":  r.entry_price,
-            "exit_price":   r.exit_price,
-            "return_pct":   r.return_pct,
-            "outcome":      r.outcome,
-            "reasoning":    r.reasoning[:200],
-            "rsi":          r.rsi,
-            "macd_hist":    r.macd_hist,
+            "ticker":          r.ticker,
+            "asset_class":     r.asset_class,
+            "date":            r.sample_date,
+            "direction":       r.direction,
+            "confidence":      r.confidence,
+            "time_horizon":    r.time_horizon,
+            "entry_price":     r.entry_price,
+            "exit_price":      r.exit_price,
+            "return_pct":      r.return_pct,
+            "outcome":         r.outcome,
+            "exit_reason":     r.exit_reason,
+            "stop_loss_pct":   r.stop_loss_pct,
+            "take_profit_pct": r.take_profit_pct,
+            "max_favorable":   r.max_favorable,
+            "max_adverse":     r.max_adverse,
+            "position_weight": r.position_weight,
+            "reasoning":       r.reasoning[:200],
+            "rsi":             r.rsi,
+            "macd_hist":       r.macd_hist,
         })
 
     return {
@@ -860,7 +980,11 @@ def _aggregate_claude_results(
         "neutral":          len(neutral),
         "win_rate":         round(win_rate, 1),
         "avg_return_pct":   round(avg_return, 3),
+        "avg_win_pct":      round(avg_win, 2),
+        "avg_loss_pct":     round(avg_loss, 2),
+        "profit_factor":    profit_factor,
         "hold_rate":        round(len(holds) / len(results) * 100, 1) if results else 0,
+        "portfolio_sim":    portfolio_sim,
         "by_asset_class": {
             "stocks": {
                 "decided":  len(stock_decided),
@@ -873,6 +997,58 @@ def _aggregate_claude_results(
         },
         "by_time_horizon": by_horizon,
         "signals": signal_details,
+    }
+
+
+def _simulate_portfolio(
+    actionable: list[ClaudeSignalResult],
+    starting_balance: float = 1000.0,
+    base_position_pct: float = 0.15,
+) -> dict:
+    """Simulate a $1k portfolio using confidence-weighted position sizing."""
+    balance = starting_balance
+    peak_balance = starting_balance
+    max_drawdown = 0.0
+    trade_log: list[dict] = []
+
+    by_date: dict[str, list[ClaudeSignalResult]] = {}
+    for r in actionable:
+        by_date.setdefault(r.sample_date, []).append(r)
+
+    for date_str in sorted(by_date.keys()):
+        trades = by_date[date_str]
+        for t in trades:
+            if t.return_pct is None:
+                continue
+            position_size = balance * base_position_pct * t.position_weight
+            pnl = position_size * (t.return_pct / 100.0)
+            balance += pnl
+            peak_balance = max(peak_balance, balance)
+            dd = (peak_balance - balance) / peak_balance * 100
+            max_drawdown = max(max_drawdown, dd)
+
+            trade_log.append({
+                "date": date_str,
+                "ticker": t.ticker,
+                "direction": t.direction,
+                "confidence": t.confidence,
+                "weight": t.position_weight,
+                "position_size": round(position_size, 2),
+                "return_pct": t.return_pct,
+                "pnl": round(pnl, 2),
+                "balance": round(balance, 2),
+                "exit_reason": t.exit_reason,
+            })
+
+    total_return = (balance - starting_balance) / starting_balance * 100
+
+    return {
+        "starting_balance": starting_balance,
+        "final_balance": round(balance, 2),
+        "total_return_pct": round(total_return, 2),
+        "max_drawdown_pct": round(max_drawdown, 2),
+        "total_trades": len(trade_log),
+        "trade_log": trade_log,
     }
 
 
