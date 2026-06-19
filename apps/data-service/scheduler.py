@@ -659,7 +659,10 @@ def backtest_data_diagnostic():
 # ─── Entry point ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     logger.info("Starting Plebs data service")
-    scheduler.start()
-    logger.info("Scheduler started with {} jobs", len(scheduler.get_jobs()))
+    if os.environ.get("ENABLE_SCHEDULER", "false").lower() == "true":
+        scheduler.start()
+        logger.info("Scheduler started with {} jobs", len(scheduler.get_jobs()))
+    else:
+        logger.info("Scheduler DISABLED (set ENABLE_SCHEDULER=true to activate). Endpoints still available.")
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
