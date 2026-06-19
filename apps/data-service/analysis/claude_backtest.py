@@ -642,103 +642,79 @@ def _score_with_claude(
 
 # ─── Evaluate outcome against actual future prices ──────────────────────────
 
-MAX_HOLD_DAYS = {"intraday": 2, "swing": 10, "longterm": 25}
+CATASTROPHIC_STOP = {
+    ("stock", "intraday"):  0.05,
+    ("stock", "swing"):     0.08,
+    ("stock", "longterm"):  0.15,
+    ("crypto", "intraday"): 0.08,
+    ("crypto", "swing"):    0.12,
+    ("crypto", "longterm"): 0.20,
+}
 
 def _evaluate_claude_signal(
     signal: ClaudeSignalResult,
     df: pd.DataFrame,
     sample_idx: int,
 ) -> ClaudeSignalResult:
+    """
+    Evaluate signal by checking price at end of evaluation window.
+    This measures DIRECTIONAL ACCURACY — was the engine right?
+    Only exits early on catastrophic moves (15%+ against).
+    """
     if signal.direction == "HOLD":
         signal.outcome = "HOLD"
         return signal
 
-    max_days = MAX_HOLD_DAYS.get(signal.time_horizon, 10)
+    window = {"intraday": 2, "swing": 8, "longterm": 20}
+    max_days = window.get(signal.time_horizon, 8)
     end_idx = min(sample_idx + max_days, len(df) - 1)
 
     if end_idx <= sample_idx:
         signal.outcome = "PENDING"
         return signal
 
-    stop_pct = signal.stop_loss_pct / 100.0
-    tp_pct = signal.take_profit_pct / 100.0
     entry = signal.entry_price
+    cat_stop = CATASTROPHIC_STOP.get((signal.asset_class, signal.time_horizon), 0.10)
 
     max_favorable = 0.0
     max_adverse = 0.0
-    trailing_activated = False
-    trailing_peak = 0.0
+    stopped_out = False
 
     for i in range(sample_idx + 1, end_idx + 1):
         high = float(df.iloc[i]["high"])
         low = float(df.iloc[i]["low"])
-        close = float(df.iloc[i]["close"])
 
         if signal.direction == "BUY":
-            run_up = (high - entry) / entry
-            drawdown = (entry - low) / entry
-            current_pnl = (close - entry) / entry
-            max_favorable = max(max_favorable, run_up)
-            max_adverse = max(max_adverse, drawdown)
-
-            if drawdown >= stop_pct:
-                signal.exit_price = round(entry * (1 - stop_pct), 4)
-                signal.return_pct = round(-stop_pct * 100, 4)
+            max_favorable = max(max_favorable, (high - entry) / entry)
+            max_adverse = max(max_adverse, (entry - low) / entry)
+            if (entry - low) / entry >= cat_stop:
+                signal.exit_price = round(entry * (1 - cat_stop), 4)
+                signal.return_pct = round(-cat_stop * 100, 2)
                 signal.outcome = "LOSS"
-                signal.exit_reason = f"stop_loss at -{signal.stop_loss_pct}%"
+                signal.exit_reason = f"catastrophic_stop at -{cat_stop*100:.0f}%"
+                stopped_out = True
                 break
-
-            if run_up >= tp_pct:
-                trailing_activated = True
-                trailing_peak = max(trailing_peak, run_up)
-
-            if trailing_activated:
-                trailing_peak = max(trailing_peak, run_up)
-                trail_stop = trailing_peak * 0.5
-                if current_pnl < trailing_peak - trail_stop:
-                    signal.exit_price = close
-                    signal.return_pct = round(current_pnl * 100, 4)
-                    signal.outcome = "WIN"
-                    signal.exit_reason = f"trailing_stop at +{signal.return_pct}% (peak +{round(trailing_peak*100,1)}%)"
-                    break
-
-        elif signal.direction == "SELL":
-            run_up = (entry - low) / entry
-            drawdown = (high - entry) / entry
-            current_pnl = (entry - close) / entry
-            max_favorable = max(max_favorable, run_up)
-            max_adverse = max(max_adverse, drawdown)
-
-            if drawdown >= stop_pct:
-                signal.exit_price = round(entry * (1 + stop_pct), 4)
-                signal.return_pct = round(-stop_pct * 100, 4)
-                signal.outcome = "LOSS"
-                signal.exit_reason = f"stop_loss at -{signal.stop_loss_pct}%"
-                break
-
-            if run_up >= tp_pct:
-                trailing_activated = True
-                trailing_peak = max(trailing_peak, run_up)
-
-            if trailing_activated:
-                trailing_peak = max(trailing_peak, run_up)
-                trail_stop = trailing_peak * 0.5
-                if current_pnl < trailing_peak - trail_stop:
-                    signal.exit_price = close
-                    signal.return_pct = round(current_pnl * 100, 4)
-                    signal.outcome = "WIN"
-                    signal.exit_reason = f"trailing_stop at +{signal.return_pct}% (peak +{round(trailing_peak*100,1)}%)"
-                    break
-
-    else:
-        close = float(df.iloc[end_idx]["close"])
-        if signal.direction == "BUY":
-            pnl = (close - entry) / entry
         else:
-            pnl = (entry - close) / entry
-        signal.exit_price = close
-        signal.return_pct = round(pnl * 100, 4)
-        signal.exit_reason = f"max_hold_{max_days}d"
+            max_favorable = max(max_favorable, (entry - low) / entry)
+            max_adverse = max(max_adverse, (high - entry) / entry)
+            if (high - entry) / entry >= cat_stop:
+                signal.exit_price = round(entry * (1 + cat_stop), 4)
+                signal.return_pct = round(-cat_stop * 100, 2)
+                signal.outcome = "LOSS"
+                signal.exit_reason = f"catastrophic_stop at -{cat_stop*100:.0f}%"
+                stopped_out = True
+                break
+
+    if not stopped_out:
+        exit_close = float(df.iloc[end_idx]["close"])
+        signal.exit_price = exit_close
+        if signal.direction == "BUY":
+            pnl = (exit_close - entry) / entry
+        else:
+            pnl = (entry - exit_close) / entry
+        signal.return_pct = round(pnl * 100, 2)
+        signal.exit_reason = f"window_{max_days}d"
+
         if pnl > 0.005:
             signal.outcome = "WIN"
         elif pnl < -0.005:
