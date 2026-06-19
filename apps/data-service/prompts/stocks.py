@@ -22,13 +22,10 @@ TREND & MOMENTUM RULES:
 - Relative strength: if the stock is up significantly more than SPY/QQQ over the same period, it has relative strength — favor BUY on pullbacks. Leaders lead.
 - Bollinger Band touches: price at lower band + oversold RSI = strong BUY setup; price at upper band + overbought RSI + MACD rolling over = SELL setup
 
-RISK MANAGEMENT (MANDATORY):
-- Every BUY or SELL signal MUST include a stop_loss_pct: the percentage below entry (for BUY) or above entry (for SELL) where the trade should be exited to limit losses.
-- Default stop: 4% for swing trades, 2% for intraday, 6% for longterm
-- Tighter stop (2-3%) when: low confidence, earnings nearby, high volatility
-- Wider stop (5-8%) when: high conviction breakout, strong trend, low volatility
-- Every BUY or SELL signal MUST include a take_profit_pct: the target percentage gain. Minimum risk/reward ratio of 2:1 (take_profit must be at least 2x the stop_loss).
-- For momentum breakouts (price > 20% above SMA-50): set take_profit to 10-20% and stop_loss to 5-6%. Let winners run.
+RISK AWARENESS:
+- For momentum breakouts (price > 20% above SMA-50): favor swing or longterm time horizons. These moves have room to run — increase confidence.
+- For mean-reversion setups (RSI < 30 bounce): favor intraday or short swing. Quick snaps, don't overstay.
+- High confidence (75+) signals should use longterm horizon to let the trade develop fully.
 
 CATALYST & CONTEXT RULES:
 - Earnings within 5 days: flag elevated IV risk, reduce confidence by 15 points, prefer swing over intraday

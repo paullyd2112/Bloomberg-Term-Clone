@@ -32,14 +32,12 @@ client     = instructor.from_anthropic(_anthropic)
 # ─── Pydantic signal schemas ──────────────────────────────────────────────────
 
 class StockSignal(BaseModel):
-    direction:       Literal["BUY", "SELL", "HOLD"]
-    confidence:      int    = Field(..., ge=0, le=100)
-    reasoning:       str    = Field(..., min_length=20)
-    time_horizon:    Literal["intraday", "swing", "longterm"]
-    stop_loss_pct:   float | None = Field(default=None)
-    take_profit_pct: float | None = Field(default=None)
-    key_risk:        str
-    news_context:    list[str] = Field(default_factory=list, max_length=3)
+    direction:    Literal["BUY", "SELL", "HOLD"]
+    confidence:   int    = Field(..., ge=0, le=100)
+    reasoning:    str    = Field(..., min_length=20)
+    time_horizon: Literal["intraday", "swing", "longterm"]
+    key_risk:     str
+    news_context: list[str] = Field(default_factory=list, max_length=3)
 
 
 class CryptoSignal(BaseModel):
@@ -290,10 +288,6 @@ def _write_signal(asset_type: str, identifier: str, price: float | None, signal)
         "is_backtest":     False,
         "outcome":         "PENDING",
     }
-    if hasattr(signal, "stop_loss_pct"):
-        base["stop_loss_pct"] = signal.stop_loss_pct
-    if hasattr(signal, "take_profit_pct"):
-        base["take_profit_pct"] = signal.take_profit_pct
     result = supabase.table("signals").insert(base).execute()
     return result.data[0] if result.data else base
 

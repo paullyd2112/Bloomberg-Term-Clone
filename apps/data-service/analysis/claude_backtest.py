@@ -94,14 +94,12 @@ WIN_THRESHOLDS = {
 # ─── Pydantic models (mirror scoring/engine.py) ─────────────────────────────
 
 class StockSignal(BaseModel):
-    direction:       Literal["BUY", "SELL", "HOLD"]
-    confidence:      int    = Field(..., ge=0, le=100)
-    reasoning:       str    = Field(..., min_length=20)
-    time_horizon:    Literal["intraday", "swing", "longterm"]
-    stop_loss_pct:   float | None = Field(default=None)
-    take_profit_pct: float | None = Field(default=None)
-    key_risk:        str
-    news_context:    list[str] = Field(default_factory=list, max_length=3)
+    direction:    Literal["BUY", "SELL", "HOLD"]
+    confidence:   int    = Field(..., ge=0, le=100)
+    reasoning:    str    = Field(..., min_length=20)
+    time_horizon: Literal["intraday", "swing", "longterm"]
+    key_risk:     str
+    news_context: list[str] = Field(default_factory=list, max_length=3)
 
 
 class CryptoSignal(BaseModel):
@@ -802,10 +800,11 @@ def run_claude_backtest(
                 errors += 1
                 continue
 
-            defaults = {"intraday": (2.0, 4.0), "swing": (4.0, 8.0), "longterm": (6.0, 15.0)}
-            default_sl, default_tp = defaults.get(signal.time_horizon, (4.0, 8.0))
-            sl_pct = signal.stop_loss_pct if signal.stop_loss_pct and signal.stop_loss_pct > 0 else default_sl
-            tp_pct = signal.take_profit_pct if signal.take_profit_pct and signal.take_profit_pct > 0 else default_tp
+            sl_tp = {"intraday": (2.0, 4.0), "swing": (4.0, 10.0), "longterm": (6.0, 18.0)}
+            sl_pct, tp_pct = sl_tp.get(signal.time_horizon, (4.0, 10.0))
+            if signal.confidence >= 75:
+                tp_pct *= 1.5
+                sl_pct *= 1.25
 
             weight = 1.0
             if signal.confidence >= 75:
