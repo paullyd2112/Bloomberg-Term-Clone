@@ -202,10 +202,12 @@ def _stock_fmp(ticker: str) -> pd.DataFrame | None:
     if not FMP_KEY:
         return None
     try:
-        url = (f"{FMP_BASE}/historical-price-full/{ticker}"
-               f"?from={DATE_FROM}&to={DATE_TO}&apikey={FMP_KEY}")
+        url = (f"https://financialmodelingprep.com/stable/historical-price-eod/full"
+               f"?symbol={ticker}&apikey={FMP_KEY}")
         data = _get_json(url)
-        hist = (data or {}).get("historical", [])
+        if not data:
+            return None
+        hist = data if isinstance(data, list) else data.get("historical", [])
         if not hist:
             return None
         df = pd.DataFrame(hist)
@@ -240,13 +242,38 @@ def _stock_alphavantage(ticker: str) -> pd.DataFrame | None:
         return None
 
 
+def _stock_massive(ticker: str) -> pd.DataFrame | None:
+    if not MASSIVE_KEY:
+        return None
+    try:
+        url = (f"{MASSIVE_BASE}/v2/aggs/ticker/{ticker}/range/1/day"
+               f"/{DATE_FROM}/{DATE_TO}?apiKey={MASSIVE_KEY}")
+        data = _get_json(url)
+        results = (data or {}).get("results", [])
+        if not results:
+            return None
+        rows = []
+        for r in results:
+            rows.append({
+                "date": pd.Timestamp(r["t"], unit="ms").tz_localize(None),
+                "open": r["o"], "high": r["h"], "low": r["l"],
+                "close": r["c"], "volume": r.get("v", 0),
+            })
+        df = pd.DataFrame(rows).set_index("date")
+        return _normalize_ohlcv(df)
+    except Exception as e:
+        logger.debug("[claude_backtest] {} Massive failed — {}", ticker, e)
+        return None
+
+
 def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
-    """Fetch from ALL 4 sources, merge for best date coverage."""
+    """Fetch from ALL 5 sources, merge for best date coverage."""
     sources = [
         ("yfinance",      _stock_yfinance),
         ("Finnhub",       _stock_finnhub),
         ("FMP",           _stock_fmp),
         ("Alpha Vantage", _stock_alphavantage),
+        ("Massive",       _stock_massive),
     ]
     frames: list[pd.DataFrame] = []
     for name, fn in sources:
@@ -261,7 +288,7 @@ def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
             logger.debug("[claude_backtest] {} — {} error: {}", ticker, name, e)
 
     if not frames:
-        logger.warning("[claude_backtest] {} — ALL 4 sources returned no data", ticker)
+        logger.warning("[claude_backtest] {} — ALL 5 sources returned no data", ticker)
         return None
 
     merged = frames[0]
@@ -289,6 +316,7 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
         ("finnhub",       _stock_finnhub),
         ("fmp",           _stock_fmp),
         ("alpha_vantage", _stock_alphavantage),
+        ("massive",       _stock_massive),
     ]
 
     report: dict = {
@@ -297,6 +325,7 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
             "finnhub":       bool(FINNHUB_KEY),
             "fmp":           bool(FMP_KEY),
             "alpha_vantage": bool(AV_KEY),
+            "massive":       bool(MASSIVE_KEY),
         },
         "tickers": {},
     }
@@ -324,11 +353,20 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
 
     if FMP_KEY:
         try:
-            url = f"{FMP_BASE}/historical-price-full/{ticker_0}?from={DATE_FROM}&to={DATE_TO}&apikey={FMP_KEY}"
+            url = f"https://financialmodelingprep.com/stable/historical-price-eod/full?symbol={ticker_0}&apikey={FMP_KEY}"
             resp = httpx.get(url, timeout=15.0)
             raw_tests["fmp"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
         except Exception as e:
             raw_tests["fmp"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
+
+    if MASSIVE_KEY:
+        try:
+            url = (f"{MASSIVE_BASE}/v2/aggs/ticker/{ticker_0}/range/1/day"
+                   f"/{DATE_FROM}/{DATE_TO}?apiKey={MASSIVE_KEY}")
+            resp = httpx.get(url, timeout=15.0)
+            raw_tests["massive"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
+        except Exception as e:
+            raw_tests["massive"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
 
     if AV_KEY:
         try:

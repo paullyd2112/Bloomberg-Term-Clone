@@ -562,6 +562,28 @@ def claude_backtest_status():
     return jsonify(state)
 
 
+@app.route("/scanner")
+def scanner_endpoint():
+    """
+    Run market scanner — shows which stocks have active technical setups.
+    Zero Claude cost. Use ?min=N to change minimum trigger count (default 2).
+    """
+    from flask import request as flask_request
+    from scoring.scanner import scan_stocks
+
+    try:
+        results = scan_stocks()
+        return jsonify({
+            "status": "ok",
+            "qualified": len(results),
+            "stocks": results,
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"status": "error", "error": str(e),
+                        "traceback": traceback.format_exc()}), 500
+
+
 @app.route("/backtest/diag")
 def backtest_data_diagnostic():
     """
