@@ -841,11 +841,11 @@ def run_claude_backtest(
                     errors += 1
                     continue
 
-                sl_tp = {"intraday": (2.0, 4.0), "swing": (4.0, 10.0), "longterm": (6.0, 18.0)}
-                sl_pct, tp_pct = sl_tp.get(signal.time_horizon, (4.0, 10.0))
+                sl_tp = {"intraday": (3.0, 6.0), "swing": (7.0, 16.0), "longterm": (10.0, 25.0)}
+                sl_pct, tp_pct = sl_tp.get(signal.time_horizon, (7.0, 16.0))
                 if signal.confidence >= 75:
                     tp_pct *= 1.5
-                    sl_pct *= 1.25
+                    sl_pct *= 1.2
 
                 weight = 1.0
                 if signal.confidence >= 75:
