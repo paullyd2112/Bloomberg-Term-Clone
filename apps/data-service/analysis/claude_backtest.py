@@ -51,7 +51,6 @@ CG_BASE     = "https://api.coingecko.com/api/v3"
 MASSIVE_BASE   = "https://api.massive.com"
 FINNHUB_CANDLE = "https://finnhub.io/api/v1/stock/candle"
 AV_URL         = "https://www.alphavantage.co/query"
-MASSIVE_BASE   = "https://api.massive.com"
 
 DATE_FROM = "2026-02-01"
 DATE_TO   = "2026-06-16"
@@ -242,31 +241,6 @@ def _stock_fmp(ticker: str) -> pd.DataFrame | None:
     return None
 
 
-def _stock_massive(ticker: str) -> pd.DataFrame | None:
-    if not MASSIVE_KEY:
-        return None
-    try:
-        url = (f"https://financialmodelingprep.com/stable/historical-price-eod/full"
-               f"?symbol={ticker}&apikey={FMP_KEY}")
-        data = _get_json(url)
-        if not data:
-            return None
-        hist = data if isinstance(data, list) else data.get("historical", [])
-        if not hist:
-            return None
-        results = data.get("results", [])
-        if not results:
-            return None
-        df = pd.DataFrame(results)
-        df["date"] = pd.to_datetime(df["t"], unit="ms", utc=True).dt.tz_localize(None)
-        df = df.rename(columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"})
-        df = df.set_index("date")
-        return _normalize_ohlcv(df)
-    except Exception as e:
-        logger.debug("[claude_backtest] {} Massive failed — {}", ticker, e)
-        return None
-
-
 def _stock_alphavantage(ticker: str) -> pd.DataFrame | None:
     if not AV_KEY:
         return None
@@ -423,14 +397,6 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
             raw_tests["fmp"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
         except Exception as e:
             raw_tests["fmp_stable"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
-
-    if MASSIVE_KEY:
-        try:
-            url = f"{MASSIVE_BASE}/v2/aggs/ticker/{ticker_0}/range/1/day/{DATE_FROM}/{DATE_TO}?adjusted=true&sort=asc&apiKey={MASSIVE_KEY}"
-            resp = httpx.get(url, timeout=15.0)
-            raw_tests["massive"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
-        except Exception as e:
-            raw_tests["massive"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
 
     if MASSIVE_KEY:
         try:
