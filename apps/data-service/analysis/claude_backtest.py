@@ -45,8 +45,10 @@ FMP_KEY     = os.environ.get("FMP_API_KEY", "")
 AV_KEY      = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
 CG_KEY      = os.environ.get("COINGECKO_API_KEY", "")
 FINNHUB_KEY = os.environ.get("FINNHUB_API_KEY", "")
+MASSIVE_KEY = os.environ.get("_MASSIVE_API_KEY", "")
 FMP_BASE    = "https://financialmodelingprep.com/api/v3"
 CG_BASE     = "https://api.coingecko.com/api/v3"
+MASSIVE_BASE   = "https://api.massive.com"
 FINNHUB_CANDLE = "https://finnhub.io/api/v1/stock/candle"
 AV_URL         = "https://www.alphavantage.co/query"
 
@@ -574,6 +576,8 @@ def _build_crypto_context(symbol: str, row: pd.Series, fear_greed: dict | None =
 
 # ─── Core: call Claude on a historical data point ───────────────────────────
 
+_recent_errors: list[str] = []
+
 def _score_with_claude(
     asset_type: str,
     identifier: str,
@@ -598,7 +602,11 @@ def _score_with_claude(
                 response_model=CryptoSignal,
             )
     except Exception as e:
-        logger.error("Claude scoring failed for {}/{}: {}", asset_type, identifier, e)
+        import traceback
+        err_detail = f"{asset_type}/{identifier}: {type(e).__name__}: {str(e)[:300]}"
+        logger.error("Claude scoring failed — {}", err_detail)
+        if len(_recent_errors) < 10:
+            _recent_errors.append(err_detail)
         return None
 
 
@@ -734,6 +742,8 @@ def run_claude_backtest(
     _anthropic = anthropic.Anthropic(api_key=api_key)
     claude_client = instructor.from_anthropic(_anthropic)
 
+    _recent_errors.clear()
+
     results: list[ClaudeSignalResult] = []
     api_calls = 0
     errors = 0
@@ -781,58 +791,65 @@ def run_claude_backtest(
 
     for ticker, df in stock_data.items():
         for date_str in sample_dates:
-            target = pd.Timestamp(date_str)
-            idx = df.index.get_indexer([target], method="ffill")[0]
-            if idx < 0 or idx < 50:
-                logger.debug("[claude_backtest] Skipping {}/{}: idx={} (need >= 50 for indicators)", ticker, date_str, idx)
-                continue
+            try:
+                target = pd.Timestamp(date_str)
+                idx = df.index.get_indexer([target], method="ffill")[0]
+                if idx < 0 or idx < 50:
+                    logger.debug("[claude_backtest] Skipping {}/{}: idx={} (need >= 50 for indicators)", ticker, date_str, idx)
+                    continue
 
-            row = df.iloc[idx]
-            actual_date = str(df.index[idx].date())
-            benchmarks = _get_benchmarks_for_date(actual_date)
-            context = _build_stock_context(ticker, row, df, benchmarks=benchmarks)
+                row = df.iloc[idx]
+                actual_date = str(df.index[idx].date())
+                benchmarks = _get_benchmarks_for_date(actual_date)
+                context = _build_stock_context(ticker, row, df, benchmarks=benchmarks)
 
-            logger.info("[claude_backtest] Scoring {}/{} on {}", "stock", ticker, actual_date)
-            signal = _score_with_claude("stock", ticker, context, claude_client)
-            api_calls += 1
+                logger.info("[claude_backtest] Scoring {}/{} on {}", "stock", ticker, actual_date)
+                signal = _score_with_claude("stock", ticker, context, claude_client)
+                api_calls += 1
 
-            if signal is None:
+                if signal is None:
+                    errors += 1
+                    continue
+
+                sl_tp = {"intraday": (2.0, 4.0), "swing": (4.0, 10.0), "longterm": (6.0, 18.0)}
+                sl_pct, tp_pct = sl_tp.get(signal.time_horizon, (4.0, 10.0))
+                if signal.confidence >= 75:
+                    tp_pct *= 1.5
+                    sl_pct *= 1.25
+
+                weight = 1.0
+                if signal.confidence >= 75:
+                    weight = 2.0
+                elif signal.confidence >= 65:
+                    weight = 1.5
+
+                result = ClaudeSignalResult(
+                    ticker=ticker,
+                    asset_class="stock",
+                    sample_date=actual_date,
+                    direction=signal.direction,
+                    confidence=signal.confidence,
+                    time_horizon=signal.time_horizon,
+                    reasoning=signal.reasoning,
+                    entry_price=float(row["close"]),
+                    stop_loss_pct=sl_pct,
+                    take_profit_pct=tp_pct,
+                    position_weight=weight,
+                    rsi=round(float(row["_rsi"]), 2)       if pd.notna(row.get("_rsi")) else None,
+                    macd_hist=round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
+                    volume_ratio=round(float(row["volume_ratio"]), 2) if pd.notna(row.get("volume_ratio")) else None,
+                    change_24h=round(float(row["change_1d"]), 2) if pd.notna(row.get("change_1d")) else None,
+                )
+                result = _evaluate_claude_signal(result, df, idx)
+                results.append(result)
+
+                time.sleep(0.5)
+            except Exception as e:
+                err = f"stock/{ticker}/{date_str}: {type(e).__name__}: {str(e)[:200]}"
+                logger.error("[claude_backtest] {}", err)
+                if len(_recent_errors) < 10:
+                    _recent_errors.append(err)
                 errors += 1
-                continue
-
-            sl_tp = {"intraday": (2.0, 4.0), "swing": (4.0, 10.0), "longterm": (6.0, 18.0)}
-            sl_pct, tp_pct = sl_tp.get(signal.time_horizon, (4.0, 10.0))
-            if signal.confidence >= 75:
-                tp_pct *= 1.5
-                sl_pct *= 1.25
-
-            weight = 1.0
-            if signal.confidence >= 75:
-                weight = 2.0
-            elif signal.confidence >= 65:
-                weight = 1.5
-
-            result = ClaudeSignalResult(
-                ticker=ticker,
-                asset_class="stock",
-                sample_date=actual_date,
-                direction=signal.direction,
-                confidence=signal.confidence,
-                time_horizon=signal.time_horizon,
-                reasoning=signal.reasoning,
-                entry_price=float(row["close"]),
-                stop_loss_pct=sl_pct,
-                take_profit_pct=tp_pct,
-                position_weight=weight,
-                rsi=round(float(row["_rsi"]), 2)       if pd.notna(row.get("_rsi")) else None,
-                macd_hist=round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
-                volume_ratio=round(float(row["volume_ratio"]), 2) if pd.notna(row.get("volume_ratio")) else None,
-                change_24h=round(float(row["change_1d"]), 2) if pd.notna(row.get("change_1d")) else None,
-            )
-            result = _evaluate_claude_signal(result, df, idx)
-            results.append(result)
-
-            time.sleep(0.5)
 
     # ── Crypto ───────────────────────────────────────────────────────────────
     crypto_data: dict[str, pd.DataFrame] = {}
@@ -846,54 +863,63 @@ def run_claude_backtest(
 
     for symbol, df in crypto_data.items():
         for date_str in sample_dates:
-            target = pd.Timestamp(date_str)
-            idx = df.index.get_indexer([target], method="ffill")[0]
-            if idx < 0 or idx < 50:
-                continue
+            try:
+                target = pd.Timestamp(date_str)
+                idx = df.index.get_indexer([target], method="ffill")[0]
+                if idx < 0 or idx < 50:
+                    continue
 
-            row = df.iloc[idx]
-            actual_date = str(df.index[idx].date())
-            fg = _lookup_fear_greed(fg_history, actual_date)
-            context = _build_crypto_context(symbol, row, fear_greed=fg)
+                row = df.iloc[idx]
+                actual_date = str(df.index[idx].date())
+                fg = _lookup_fear_greed(fg_history, actual_date)
+                context = _build_crypto_context(symbol, row, fear_greed=fg)
 
-            logger.info("[claude_backtest] Scoring {}/{} on {}", "crypto", symbol, actual_date)
-            signal = _score_with_claude("crypto", symbol, context, claude_client)
-            api_calls += 1
+                logger.info("[claude_backtest] Scoring {}/{} on {}", "crypto", symbol, actual_date)
+                signal = _score_with_claude("crypto", symbol, context, claude_client)
+                api_calls += 1
 
-            if signal is None:
+                if signal is None:
+                    errors += 1
+                    continue
+
+                weight = 1.0
+                if signal.confidence >= 75:
+                    weight = 2.0
+                elif signal.confidence >= 65:
+                    weight = 1.5
+
+                result = ClaudeSignalResult(
+                    ticker=symbol,
+                    asset_class="crypto",
+                    sample_date=actual_date,
+                    direction=signal.direction,
+                    confidence=signal.confidence,
+                    time_horizon=signal.time_horizon,
+                    reasoning=signal.reasoning,
+                    entry_price=float(row["close"]),
+                    stop_loss_pct=6.0,
+                    take_profit_pct=12.0,
+                    position_weight=weight,
+                    rsi=round(float(row["_rsi"]), 2)       if pd.notna(row.get("_rsi")) else None,
+                    macd_hist=round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
+                    volume_ratio=round(float(row["volume_ratio"]), 2) if pd.notna(row.get("volume_ratio")) else None,
+                    change_24h=round(float(row["change_1d"]), 2) if pd.notna(row.get("change_1d")) else None,
+                )
+                result = _evaluate_claude_signal(result, df, idx)
+                results.append(result)
+
+                time.sleep(0.5)
+            except Exception as e:
+                err = f"crypto/{symbol}/{date_str}: {type(e).__name__}: {str(e)[:200]}"
+                logger.error("[claude_backtest] {}", err)
+                if len(_recent_errors) < 10:
+                    _recent_errors.append(err)
                 errors += 1
-                continue
-
-            weight = 1.0
-            if signal.confidence >= 75:
-                weight = 2.0
-            elif signal.confidence >= 65:
-                weight = 1.5
-
-            result = ClaudeSignalResult(
-                ticker=symbol,
-                asset_class="crypto",
-                sample_date=actual_date,
-                direction=signal.direction,
-                confidence=signal.confidence,
-                time_horizon=signal.time_horizon,
-                reasoning=signal.reasoning,
-                entry_price=float(row["close"]),
-                stop_loss_pct=6.0,
-                take_profit_pct=12.0,
-                position_weight=weight,
-                rsi=round(float(row["_rsi"]), 2)       if pd.notna(row.get("_rsi")) else None,
-                macd_hist=round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
-                volume_ratio=round(float(row["volume_ratio"]), 2) if pd.notna(row.get("volume_ratio")) else None,
-                change_24h=round(float(row["change_1d"]), 2) if pd.notna(row.get("change_1d")) else None,
-            )
-            result = _evaluate_claude_signal(result, df, idx)
-            results.append(result)
-
-            time.sleep(0.5)
 
     # ── Aggregate results ────────────────────────────────────────────────────
     agg = _aggregate_claude_results(results, api_calls, errors)
+    if _recent_errors:
+        agg["error_samples"] = list(_recent_errors)
 
     json_path = str(Path(output_dir) / "claude_backtest_results.json")
     with open(json_path, "w") as f:
@@ -939,7 +965,7 @@ def _aggregate_claude_results(
 
     avg_win = float(np.mean([r.return_pct for r in wins])) if wins else 0
     avg_loss = float(np.mean([abs(r.return_pct) for r in losses])) if losses else 0
-    profit_factor = round(sum(r.return_pct for r in wins) / abs(sum(r.return_pct for r in losses)), 2) if losses else float("inf")
+    profit_factor = round(sum(r.return_pct for r in wins) / abs(sum(r.return_pct for r in losses)), 2) if losses else 999.0
 
     portfolio_sim = _simulate_portfolio(actionable)
 
