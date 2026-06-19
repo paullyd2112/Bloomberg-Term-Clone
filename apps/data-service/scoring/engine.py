@@ -448,8 +448,19 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
 
 def score_stocks() -> str:
     from ingestion.stocks import get_default_watchlist
-    tickers = get_default_watchlist()
-    logger.info("Scoring {} stocks", len(tickers))
+    from scoring.scanner import get_scan_tickers
+
+    all_tickers = get_default_watchlist()
+    scan_qualified = get_scan_tickers(all_tickers)
+
+    core_always_score = {"AAPL", "NVDA", "TSLA", "GOOGL", "META", "AMZN", "MSFT", "SPY", "QQQ"}
+    tickers = list(set(scan_qualified) | core_always_score)
+
+    logger.info(
+        "Scoring {} stocks ({} from scanner + {} core) — saved {} Claude calls vs full watchlist",
+        len(tickers), len(scan_qualified), len(core_always_score & set(tickers)),
+        len(all_tickers) - len(tickers),
+    )
     success, skipped, failed = 0, 0, 0
 
     for ticker in tickers:
@@ -464,7 +475,7 @@ def score_stocks() -> str:
             sentry_sdk.capture_exception(e)
             failed += 1
 
-    return f"{success} scored, {skipped} skipped (cooldown), {failed} failed"
+    return f"{success} scored, {skipped} skipped (cooldown), {failed} failed — {len(all_tickers) - len(tickers)} filtered by scanner"
 
 
 def score_crypto() -> str:
