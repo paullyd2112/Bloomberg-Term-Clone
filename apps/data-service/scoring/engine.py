@@ -517,77 +517,124 @@ def score_stocks() -> str:
 
 
 def score_crypto() -> str:
+    from scoring.haiku_prescreen import prescreen_crypto, should_escalate_to_sonnet
+
     try:
         result = (
             supabase.table("raw_prices")
-            .select("identifier")
+            .select("identifier, price, change_24h, metadata")
             .eq("asset_type", "crypto")
             .neq("identifier", "MARKET_SENTIMENT")
             .order("captured_at", desc=True)
             .limit(20)
             .execute()
         )
-        seen, identifiers = set(), []
+        seen, rows = set(), []
         for r in result.data:
             sym = r["identifier"]
             if sym not in seen:
                 seen.add(sym)
-                identifiers.append(sym)
+                rows.append(r)
     except Exception as e:
         logger.error("score_crypto: failed to fetch identifiers — {}", e)
         return "failed to fetch identifiers"
 
-    logger.info("Scoring {} crypto assets", len(identifiers))
+    core_always_score = {"BTC", "ETH", "SOL", "XRP", "DOGE"}
+    fg = _get_fear_greed()
+    haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
 
-    for sym in identifiers:
+    for row in rows:
+        sym = row["identifier"]
+        meta = row.get("metadata") or {}
+
+        if sym in core_always_score:
+            try:
+                result = score_asset("crypto", sym)
+                sonnet_calls += 1
+                if result is None:
+                    skipped += 1
+                else:
+                    success += 1
+            except Exception as e:
+                logger.error("score_crypto error for {}: {}", sym, e)
+                sentry_sdk.capture_exception(e)
+                failed += 1
+            continue
+
+        quick = prescreen_crypto(sym, meta, price=row.get("price"),
+                                 change_24h=row.get("change_24h"),
+                                 fear_greed=fg.get("value"))
+        haiku_calls += 1
+
+        if not should_escalate_to_sonnet(quick):
+            skipped += 1
+            continue
+
         try:
             result = score_asset("crypto", sym)
+            sonnet_calls += 1
             if result is None:
                 skipped += 1
             else:
                 success += 1
         except Exception as e:
-            logger.error("score_crypto unhandled error for {}: {}", sym, e)
+            logger.error("score_crypto error for {}: {}", sym, e)
             sentry_sdk.capture_exception(e)
             failed += 1
 
-    return f"{success} scored, {skipped} skipped (cooldown), {failed} failed"
+    return (f"{success} scored, {skipped} skipped, {failed} failed — "
+            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet")
 
 
 def score_prediction_markets() -> str:
+    from scoring.haiku_prescreen import prescreen_prediction, should_escalate_to_sonnet
+
     try:
         result = (
             supabase.table("raw_prices")
-            .select("identifier")
+            .select("identifier, price, volume, metadata")
             .eq("asset_type", "prediction")
             .order("volume", desc=True)
             .limit(20)
             .execute()
         )
-        seen, identifiers = set(), []
+        seen, rows = set(), []
         for r in result.data:
             ident = r["identifier"]
             if ident not in seen:
                 seen.add(ident)
-                identifiers.append(ident)
+                rows.append(r)
     except Exception as e:
         logger.error("score_prediction_markets: failed to fetch identifiers — {}", e)
         return "failed to fetch identifiers"
 
-    logger.info("Scoring {} prediction markets", len(identifiers))
+    haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
 
-    for ident in identifiers:
+    for row in rows:
+        ident = row["identifier"]
+
+        quick = prescreen_prediction(ident, price=row.get("price"),
+                                     volume=row.get("volume"),
+                                     metadata=row.get("metadata"))
+        haiku_calls += 1
+
+        if not should_escalate_to_sonnet(quick):
+            skipped += 1
+            continue
+
         try:
             result = score_asset("prediction", ident)
+            sonnet_calls += 1
             if result is None:
                 skipped += 1
             else:
                 success += 1
         except Exception as e:
-            logger.error("score_prediction_markets unhandled error for {}: {}", ident, e)
+            logger.error("score_prediction_markets error for {}: {}", ident, e)
             sentry_sdk.capture_exception(e)
             failed += 1
 
-    return f"{success} scored, {skipped} skipped (cooldown), {failed} failed"
+    return (f"{success} scored, {skipped} skipped, {failed} failed — "
+            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet")
