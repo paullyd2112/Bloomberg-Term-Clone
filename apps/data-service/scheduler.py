@@ -531,9 +531,15 @@ def run_claude_backtest_endpoint():
                     "total_signals": agg.get("total_signals", 0),
                     "win_rate":      agg.get("win_rate", 0),
                     "api_calls":     agg.get("api_calls", 0),
+                    "errors":        agg.get("errors", 0),
                     "avg_return":    agg.get("avg_return_pct", 0),
+                    "avg_win_pct":   agg.get("avg_win_pct", 0),
+                    "avg_loss_pct":  agg.get("avg_loss_pct", 0),
+                    "profit_factor": agg.get("profit_factor", 0),
+                    "portfolio_sim": agg.get("portfolio_sim", {}),
                     "by_asset_class": agg.get("by_asset_class", {}),
                     "by_time_horizon": agg.get("by_time_horizon", {}),
+                    "error_samples": agg.get("error_samples", []),
                 },
                 "signals": agg.get("signals", []),
             }
@@ -560,6 +566,28 @@ def run_claude_backtest_endpoint():
 def claude_backtest_status():
     state = _job_state.get("claude_backtest", {"status": "never_run"})
     return jsonify(state)
+
+
+@app.route("/scanner")
+def scanner_endpoint():
+    """
+    Run market scanner — shows which stocks have active technical setups.
+    Zero Claude cost. Use ?min=N to change minimum trigger count (default 2).
+    """
+    from flask import request as flask_request
+    from scoring.scanner import scan_stocks
+
+    try:
+        results = scan_stocks()
+        return jsonify({
+            "status": "ok",
+            "qualified": len(results),
+            "stocks": results,
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"status": "error", "error": str(e),
+                        "traceback": traceback.format_exc()}), 500
 
 
 @app.route("/backtest/diag")

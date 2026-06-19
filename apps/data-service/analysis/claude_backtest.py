@@ -48,6 +48,7 @@ FINNHUB_KEY = os.environ.get("FINNHUB_API_KEY", "")
 MASSIVE_KEY = os.environ.get("_MASSIVE_API_KEY", "")
 FMP_BASE    = "https://financialmodelingprep.com/api/v3"
 CG_BASE     = "https://api.coingecko.com/api/v3"
+MASSIVE_BASE   = "https://api.massive.com"
 FINNHUB_CANDLE = "https://finnhub.io/api/v1/stock/candle"
 AV_URL         = "https://www.alphavantage.co/query"
 MASSIVE_BASE   = "https://api.massive.com"
@@ -117,21 +118,27 @@ class CryptoSignal(BaseModel):
 
 @dataclass
 class ClaudeSignalResult:
-    ticker:       str
-    asset_class:  str
-    sample_date:  str
-    direction:    str
-    confidence:   int
-    time_horizon: str
-    reasoning:    str
-    entry_price:  float
-    exit_price:   float | None = None
-    return_pct:   float | None = None
-    outcome:      str = "PENDING"
-    rsi:          float | None = None
-    macd_hist:    float | None = None
-    volume_ratio: float | None = None
-    change_24h:   float | None = None
+    ticker:          str
+    asset_class:     str
+    sample_date:     str
+    direction:       str
+    confidence:      int
+    time_horizon:    str
+    reasoning:       str
+    entry_price:     float
+    stop_loss_pct:   float = 4.0
+    take_profit_pct: float = 8.0
+    exit_price:      float | None = None
+    return_pct:      float | None = None
+    outcome:         str = "PENDING"
+    exit_reason:     str = ""
+    max_favorable:   float | None = None
+    max_adverse:     float | None = None
+    position_weight: float = 1.0
+    rsi:             float | None = None
+    macd_hist:       float | None = None
+    volume_ratio:    float | None = None
+    change_24h:      float | None = None
 
 
 # ─── Data fetching (reuse from backtest.py) ──────────────────────────────────
@@ -239,10 +246,13 @@ def _stock_massive(ticker: str) -> pd.DataFrame | None:
     if not MASSIVE_KEY:
         return None
     try:
-        url = (f"{MASSIVE_BASE}/v2/aggs/ticker/{ticker}/range/1/day"
-               f"/{DATE_FROM}/{DATE_TO}?adjusted=true&sort=asc&apiKey={MASSIVE_KEY}")
+        url = (f"https://financialmodelingprep.com/stable/historical-price-eod/full"
+               f"?symbol={ticker}&apikey={FMP_KEY}")
         data = _get_json(url)
-        if not data or data.get("resultsCount", 0) == 0:
+        if not data:
+            return None
+        hist = data if isinstance(data, list) else data.get("historical", [])
+        if not hist:
             return None
         results = data.get("results", [])
         if not results:
@@ -280,6 +290,30 @@ def _stock_alphavantage(ticker: str) -> pd.DataFrame | None:
         return None
 
 
+def _stock_massive(ticker: str) -> pd.DataFrame | None:
+    if not MASSIVE_KEY:
+        return None
+    try:
+        url = (f"{MASSIVE_BASE}/v2/aggs/ticker/{ticker}/range/1/day"
+               f"/{DATE_FROM}/{DATE_TO}?apiKey={MASSIVE_KEY}")
+        data = _get_json(url)
+        results = (data or {}).get("results", [])
+        if not results:
+            return None
+        rows = []
+        for r in results:
+            rows.append({
+                "date": pd.Timestamp(r["t"], unit="ms").tz_localize(None),
+                "open": r["o"], "high": r["h"], "low": r["l"],
+                "close": r["c"], "volume": r.get("v", 0),
+            })
+        df = pd.DataFrame(rows).set_index("date")
+        return _normalize_ohlcv(df)
+    except Exception as e:
+        logger.debug("[claude_backtest] {} Massive failed — {}", ticker, e)
+        return None
+
+
 def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
     """Fetch from ALL 5 sources, merge for best date coverage."""
     sources = [
@@ -288,6 +322,7 @@ def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
         ("FMP",           _stock_fmp),
         ("Massive",       _stock_massive),
         ("Alpha Vantage", _stock_alphavantage),
+        ("Massive",       _stock_massive),
     ]
     frames: list[pd.DataFrame] = []
     for name, fn in sources:
@@ -302,7 +337,7 @@ def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
             logger.debug("[claude_backtest] {} — {} error: {}", ticker, name, e)
 
     if not frames:
-        logger.warning("[claude_backtest] {} — ALL sources returned no data", ticker)
+        logger.warning("[claude_backtest] {} — ALL 5 sources returned no data", ticker)
         return None
 
     merged = frames[0]
@@ -312,6 +347,7 @@ def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
             merged = pd.concat([merged, extra.loc[new_dates]]).sort_index()
             logger.info("[claude_backtest] {} — filled {} gap dates from additional source", ticker, len(new_dates))
 
+    merged = merged[~merged.index.duplicated(keep="first")]
     logger.info("[claude_backtest] {} — merged OHLCV: {} total rows from {} sources", ticker, len(merged), len(frames))
     return merged
 
@@ -331,6 +367,7 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
         ("fmp",           _stock_fmp),
         ("massive",       _stock_massive),
         ("alpha_vantage", _stock_alphavantage),
+        ("massive",       _stock_massive),
     ]
 
     report: dict = {
@@ -340,6 +377,7 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
             "fmp":           bool(FMP_KEY),
             "massive":       bool(MASSIVE_KEY),
             "alpha_vantage": bool(AV_KEY),
+            "massive":       bool(MASSIVE_KEY),
         },
         "tickers": {},
     }
@@ -380,15 +418,24 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
 
     if FMP_KEY:
         try:
-            stable_url = f"https://financialmodelingprep.com/stable/historical-price-eod/full?symbol={ticker_0}&from={DATE_FROM}&to={DATE_TO}&apikey={FMP_KEY}"
-            resp = httpx.get(stable_url, timeout=15.0)
-            raw_tests["fmp_stable"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
+            url = f"https://financialmodelingprep.com/stable/historical-price-eod/full?symbol={ticker_0}&apikey={FMP_KEY}"
+            resp = httpx.get(url, timeout=15.0)
+            raw_tests["fmp"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
         except Exception as e:
             raw_tests["fmp_stable"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
 
     if MASSIVE_KEY:
         try:
             url = f"{MASSIVE_BASE}/v2/aggs/ticker/{ticker_0}/range/1/day/{DATE_FROM}/{DATE_TO}?adjusted=true&sort=asc&apiKey={MASSIVE_KEY}"
+            resp = httpx.get(url, timeout=15.0)
+            raw_tests["massive"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
+        except Exception as e:
+            raw_tests["massive"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
+
+    if MASSIVE_KEY:
+        try:
+            url = (f"{MASSIVE_BASE}/v2/aggs/ticker/{ticker_0}/range/1/day"
+                   f"/{DATE_FROM}/{DATE_TO}?apiKey={MASSIVE_KEY}")
             resp = httpx.get(url, timeout=15.0)
             raw_tests["massive"] = f"http_status={resp.status_code}, body={resp.text[:300]}"
         except Exception as e:
@@ -502,6 +549,19 @@ def _compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def _build_stock_context(ticker: str, row: pd.Series, df: pd.DataFrame,
                          benchmarks: dict | None = None) -> dict:
+    loc = df.index.get_loc(row.name)
+    idx = loc if isinstance(loc, int) else (loc.start if isinstance(loc, slice) else int(np.argmax(loc)))
+    prev_macd_hist = None
+    if idx >= 1:
+        prev_row = df.iloc[idx - 1]
+        if pd.notna(prev_row.get("_macd_hist")):
+            prev_macd_hist = round(float(prev_row["_macd_hist"]), 4)
+
+    week_return = None
+    if idx >= 5:
+        week_ago_close = float(df.iloc[idx - 5]["close"])
+        week_return = round((float(row["close"]) - week_ago_close) / week_ago_close * 100, 2)
+
     return {
         "identifier":     ticker,
         "current_price":  float(row["close"]),
@@ -511,11 +571,13 @@ def _build_stock_context(ticker: str, row: pd.Series, df: pd.DataFrame,
             "macd_line":         round(float(row["_macd_line"]), 4) if pd.notna(row.get("_macd_line")) else None,
             "macd_signal":       round(float(row["_macd_sig"]), 4)  if pd.notna(row.get("_macd_sig")) else None,
             "macd_hist":         round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
+            "prev_macd_hist":    prev_macd_hist,
             "bb_upper":          round(float(row["_bb_upper"]), 2)  if pd.notna(row.get("_bb_upper")) else None,
             "bb_middle":         round(float(row["_bb_middle"]), 2) if pd.notna(row.get("_bb_middle")) else None,
             "bb_lower":          round(float(row["_bb_lower"]), 2)  if pd.notna(row.get("_bb_lower")) else None,
             "price_vs_sma50_pct": round(float(row["price_vs_sma50"]), 2) if pd.notna(row.get("price_vs_sma50")) else None,
             "volume_ratio":      round(float(row["volume_ratio"]), 2)    if pd.notna(row.get("volume_ratio")) else None,
+            "week_return_pct":   week_return,
         },
         "market_benchmarks": benchmarks or {},
         "news_headlines": [],
@@ -578,6 +640,8 @@ def _build_crypto_context(symbol: str, row: pd.Series, fear_greed: dict | None =
 
 # ─── Core: call Claude on a historical data point ───────────────────────────
 
+_recent_errors: list[str] = []
+
 def _score_with_claude(
     asset_type: str,
     identifier: str,
@@ -602,11 +666,17 @@ def _score_with_claude(
                 response_model=CryptoSignal,
             )
     except Exception as e:
-        logger.error("Claude scoring failed for {}/{}: {}", asset_type, identifier, e)
+        import traceback
+        err_detail = f"{asset_type}/{identifier}: {type(e).__name__}: {str(e)[:300]}"
+        logger.error("Claude scoring failed — {}", err_detail)
+        if len(_recent_errors) < 10:
+            _recent_errors.append(err_detail)
         return None
 
 
 # ─── Evaluate outcome against actual future prices ──────────────────────────
+
+MAX_HOLD_DAYS = {"intraday": 2, "swing": 10, "longterm": 25}
 
 def _evaluate_claude_signal(
     signal: ClaudeSignalResult,
@@ -617,38 +687,101 @@ def _evaluate_claude_signal(
         signal.outcome = "HOLD"
         return signal
 
-    eval_days = EVAL_WINDOWS.get(signal.time_horizon, 5)
-    exit_idx = min(sample_idx + eval_days, len(df) - 1)
+    max_days = MAX_HOLD_DAYS.get(signal.time_horizon, 10)
+    end_idx = min(sample_idx + max_days, len(df) - 1)
 
-    if exit_idx <= sample_idx:
+    if end_idx <= sample_idx:
         signal.outcome = "PENDING"
         return signal
 
-    exit_price = float(df.iloc[exit_idx]["close"])
-    signal.exit_price = exit_price
+    stop_pct = signal.stop_loss_pct / 100.0
+    tp_pct = signal.take_profit_pct / 100.0
+    entry = signal.entry_price
 
-    pct_change = (exit_price - signal.entry_price) / signal.entry_price
-    signal.return_pct = round(pct_change * 100, 4)
+    max_favorable = 0.0
+    max_adverse = 0.0
+    trailing_activated = False
+    trailing_peak = 0.0
 
-    key = (signal.asset_class, signal.time_horizon)
-    win_thresh  = WIN_THRESHOLDS.get(key, 0.02)
-    loss_thresh = LOSS_THRESHOLDS.get(key, 0.05)
+    for i in range(sample_idx + 1, end_idx + 1):
+        high = float(df.iloc[i]["high"])
+        low = float(df.iloc[i]["low"])
+        close = float(df.iloc[i]["close"])
 
-    if signal.direction == "BUY":
-        if pct_change >= win_thresh:
+        if signal.direction == "BUY":
+            run_up = (high - entry) / entry
+            drawdown = (entry - low) / entry
+            current_pnl = (close - entry) / entry
+            max_favorable = max(max_favorable, run_up)
+            max_adverse = max(max_adverse, drawdown)
+
+            if drawdown >= stop_pct:
+                signal.exit_price = round(entry * (1 - stop_pct), 4)
+                signal.return_pct = round(-stop_pct * 100, 4)
+                signal.outcome = "LOSS"
+                signal.exit_reason = f"stop_loss at -{signal.stop_loss_pct}%"
+                break
+
+            if run_up >= tp_pct:
+                trailing_activated = True
+                trailing_peak = max(trailing_peak, run_up)
+
+            if trailing_activated:
+                trailing_peak = max(trailing_peak, run_up)
+                trail_stop = trailing_peak * 0.5
+                if current_pnl < trailing_peak - trail_stop:
+                    signal.exit_price = close
+                    signal.return_pct = round(current_pnl * 100, 4)
+                    signal.outcome = "WIN"
+                    signal.exit_reason = f"trailing_stop at +{signal.return_pct}% (peak +{round(trailing_peak*100,1)}%)"
+                    break
+
+        elif signal.direction == "SELL":
+            run_up = (entry - low) / entry
+            drawdown = (high - entry) / entry
+            current_pnl = (entry - close) / entry
+            max_favorable = max(max_favorable, run_up)
+            max_adverse = max(max_adverse, drawdown)
+
+            if drawdown >= stop_pct:
+                signal.exit_price = round(entry * (1 + stop_pct), 4)
+                signal.return_pct = round(-stop_pct * 100, 4)
+                signal.outcome = "LOSS"
+                signal.exit_reason = f"stop_loss at -{signal.stop_loss_pct}%"
+                break
+
+            if run_up >= tp_pct:
+                trailing_activated = True
+                trailing_peak = max(trailing_peak, run_up)
+
+            if trailing_activated:
+                trailing_peak = max(trailing_peak, run_up)
+                trail_stop = trailing_peak * 0.5
+                if current_pnl < trailing_peak - trail_stop:
+                    signal.exit_price = close
+                    signal.return_pct = round(current_pnl * 100, 4)
+                    signal.outcome = "WIN"
+                    signal.exit_reason = f"trailing_stop at +{signal.return_pct}% (peak +{round(trailing_peak*100,1)}%)"
+                    break
+
+    else:
+        close = float(df.iloc[end_idx]["close"])
+        if signal.direction == "BUY":
+            pnl = (close - entry) / entry
+        else:
+            pnl = (entry - close) / entry
+        signal.exit_price = close
+        signal.return_pct = round(pnl * 100, 4)
+        signal.exit_reason = f"max_hold_{max_days}d"
+        if pnl > 0.005:
             signal.outcome = "WIN"
-        elif pct_change <= -loss_thresh:
+        elif pnl < -0.005:
             signal.outcome = "LOSS"
         else:
             signal.outcome = "NEUTRAL"
-    elif signal.direction == "SELL":
-        if pct_change <= -win_thresh:
-            signal.outcome = "WIN"
-        elif pct_change >= loss_thresh:
-            signal.outcome = "LOSS"
-        else:
-            signal.outcome = "NEUTRAL"
 
+    signal.max_favorable = round(max_favorable * 100, 2)
+    signal.max_adverse = round(max_adverse * 100, 2)
     return signal
 
 
@@ -672,6 +805,8 @@ def run_claude_backtest(
 
     _anthropic = anthropic.Anthropic(api_key=api_key)
     claude_client = instructor.from_anthropic(_anthropic)
+
+    _recent_errors.clear()
 
     results: list[ClaudeSignalResult] = []
     api_calls = 0
@@ -720,43 +855,65 @@ def run_claude_backtest(
 
     for ticker, df in stock_data.items():
         for date_str in sample_dates:
-            target = pd.Timestamp(date_str)
-            idx = df.index.get_indexer([target], method="ffill")[0]
-            if idx < 0 or idx < 50:
-                logger.debug("[claude_backtest] Skipping {}/{}: idx={} (need >= 50 for indicators)", ticker, date_str, idx)
-                continue
+            try:
+                target = pd.Timestamp(date_str)
+                idx = df.index.get_indexer([target], method="ffill")[0]
+                if idx < 0 or idx < 50:
+                    logger.debug("[claude_backtest] Skipping {}/{}: idx={} (need >= 50 for indicators)", ticker, date_str, idx)
+                    continue
 
-            row = df.iloc[idx]
-            actual_date = str(df.index[idx].date())
-            benchmarks = _get_benchmarks_for_date(actual_date)
-            context = _build_stock_context(ticker, row, df, benchmarks=benchmarks)
+                row = df.iloc[idx]
+                actual_date = str(df.index[idx].date())
+                benchmarks = _get_benchmarks_for_date(actual_date)
+                context = _build_stock_context(ticker, row, df, benchmarks=benchmarks)
 
-            logger.info("[claude_backtest] Scoring {}/{} on {}", "stock", ticker, actual_date)
-            signal = _score_with_claude("stock", ticker, context, claude_client)
-            api_calls += 1
+                logger.info("[claude_backtest] Scoring {}/{} on {}", "stock", ticker, actual_date)
+                signal = _score_with_claude("stock", ticker, context, claude_client)
+                api_calls += 1
 
-            if signal is None:
+                if signal is None:
+                    errors += 1
+                    continue
+
+                sl_tp = {"intraday": (2.0, 4.0), "swing": (4.0, 10.0), "longterm": (6.0, 18.0)}
+                sl_pct, tp_pct = sl_tp.get(signal.time_horizon, (4.0, 10.0))
+                if signal.confidence >= 75:
+                    tp_pct *= 1.5
+                    sl_pct *= 1.25
+
+                weight = 1.0
+                if signal.confidence >= 75:
+                    weight = 2.0
+                elif signal.confidence >= 65:
+                    weight = 1.5
+
+                result = ClaudeSignalResult(
+                    ticker=ticker,
+                    asset_class="stock",
+                    sample_date=actual_date,
+                    direction=signal.direction,
+                    confidence=signal.confidence,
+                    time_horizon=signal.time_horizon,
+                    reasoning=signal.reasoning,
+                    entry_price=float(row["close"]),
+                    stop_loss_pct=sl_pct,
+                    take_profit_pct=tp_pct,
+                    position_weight=weight,
+                    rsi=round(float(row["_rsi"]), 2)       if pd.notna(row.get("_rsi")) else None,
+                    macd_hist=round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
+                    volume_ratio=round(float(row["volume_ratio"]), 2) if pd.notna(row.get("volume_ratio")) else None,
+                    change_24h=round(float(row["change_1d"]), 2) if pd.notna(row.get("change_1d")) else None,
+                )
+                result = _evaluate_claude_signal(result, df, idx)
+                results.append(result)
+
+                time.sleep(0.5)
+            except Exception as e:
+                err = f"stock/{ticker}/{date_str}: {type(e).__name__}: {str(e)[:200]}"
+                logger.error("[claude_backtest] {}", err)
+                if len(_recent_errors) < 10:
+                    _recent_errors.append(err)
                 errors += 1
-                continue
-
-            result = ClaudeSignalResult(
-                ticker=ticker,
-                asset_class="stock",
-                sample_date=actual_date,
-                direction=signal.direction,
-                confidence=signal.confidence,
-                time_horizon=signal.time_horizon,
-                reasoning=signal.reasoning,
-                entry_price=float(row["close"]),
-                rsi=round(float(row["_rsi"]), 2)       if pd.notna(row.get("_rsi")) else None,
-                macd_hist=round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
-                volume_ratio=round(float(row["volume_ratio"]), 2) if pd.notna(row.get("volume_ratio")) else None,
-                change_24h=round(float(row["change_1d"]), 2) if pd.notna(row.get("change_1d")) else None,
-            )
-            result = _evaluate_claude_signal(result, df, idx)
-            results.append(result)
-
-            time.sleep(0.5)
 
     # ── Crypto ───────────────────────────────────────────────────────────────
     crypto_data: dict[str, pd.DataFrame] = {}
@@ -770,45 +927,63 @@ def run_claude_backtest(
 
     for symbol, df in crypto_data.items():
         for date_str in sample_dates:
-            target = pd.Timestamp(date_str)
-            idx = df.index.get_indexer([target], method="ffill")[0]
-            if idx < 0 or idx < 50:
-                continue
+            try:
+                target = pd.Timestamp(date_str)
+                idx = df.index.get_indexer([target], method="ffill")[0]
+                if idx < 0 or idx < 50:
+                    continue
 
-            row = df.iloc[idx]
-            actual_date = str(df.index[idx].date())
-            fg = _lookup_fear_greed(fg_history, actual_date)
-            context = _build_crypto_context(symbol, row, fear_greed=fg)
+                row = df.iloc[idx]
+                actual_date = str(df.index[idx].date())
+                fg = _lookup_fear_greed(fg_history, actual_date)
+                context = _build_crypto_context(symbol, row, fear_greed=fg)
 
-            logger.info("[claude_backtest] Scoring {}/{} on {}", "crypto", symbol, actual_date)
-            signal = _score_with_claude("crypto", symbol, context, claude_client)
-            api_calls += 1
+                logger.info("[claude_backtest] Scoring {}/{} on {}", "crypto", symbol, actual_date)
+                signal = _score_with_claude("crypto", symbol, context, claude_client)
+                api_calls += 1
 
-            if signal is None:
+                if signal is None:
+                    errors += 1
+                    continue
+
+                weight = 1.0
+                if signal.confidence >= 75:
+                    weight = 2.0
+                elif signal.confidence >= 65:
+                    weight = 1.5
+
+                result = ClaudeSignalResult(
+                    ticker=symbol,
+                    asset_class="crypto",
+                    sample_date=actual_date,
+                    direction=signal.direction,
+                    confidence=signal.confidence,
+                    time_horizon=signal.time_horizon,
+                    reasoning=signal.reasoning,
+                    entry_price=float(row["close"]),
+                    stop_loss_pct=6.0,
+                    take_profit_pct=12.0,
+                    position_weight=weight,
+                    rsi=round(float(row["_rsi"]), 2)       if pd.notna(row.get("_rsi")) else None,
+                    macd_hist=round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
+                    volume_ratio=round(float(row["volume_ratio"]), 2) if pd.notna(row.get("volume_ratio")) else None,
+                    change_24h=round(float(row["change_1d"]), 2) if pd.notna(row.get("change_1d")) else None,
+                )
+                result = _evaluate_claude_signal(result, df, idx)
+                results.append(result)
+
+                time.sleep(0.5)
+            except Exception as e:
+                err = f"crypto/{symbol}/{date_str}: {type(e).__name__}: {str(e)[:200]}"
+                logger.error("[claude_backtest] {}", err)
+                if len(_recent_errors) < 10:
+                    _recent_errors.append(err)
                 errors += 1
-                continue
-
-            result = ClaudeSignalResult(
-                ticker=symbol,
-                asset_class="crypto",
-                sample_date=actual_date,
-                direction=signal.direction,
-                confidence=signal.confidence,
-                time_horizon=signal.time_horizon,
-                reasoning=signal.reasoning,
-                entry_price=float(row["close"]),
-                rsi=round(float(row["_rsi"]), 2)       if pd.notna(row.get("_rsi")) else None,
-                macd_hist=round(float(row["_macd_hist"]), 4) if pd.notna(row.get("_macd_hist")) else None,
-                volume_ratio=round(float(row["volume_ratio"]), 2) if pd.notna(row.get("volume_ratio")) else None,
-                change_24h=round(float(row["change_1d"]), 2) if pd.notna(row.get("change_1d")) else None,
-            )
-            result = _evaluate_claude_signal(result, df, idx)
-            results.append(result)
-
-            time.sleep(0.5)
 
     # ── Aggregate results ────────────────────────────────────────────────────
     agg = _aggregate_claude_results(results, api_calls, errors)
+    if _recent_errors:
+        agg["error_samples"] = list(_recent_errors)
 
     json_path = str(Path(output_dir) / "claude_backtest_results.json")
     with open(json_path, "w") as f:
@@ -852,22 +1027,34 @@ def _aggregate_claude_results(
             "win_rate": round(len(h_wins) / len(h_decided) * 100, 1) if h_decided else None,
         }
 
+    avg_win = float(np.mean([r.return_pct for r in wins])) if wins else 0
+    avg_loss = float(np.mean([abs(r.return_pct) for r in losses])) if losses else 0
+    profit_factor = round(sum(r.return_pct for r in wins) / abs(sum(r.return_pct for r in losses)), 2) if losses else 999.0
+
+    portfolio_sim = _simulate_portfolio(actionable)
+
     signal_details = []
     for r in results:
         signal_details.append({
-            "ticker":       r.ticker,
-            "asset_class":  r.asset_class,
-            "date":         r.sample_date,
-            "direction":    r.direction,
-            "confidence":   r.confidence,
-            "time_horizon": r.time_horizon,
-            "entry_price":  r.entry_price,
-            "exit_price":   r.exit_price,
-            "return_pct":   r.return_pct,
-            "outcome":      r.outcome,
-            "reasoning":    r.reasoning[:200],
-            "rsi":          r.rsi,
-            "macd_hist":    r.macd_hist,
+            "ticker":          r.ticker,
+            "asset_class":     r.asset_class,
+            "date":            r.sample_date,
+            "direction":       r.direction,
+            "confidence":      r.confidence,
+            "time_horizon":    r.time_horizon,
+            "entry_price":     r.entry_price,
+            "exit_price":      r.exit_price,
+            "return_pct":      r.return_pct,
+            "outcome":         r.outcome,
+            "exit_reason":     r.exit_reason,
+            "stop_loss_pct":   r.stop_loss_pct,
+            "take_profit_pct": r.take_profit_pct,
+            "max_favorable":   r.max_favorable,
+            "max_adverse":     r.max_adverse,
+            "position_weight": r.position_weight,
+            "reasoning":       r.reasoning[:200],
+            "rsi":             r.rsi,
+            "macd_hist":       r.macd_hist,
         })
 
     return {
@@ -886,7 +1073,11 @@ def _aggregate_claude_results(
         "neutral":          len(neutral),
         "win_rate":         round(win_rate, 1),
         "avg_return_pct":   round(avg_return, 3),
+        "avg_win_pct":      round(avg_win, 2),
+        "avg_loss_pct":     round(avg_loss, 2),
+        "profit_factor":    profit_factor,
         "hold_rate":        round(len(holds) / len(results) * 100, 1) if results else 0,
+        "portfolio_sim":    portfolio_sim,
         "by_asset_class": {
             "stocks": {
                 "decided":  len(stock_decided),
@@ -899,6 +1090,58 @@ def _aggregate_claude_results(
         },
         "by_time_horizon": by_horizon,
         "signals": signal_details,
+    }
+
+
+def _simulate_portfolio(
+    actionable: list[ClaudeSignalResult],
+    starting_balance: float = 1000.0,
+    base_position_pct: float = 0.15,
+) -> dict:
+    """Simulate a $1k portfolio using confidence-weighted position sizing."""
+    balance = starting_balance
+    peak_balance = starting_balance
+    max_drawdown = 0.0
+    trade_log: list[dict] = []
+
+    by_date: dict[str, list[ClaudeSignalResult]] = {}
+    for r in actionable:
+        by_date.setdefault(r.sample_date, []).append(r)
+
+    for date_str in sorted(by_date.keys()):
+        trades = by_date[date_str]
+        for t in trades:
+            if t.return_pct is None:
+                continue
+            position_size = balance * base_position_pct * t.position_weight
+            pnl = position_size * (t.return_pct / 100.0)
+            balance += pnl
+            peak_balance = max(peak_balance, balance)
+            dd = (peak_balance - balance) / peak_balance * 100
+            max_drawdown = max(max_drawdown, dd)
+
+            trade_log.append({
+                "date": date_str,
+                "ticker": t.ticker,
+                "direction": t.direction,
+                "confidence": t.confidence,
+                "weight": t.position_weight,
+                "position_size": round(position_size, 2),
+                "return_pct": t.return_pct,
+                "pnl": round(pnl, 2),
+                "balance": round(balance, 2),
+                "exit_reason": t.exit_reason,
+            })
+
+    total_return = (balance - starting_balance) / starting_balance * 100
+
+    return {
+        "starting_balance": starting_balance,
+        "final_balance": round(balance, 2),
+        "total_return_pct": round(total_return, 2),
+        "max_drawdown_pct": round(max_drawdown, 2),
+        "total_trades": len(trade_log),
+        "trade_log": trade_log,
     }
 
 

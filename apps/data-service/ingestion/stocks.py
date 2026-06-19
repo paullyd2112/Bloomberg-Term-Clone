@@ -23,10 +23,12 @@ load_dotenv()
 FINNHUB_KEY    = os.environ.get("FINNHUB_API_KEY", "")
 FMP_KEY        = os.environ.get("FMP_API_KEY", "")
 AV_KEY         = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
+MASSIVE_KEY    = os.environ.get("_MASSIVE_API_KEY", "")
 FINNHUB_URL    = "https://finnhub.io/api/v1/company-news"
 FINNHUB_CANDLE = "https://finnhub.io/api/v1/stock/candle"
 FMP_QUOTE_URL  = "https://financialmodelingprep.com/api/v3/quote"
 AV_URL         = "https://www.alphavantage.co/query"
+MASSIVE_BASE   = "https://api.massive.com"
 TICKER_DELAY_S = 0.5   # stay well under rate limits
 
 DEFAULT_WATCHLIST = [
@@ -116,11 +118,26 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
     volume_sma = float(volume_sma_raw) if pd.notna(volume_sma_raw) and volume_sma_raw else None
     vol_ratio  = (float(latest["volume"]) / volume_sma) if volume_sma else None
 
+    def _prev_col(prefix: str) -> float | None:
+        match = [c for c in df.columns if c.startswith(prefix.lower())]
+        if not match:
+            return None
+        val = prev[match[0]]
+        return float(val) if pd.notna(val) else None
+
+    week_return = None
+    if len(df) >= 6:
+        week_ago = df.iloc[-6]
+        week_return = round(
+            (float(latest["close"]) - float(week_ago["close"])) / float(week_ago["close"]) * 100, 2
+        )
+
     return {
         "rsi_14":              _col("rsi_"),
         "macd_line":           _col("macd_"),
         "macd_signal":         _col("macds_"),
         "macd_hist":           _col("macdh_"),
+        "prev_macd_hist":      _prev_col("macdh_"),
         "bb_upper":            _col("bbu_"),
         "bb_middle":           _col("bbm_"),
         "bb_lower":            _col("bbl_"),
@@ -130,6 +147,7 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
         "sma_50":              float(latest["sma_50"]) if pd.notna(latest["sma_50"]) else None,
         "price_vs_sma50_pct":  round(float(latest["price_vs_sma50_pct"]), 2)
                                if pd.notna(latest["price_vs_sma50_pct"]) else None,
+        "week_return_pct":     week_return,
         "close":               float(latest["close"]),
         "volume":              float(latest["volume"]),
         "change_1d_pct":       round(
@@ -187,26 +205,25 @@ def _fetch_ohlcv_finnhub(ticker: str) -> pd.DataFrame | None:
 
 
 def _fetch_ohlcv_fmp(ticker: str) -> pd.DataFrame | None:
-    """FMP historical daily — fallback when yfinance is unavailable."""
+    """FMP historical daily via stable endpoint."""
     if not FMP_KEY:
         return None
     try:
-        from datetime import timedelta
-        end   = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        start = (datetime.now(timezone.utc) - timedelta(days=90)).strftime("%Y-%m-%d")
         resp = httpx.get(
-            f"https://financialmodelingprep.com/api/v3/historical-price-full/{ticker}",
-            params={"from": start, "to": end, "apikey": FMP_KEY},
+            "https://financialmodelingprep.com/stable/historical-price-eod/full",
+            params={"symbol": ticker, "apikey": FMP_KEY},
             timeout=15.0,
         )
         resp.raise_for_status()
-        hist = resp.json().get("historical", [])
+        data = resp.json()
+        hist = data if isinstance(data, list) else data.get("historical", [])
         if not hist:
             return None
         df = pd.DataFrame(hist)
         df["date"] = pd.to_datetime(df["date"])
         df = df.sort_values("date").set_index("date")
         df.columns = [c.lower() for c in df.columns]
+        df = df.tail(90)
         return df[["open", "high", "low", "close", "volume"]]
     except Exception as e:
         logger.debug("{}: FMP OHLCV failed — {}", ticker, e)
@@ -214,13 +231,13 @@ def _fetch_ohlcv_fmp(ticker: str) -> pd.DataFrame | None:
 
 
 def _fetch_ohlcv_av(ticker: str) -> pd.DataFrame | None:
-    """Alpha Vantage daily adjusted — last-resort fallback."""
+    """Alpha Vantage daily (free tier)."""
     if not AV_KEY:
         return None
     try:
         resp = httpx.get(
             AV_URL,
-            params={"function": "TIME_SERIES_DAILY_ADJUSTED", "symbol": ticker,
+            params={"function": "TIME_SERIES_DAILY", "symbol": ticker,
                     "outputsize": "compact", "apikey": AV_KEY},
             timeout=15.0,
         )
@@ -231,7 +248,7 @@ def _fetch_ohlcv_av(ticker: str) -> pd.DataFrame | None:
         rows = [
             {"date": pd.Timestamp(d), "open": float(v["1. open"]),
              "high": float(v["2. high"]), "low": float(v["3. low"]),
-             "close": float(v["5. adjusted close"]), "volume": float(v["6. volume"])}
+             "close": float(v["4. close"]), "volume": float(v["5. volume"])}
             for d, v in ts.items()
         ]
         df = pd.DataFrame(rows).sort_values("date").set_index("date")
@@ -241,13 +258,44 @@ def _fetch_ohlcv_av(ticker: str) -> pd.DataFrame | None:
         return None
 
 
+def _fetch_ohlcv_massive(ticker: str) -> pd.DataFrame | None:
+    """Massive aggregate bars — EOD on free plan."""
+    if not MASSIVE_KEY:
+        return None
+    try:
+        end = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        start = (datetime.now(timezone.utc) - timedelta(days=90)).strftime("%Y-%m-%d")
+        resp = httpx.get(
+            f"{MASSIVE_BASE}/v2/aggs/ticker/{ticker}/range/1/day/{start}/{end}",
+            params={"apiKey": MASSIVE_KEY},
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        results = resp.json().get("results", [])
+        if not results:
+            return None
+        rows = []
+        for r in results:
+            rows.append({
+                "date": pd.Timestamp(r["t"], unit="ms").tz_localize(None),
+                "open": r["o"], "high": r["h"], "low": r["l"],
+                "close": r["c"], "volume": r.get("v", 0),
+            })
+        df = pd.DataFrame(rows).sort_values("date").set_index("date")
+        return df[["open", "high", "low", "close", "volume"]]
+    except Exception as e:
+        logger.debug("{}: Massive OHLCV failed — {}", ticker, e)
+        return None
+
+
 def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
-    """Fetch from ALL 4 sources, merge into one DataFrame for best coverage."""
+    """Fetch from ALL 5 sources, merge into one DataFrame for best coverage."""
     sources = [
         ("yfinance",      _fetch_ohlcv_yfinance),
         ("Finnhub",       _fetch_ohlcv_finnhub),
         ("FMP",           _fetch_ohlcv_fmp),
         ("Alpha Vantage", _fetch_ohlcv_av),
+        ("Massive",       _fetch_ohlcv_massive),
     ]
     frames: list[pd.DataFrame] = []
     for name, fn in sources:
@@ -263,7 +311,7 @@ def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
             logger.debug("{}: {} — error: {}", ticker, name, e)
 
     if not frames:
-        logger.warning("{}: ALL 4 sources returned no data", ticker)
+        logger.warning("{}: ALL 5 sources returned no data", ticker)
         return None
 
     merged = frames[0]
