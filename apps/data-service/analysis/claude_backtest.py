@@ -98,8 +98,8 @@ class StockSignal(BaseModel):
     confidence:      int    = Field(..., ge=0, le=100)
     reasoning:       str    = Field(..., min_length=20)
     time_horizon:    Literal["intraday", "swing", "longterm"]
-    stop_loss_pct:   float  = Field(default=4.0, ge=0.5, le=15.0)
-    take_profit_pct: float  = Field(default=8.0, ge=1.0, le=50.0)
+    stop_loss_pct:   float | None = Field(default=None)
+    take_profit_pct: float | None = Field(default=None)
     key_risk:        str
     news_context:    list[str] = Field(default_factory=list, max_length=3)
 
@@ -802,8 +802,10 @@ def run_claude_backtest(
                 errors += 1
                 continue
 
-            sl_pct = getattr(signal, "stop_loss_pct", 4.0)
-            tp_pct = getattr(signal, "take_profit_pct", 8.0)
+            defaults = {"intraday": (2.0, 4.0), "swing": (4.0, 8.0), "longterm": (6.0, 15.0)}
+            default_sl, default_tp = defaults.get(signal.time_horizon, (4.0, 8.0))
+            sl_pct = signal.stop_loss_pct if signal.stop_loss_pct and signal.stop_loss_pct > 0 else default_sl
+            tp_pct = signal.take_profit_pct if signal.take_profit_pct and signal.take_profit_pct > 0 else default_tp
 
             weight = 1.0
             if signal.confidence >= 75:
