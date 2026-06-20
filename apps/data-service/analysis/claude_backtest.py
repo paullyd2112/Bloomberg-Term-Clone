@@ -643,11 +643,11 @@ def _score_with_claude(
 # ─── Evaluate outcome against actual future prices ──────────────────────────
 
 CATASTROPHIC_STOP = {
-    ("stock", "intraday"):  0.05,
-    ("stock", "swing"):     0.08,
+    ("stock", "intraday"):  0.06,
+    ("stock", "swing"):     0.12,
     ("stock", "longterm"):  0.15,
-    ("crypto", "intraday"): 0.08,
-    ("crypto", "swing"):    0.12,
+    ("crypto", "intraday"): 0.10,
+    ("crypto", "swing"):    0.15,
     ("crypto", "longterm"): 0.20,
 }
 
