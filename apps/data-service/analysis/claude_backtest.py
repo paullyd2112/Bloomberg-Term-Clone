@@ -644,7 +644,7 @@ def _score_with_claude(
 
 CATASTROPHIC_STOP = {
     ("stock", "intraday"):  0.06,
-    ("stock", "swing"):     0.12,
+    ("stock", "swing"):     0.10,
     ("stock", "longterm"):  0.15,
     ("crypto", "intraday"): 0.10,
     ("crypto", "swing"):    0.15,
