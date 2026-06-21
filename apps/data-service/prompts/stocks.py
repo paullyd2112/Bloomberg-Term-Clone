@@ -6,6 +6,16 @@ Be direct and specific — reference actual indicator values in your reasoning.
 
 YOUR JOB IS TO FIND TRADES. You are NOT a risk committee. Most stocks on most days have a lean — find it and call it. Only issue HOLD when signals genuinely conflict with no lean in either direction.
 
+HARD GATE — MARKET REGIME:
+- CHECK SPY FIRST. If SPY is trading BELOW its SMA-50, the broad market is in a downtrend. In a bearish regime:
+  • Do NOT issue BUY signals. Default to SELL or HOLD.
+  • The only exception: a stock with RSI < 30 AND a fresh MACD bullish crossover (genuine capitulation bounce) — and even then, confidence capped at 68 and time horizon must be intraday or swing, never longterm.
+- If SPY is ABOVE its SMA-50, normal rules apply.
+
+CONFLUENCE REQUIREMENT:
+- A directional signal requires at LEAST 2 confirming factors from: trend (price vs SMA-50), momentum (MACD direction), volume (ratio > 1.2x), and RSI alignment.
+- Single-indicator setups are not enough for a signal. If only one factor supports the direction, HOLD.
+
 SIGNAL RULES:
 - TREND IS KING: price vs SMA-50 is your primary signal. If price > 5% above SMA-50, the stock is in an uptrend — default to BUY unless something specific overrides it. If price < 5% below SMA-50, default to SELL.
 - RSI < 30: oversold — BUY setup. RSI > 70 in an uptrend: momentum is strong, this is NOT a sell signal by itself.
@@ -19,12 +29,15 @@ SIGNAL RULES:
 - Price > 15% above SMA-50 with MACD line above signal: momentum breakout — BUY with high confidence (75+). Histogram direction is secondary here; the trend is the trade.
 - Price breaking above BB upper with MACD confirmation: breakout — BUY. Price breaking below BB lower: breakdown — SELL.
 
+CONFIDENCE FLOOR:
+- If you'd be less than 68 confidence in either direction, HOLD. Do not issue weak signals — only trade when you see a real edge.
+
 WHEN TO ISSUE DIRECTIONAL SIGNALS:
-- Trend alignment (price vs SMA-50) + MACD agreement (both bullish or both bearish) = strong signal at 70+.
-- Strong trend (>10% above/below SMA-50) + positive MACD = directional signal at 65-70.
-- MACD crossover alone is enough for a signal at 65-70 confidence.
-- RSI extreme (<30) + MACD turning = strong BUY at 70+.
-- 2+ signals agreeing with NO divergence: 75-85 confidence.
+- Trend alignment (price vs SMA-50) + MACD agreement (both bullish or both bearish) = strong signal at 72+.
+- Strong trend (>10% above/below SMA-50) + positive MACD + volume confirmation = directional signal at 70-75.
+- MACD crossover + one confirming factor = signal at 68-72 confidence.
+- RSI extreme (<30) + MACD turning = strong BUY at 72+.
+- 3+ signals agreeing with NO divergence: 78-88 confidence.
 
 WHEN TO HOLD:
 - RSI between 40-60 AND price within 3% of SMA-50 AND flat MACD — genuinely no edge.
@@ -32,7 +45,8 @@ WHEN TO HOLD:
 - WEAK trend (5-12% above SMA-50) with MACD line below signal and deepening — wait for resolution.
 - Earnings within 48h — too much event risk.
 - 24h change > +8% or < -8% — gap move, let it settle.
-- If you'd be less than 58 confidence in either direction, HOLD.
+- Only one indicator supports the trade (no confluence) — HOLD.
+- SPY below SMA-50 (bearish regime) — default HOLD/SELL unless capitulation bounce.
 
 TIME HORIZONS:
 - Momentum breakouts (>20% above SMA-50 with MACD confirming): swing or longterm. Let winners run.
@@ -111,7 +125,11 @@ def build_user_prompt(context: dict) -> str:
         for sym, bm in benchmarks.items():
             if bm.get("price") is not None:
                 chg = f"{bm['change_24h']:+.2f}%" if bm.get("change_24h") is not None else "N/A"
-                lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg})")
+                sma_note = ""
+                if bm.get("vs_sma50_pct") is not None:
+                    regime = "ABOVE" if bm["vs_sma50_pct"] > 0 else "BELOW"
+                    sma_note = f" | {bm['vs_sma50_pct']:+.1f}% vs SMA-50 ({regime})"
+                lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg}){sma_note}")
 
     macro = context.get("upcoming_macro", [])
     if macro:

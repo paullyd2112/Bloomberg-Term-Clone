@@ -539,7 +539,7 @@ def score_crypto() -> str:
         logger.error("score_crypto: failed to fetch identifiers — {}", e)
         return "failed to fetch identifiers"
 
-    core_always_score = {"BTC", "ETH", "SOL", "XRP", "DOGE"}
+    core_always_score = {"BTC", "ETH", "SOL", "XRP", "ADA"}
     fg = _get_fear_greed()
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0

@@ -66,8 +66,8 @@ CRYPTO_ASSETS = [
     ("BTC", "bitcoin"),
     ("ETH", "ethereum"),
     ("SOL", "solana"),
-    ("DOGE", "dogecoin"),
-    ("PEPE", "pepe"),
+    ("XRP", "ripple"),
+    ("ADA", "cardano"),
 ]
 
 EVAL_WINDOWS = {
@@ -604,6 +604,43 @@ def _build_crypto_context(symbol: str, row: pd.Series, fear_greed: dict | None =
     }
 
 
+# ─── Regime filters ────────────────────────────────────────────────────────
+
+def _spy_regime_bearish(benchmark_data: dict, date_str: str) -> bool:
+    """Return True if SPY is below its SMA-50 on this date — bearish regime."""
+    spy_df = benchmark_data.get("SPY")
+    if spy_df is None:
+        return False
+    target = pd.Timestamp(date_str)
+    idx = spy_df.index.get_indexer([target], method="ffill")[0]
+    if idx < 0:
+        return False
+    row = spy_df.iloc[idx]
+    sma50 = row.get("sma_50")
+    if pd.isna(sma50) or sma50 is None:
+        return False
+    return float(row["close"]) < float(sma50)
+
+
+def _btc_regime_bearish(crypto_data: dict, date_str: str) -> bool:
+    """Return True if BTC MACD histogram is negative and deepening — bearish regime.
+    Used to gate alt-crypto longs."""
+    btc_df = crypto_data.get("BTC")
+    if btc_df is None:
+        return False
+    target = pd.Timestamp(date_str)
+    idx = btc_df.index.get_indexer([target], method="ffill")[0]
+    if idx < 1:
+        return False
+    row = btc_df.iloc[idx]
+    prev = btc_df.iloc[idx - 1]
+    hist = row.get("_macd_hist")
+    prev_hist = prev.get("_macd_hist")
+    if pd.isna(hist) or pd.isna(prev_hist):
+        return False
+    return float(hist) < 0 and float(hist) < float(prev_hist)
+
+
 # ─── Core: call Claude on a historical data point ───────────────────────────
 
 _recent_errors: list[str] = []
@@ -658,6 +695,17 @@ STOCK_WINDOWS = {"intraday": 2, "swing": 8, "longterm": 20}
 CRYPTO_WINDOWS = {"intraday": 1, "swing": 6, "longterm": 14}
 CRYPTO_DEAD_ZONE = 0.015
 
+# ─── Win-rate levers ───────────────────────────────────────────────────────
+CONVICTION_FLOOR = 68  # Ignore signals below this confidence
+
+# Extended windows for high-conviction longterm calls ("let winners run")
+EXTENDED_STOCK_LONGTERM = 30   # was 20
+EXTENDED_CRYPTO_LONGTERM = 21  # was 14
+
+# Portfolio-level circuit breaker: exit all positions if cumulative
+# drawdown from peak exceeds this threshold.
+PORTFOLIO_CIRCUIT_BREAKER_PCT = 15.0
+
 
 def _evaluate_claude_signal(
     signal: ClaudeSignalResult,
@@ -682,8 +730,11 @@ def _evaluate_stock_signal(
     """
     Stock eval: real OHLC data. Check price at end of window, exit early only
     on a catastrophic intraday move (real high/low data supports this).
+    High-conviction longterm calls get extended windows to let winners run.
     """
     max_days = STOCK_WINDOWS.get(signal.time_horizon, 8)
+    if signal.time_horizon == "longterm" and signal.confidence >= 75:
+        max_days = EXTENDED_STOCK_LONGTERM
     end_idx = min(sample_idx + max_days, len(df) - 1)
 
     if end_idx <= sample_idx:
@@ -753,8 +804,11 @@ def _evaluate_crypto_signal(
     Crypto eval: close-to-close only. CoinGecko has no real intraday highs/lows,
     so we can't honestly check catastrophic stops — grade purely on direction at
     window end. Shorter windows, wider dead zone to ignore crypto noise.
+    High-conviction longterm calls get extended windows.
     """
     max_days = CRYPTO_WINDOWS.get(signal.time_horizon, 6)
+    if signal.time_horizon == "longterm" and signal.confidence >= 75:
+        max_days = EXTENDED_CRYPTO_LONGTERM
     end_idx = min(sample_idx + max_days, len(df) - 1)
 
     if end_idx <= sample_idx:
@@ -858,11 +912,17 @@ def run_claude_backtest(
             bidx = bdf.index.get_indexer([target], method="ffill")[0]
             if bidx >= 0:
                 brow = bdf.iloc[bidx]
-                bm[sym] = {
+                entry = {
                     "price": round(float(brow["close"]), 2),
                     "change_24h": round(float(brow["change_1d"]), 2) if pd.notna(brow.get("change_1d")) else None,
                 }
+                if pd.notna(brow.get("price_vs_sma50")):
+                    entry["vs_sma50_pct"] = round(float(brow["price_vs_sma50"]), 2)
+                bm[sym] = entry
         return bm
+
+    regime_filtered = 0
+    conviction_filtered = 0
 
     for ticker, df in stock_data.items():
         for date_str in sample_dates:
@@ -886,6 +946,20 @@ def run_claude_backtest(
                     errors += 1
                     continue
 
+                # ── Conviction floor: skip low-confidence signals ──
+                if signal.direction != "HOLD" and signal.confidence < CONVICTION_FLOOR:
+                    conviction_filtered += 1
+                    logger.info("[claude_backtest] {} {} filtered: confidence {} < floor {}",
+                                ticker, actual_date, signal.confidence, CONVICTION_FLOOR)
+                    continue
+
+                # ── SPY regime gate: suppress BUY in bearish regime ──
+                if signal.direction == "BUY" and _spy_regime_bearish(benchmark_data, actual_date):
+                    regime_filtered += 1
+                    logger.info("[claude_backtest] {} {} BUY suppressed: SPY below SMA-50 (bearish regime)",
+                                ticker, actual_date)
+                    signal.direction = "HOLD"
+
                 sl_tp = {"intraday": (3.0, 6.0), "swing": (7.0, 16.0), "longterm": (10.0, 25.0)}
                 sl_pct, tp_pct = sl_tp.get(signal.time_horizon, (7.0, 16.0))
                 if signal.confidence >= 75:
@@ -895,7 +969,7 @@ def run_claude_backtest(
                 weight = 1.0
                 if signal.confidence >= 75:
                     weight = 2.0
-                elif signal.confidence >= 65:
+                elif signal.confidence >= 68:
                     weight = 1.5
 
                 result = ClaudeSignalResult(
@@ -936,6 +1010,8 @@ def run_claude_backtest(
 
     fg_history = _fetch_fear_greed_history() if crypto_data else {}
 
+    btc_gated = 0
+
     for symbol, df in crypto_data.items():
         for date_str in sample_dates:
             try:
@@ -957,10 +1033,24 @@ def run_claude_backtest(
                     errors += 1
                     continue
 
+                # ── Conviction floor ──
+                if signal.direction != "HOLD" and signal.confidence < CONVICTION_FLOOR:
+                    conviction_filtered += 1
+                    logger.info("[claude_backtest] {} {} filtered: confidence {} < floor {}",
+                                symbol, actual_date, signal.confidence, CONVICTION_FLOOR)
+                    continue
+
+                # ── BTC regime gate: suppress alt BUYs when BTC is breaking down ──
+                if symbol != "BTC" and signal.direction == "BUY" and _btc_regime_bearish(crypto_data, actual_date):
+                    btc_gated += 1
+                    logger.info("[claude_backtest] {} {} BUY suppressed: BTC bearish regime",
+                                symbol, actual_date)
+                    signal.direction = "HOLD"
+
                 weight = 1.0
                 if signal.confidence >= 75:
                     weight = 2.0
-                elif signal.confidence >= 65:
+                elif signal.confidence >= 68:
                     weight = 1.5
 
                 result = ClaudeSignalResult(
@@ -993,6 +1083,12 @@ def run_claude_backtest(
 
     # ── Aggregate results ────────────────────────────────────────────────────
     agg = _aggregate_claude_results(results, api_calls, errors)
+    agg["filters"] = {
+        "conviction_floor": CONVICTION_FLOOR,
+        "signals_below_floor": conviction_filtered,
+        "spy_regime_suppressed": regime_filtered,
+        "btc_regime_suppressed": btc_gated,
+    }
     if _recent_errors:
         agg["error_samples"] = list(_recent_errors)
 
@@ -1109,10 +1205,13 @@ def _simulate_portfolio(
     starting_balance: float = 1000.0,
     base_position_pct: float = 0.15,
 ) -> dict:
-    """Simulate a $1k portfolio using confidence-weighted position sizing."""
+    """Simulate a $1k portfolio using confidence-weighted position sizing.
+    Includes a circuit breaker: if drawdown from peak exceeds the threshold,
+    stop taking new positions (go to cash)."""
     balance = starting_balance
     peak_balance = starting_balance
     max_drawdown = 0.0
+    circuit_breaker_hit = False
     trade_log: list[dict] = []
 
     by_date: dict[str, list[ClaudeSignalResult]] = {}
@@ -1124,6 +1223,24 @@ def _simulate_portfolio(
         for t in trades:
             if t.return_pct is None:
                 continue
+
+            current_dd = (peak_balance - balance) / peak_balance * 100 if peak_balance > 0 else 0
+            if current_dd >= PORTFOLIO_CIRCUIT_BREAKER_PCT:
+                circuit_breaker_hit = True
+                trade_log.append({
+                    "date": date_str,
+                    "ticker": t.ticker,
+                    "direction": "SKIP",
+                    "confidence": t.confidence,
+                    "weight": 0,
+                    "position_size": 0,
+                    "return_pct": 0,
+                    "pnl": 0,
+                    "balance": round(balance, 2),
+                    "exit_reason": f"circuit_breaker_{PORTFOLIO_CIRCUIT_BREAKER_PCT}%_dd",
+                })
+                continue
+
             position_size = balance * base_position_pct * t.position_weight
             pnl = position_size * (t.return_pct / 100.0)
             balance += pnl
@@ -1151,6 +1268,7 @@ def _simulate_portfolio(
         "final_balance": round(balance, 2),
         "total_return_pct": round(total_return, 2),
         "max_drawdown_pct": round(max_drawdown, 2),
+        "circuit_breaker_triggered": circuit_breaker_hit,
         "total_trades": len(trade_log),
         "trade_log": trade_log,
     }
