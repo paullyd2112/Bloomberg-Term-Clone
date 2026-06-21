@@ -646,27 +646,44 @@ CATASTROPHIC_STOP = {
     ("stock", "intraday"):  0.06,
     ("stock", "swing"):     0.10,
     ("stock", "longterm"):  0.15,
-    ("crypto", "intraday"): 0.10,
-    ("crypto", "swing"):    0.15,
-    ("crypto", "longterm"): 0.20,
 }
+
+# Stocks: real OHLC from FMP/Massive — supports intraday high/low stop checks.
+STOCK_WINDOWS = {"intraday": 2, "swing": 8, "longterm": 20}
+
+# Crypto: CoinGecko gives daily CLOSES only (open=high=low=close), so there are
+# no real intraday highs/lows to check — catastrophic stops are impossible to
+# evaluate honestly. Crypto also trades 24/7 and moves faster, so windows are
+# shorter and the win/loss dead zone is wider (1.5% vs 0.5%) to ignore noise.
+CRYPTO_WINDOWS = {"intraday": 1, "swing": 6, "longterm": 14}
+CRYPTO_DEAD_ZONE = 0.015
+
 
 def _evaluate_claude_signal(
     signal: ClaudeSignalResult,
     df: pd.DataFrame,
     sample_idx: int,
 ) -> ClaudeSignalResult:
-    """
-    Evaluate signal by checking price at end of evaluation window.
-    This measures DIRECTIONAL ACCURACY — was the engine right?
-    Only exits early on catastrophic moves (15%+ against).
-    """
+    """Dispatch to asset-specific evaluation — stocks and crypto have
+    fundamentally different data quality and market behavior."""
     if signal.direction == "HOLD":
         signal.outcome = "HOLD"
         return signal
+    if signal.asset_class == "crypto":
+        return _evaluate_crypto_signal(signal, df, sample_idx)
+    return _evaluate_stock_signal(signal, df, sample_idx)
 
-    window = {"intraday": 2, "swing": 8, "longterm": 20}
-    max_days = window.get(signal.time_horizon, 8)
+
+def _evaluate_stock_signal(
+    signal: ClaudeSignalResult,
+    df: pd.DataFrame,
+    sample_idx: int,
+) -> ClaudeSignalResult:
+    """
+    Stock eval: real OHLC data. Check price at end of window, exit early only
+    on a catastrophic intraday move (real high/low data supports this).
+    """
+    max_days = STOCK_WINDOWS.get(signal.time_horizon, 8)
     end_idx = min(sample_idx + max_days, len(df) - 1)
 
     if end_idx <= sample_idx:
@@ -721,6 +738,58 @@ def _evaluate_claude_signal(
             signal.outcome = "LOSS"
         else:
             signal.outcome = "NEUTRAL"
+
+    signal.max_favorable = round(max_favorable * 100, 2)
+    signal.max_adverse = round(max_adverse * 100, 2)
+    return signal
+
+
+def _evaluate_crypto_signal(
+    signal: ClaudeSignalResult,
+    df: pd.DataFrame,
+    sample_idx: int,
+) -> ClaudeSignalResult:
+    """
+    Crypto eval: close-to-close only. CoinGecko has no real intraday highs/lows,
+    so we can't honestly check catastrophic stops — grade purely on direction at
+    window end. Shorter windows, wider dead zone to ignore crypto noise.
+    """
+    max_days = CRYPTO_WINDOWS.get(signal.time_horizon, 6)
+    end_idx = min(sample_idx + max_days, len(df) - 1)
+
+    if end_idx <= sample_idx:
+        signal.outcome = "PENDING"
+        return signal
+
+    entry = signal.entry_price
+
+    # Track close-to-close excursion for analytics (no intraday data exists).
+    max_favorable = 0.0
+    max_adverse = 0.0
+    for i in range(sample_idx + 1, end_idx + 1):
+        close_i = float(df.iloc[i]["close"])
+        if signal.direction == "BUY":
+            max_favorable = max(max_favorable, (close_i - entry) / entry)
+            max_adverse = max(max_adverse, (entry - close_i) / entry)
+        else:
+            max_favorable = max(max_favorable, (entry - close_i) / entry)
+            max_adverse = max(max_adverse, (close_i - entry) / entry)
+
+    exit_close = float(df.iloc[end_idx]["close"])
+    signal.exit_price = exit_close
+    if signal.direction == "BUY":
+        pnl = (exit_close - entry) / entry
+    else:
+        pnl = (entry - exit_close) / entry
+    signal.return_pct = round(pnl * 100, 2)
+    signal.exit_reason = f"window_{max_days}d_close"
+
+    if pnl > CRYPTO_DEAD_ZONE:
+        signal.outcome = "WIN"
+    elif pnl < -CRYPTO_DEAD_ZONE:
+        signal.outcome = "LOSS"
+    else:
+        signal.outcome = "NEUTRAL"
 
     signal.max_favorable = round(max_favorable * 100, 2)
     signal.max_adverse = round(max_adverse * 100, 2)
