@@ -51,6 +51,18 @@ export async function GET(request: Request) {
         }
       }
 
+      // Capture name from OAuth provider (Google, etc.) if available
+      const oauthName = data.user.user_metadata?.full_name
+        ?? data.user.user_metadata?.name
+        ?? null;
+      if (oauthName) {
+        await (admin as any)
+          .from("profiles")
+          .update({ full_name: oauthName })
+          .eq("id", data.user.id)
+          .is("full_name", null);
+      }
+
       // Route new vs returning users
       const { data: profile } = await supabase
         .from("profiles")

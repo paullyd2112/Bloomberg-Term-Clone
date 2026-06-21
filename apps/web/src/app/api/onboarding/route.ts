@@ -5,6 +5,8 @@ import { requireUser } from "@/lib/user";
 import { syncToBeehiiv } from "@/lib/beehiiv";
 
 const Body = z.object({
+  full_name:          z.string().min(1).max(200),
+  phone_number:       z.string().max(30).nullable().optional(),
   trading_experience: z.enum(["beginner", "intermediate", "advanced"]),
   asset_preferences:  z.array(z.enum(["stocks", "crypto", "predictions"])).min(1),
 });
@@ -26,6 +28,8 @@ export async function POST(req: Request) {
   const { error } = await supabase
     .from("profiles")
     .update({
+      full_name:            parsed.data.full_name,
+      phone_number:         parsed.data.phone_number ?? null,
       trading_experience:   parsed.data.trading_experience,
       asset_preferences:    parsed.data.asset_preferences,
       onboarding_completed: true,

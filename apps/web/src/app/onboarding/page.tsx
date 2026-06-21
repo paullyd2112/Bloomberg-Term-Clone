@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 
 type Experience = "beginner" | "intermediate" | "advanced";
 type AssetPref  = "stocks" | "crypto" | "predictions";
@@ -18,17 +19,29 @@ const ASSET_OPTIONS: { value: AssetPref; label: string; icon: string; desc: stri
   { value: "predictions", label: "Prediction markets",  icon: "🎯", desc: "Polymarket & Kalshi" },
 ];
 
-const STEPS = ["experience", "markets", "done"] as const;
+const STEPS = ["profile", "experience", "markets", "done"] as const;
 type Step = (typeof STEPS)[number];
 
 export default function OnboardingPage() {
-  const [step, setStep]         = useState<Step>("experience");
+  const [step, setStep]         = useState<Step>("profile");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone]       = useState("");
   const [experience, setExp]    = useState<Experience | null>(null);
   const [assets, setAssets]     = useState<Set<AssetPref>>(new Set());
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
 
   const stepIndex = STEPS.indexOf(step);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      const name = data.user?.user_metadata?.full_name
+        ?? data.user?.user_metadata?.name
+        ?? "";
+      if (name) setFullName(name);
+    });
+  }, []);
 
   function toggleAsset(a: AssetPref) {
     setAssets((prev) => {
@@ -47,6 +60,8 @@ export default function OnboardingPage() {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
+          full_name:          fullName.trim(),
+          phone_number:       phone.trim() || null,
           trading_experience: experience,
           asset_preferences:  Array.from(assets),
         }),
@@ -81,7 +96,58 @@ export default function OnboardingPage() {
       )}
 
       <div className="w-full max-w-md">
-        {/* ── Step 1: Experience ── */}
+        {/* ── Step 1: Profile ── */}
+        {step === "profile" && (
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-2xl font-bold text-white">Welcome to Plebs</h1>
+              <p className="text-zinc-500 text-sm mt-1">Tell us a bit about yourself.</p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1" htmlFor="full_name">
+                  Full name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  id="full_name"
+                  type="text"
+                  autoComplete="name"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors"
+                  placeholder="Your name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1" htmlFor="phone">
+                  Phone number <span className="text-zinc-600">(optional)</span>
+                </label>
+                <input
+                  id="phone"
+                  type="tel"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors"
+                  placeholder="+1 (555) 123-4567"
+                />
+              </div>
+            </div>
+
+            <button
+              disabled={!fullName.trim()}
+              onClick={() => setStep("experience")}
+              className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold py-3 rounded-lg transition-colors"
+            >
+              Continue
+            </button>
+          </div>
+        )}
+
+        {/* ── Step 2: Experience ── */}
         {step === "experience" && (
           <div className="space-y-6">
             <div>
@@ -106,17 +172,25 @@ export default function OnboardingPage() {
               ))}
             </div>
 
-            <button
-              disabled={!experience}
-              onClick={() => setStep("markets")}
-              className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold py-3 rounded-lg transition-colors"
-            >
-              Continue
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setStep("profile")}
+                className="px-5 py-3 rounded-lg border border-zinc-700 text-zinc-400 hover:text-white transition-colors text-sm"
+              >
+                Back
+              </button>
+              <button
+                disabled={!experience}
+                onClick={() => setStep("markets")}
+                className="flex-1 bg-green-500 hover:bg-green-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold py-3 rounded-lg transition-colors"
+              >
+                Continue
+              </button>
+            </div>
           </div>
         )}
 
-        {/* ── Step 2: Markets ── */}
+        {/* ── Step 3: Markets ── */}
         {step === "markets" && (
           <div className="space-y-6">
             <div>
@@ -178,7 +252,7 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* ── Step 3: Done ── */}
+        {/* ── Step 4: Done ── */}
         {step === "done" && (
           <div className="text-center space-y-6">
             <div className="text-6xl">🎉</div>

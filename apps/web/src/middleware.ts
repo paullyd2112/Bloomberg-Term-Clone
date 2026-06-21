@@ -6,8 +6,12 @@ const _rl = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 const RATE_LIMITS: Record<string, number> = {
-  "/api/newsletter/subscribe": 5,
-  "/api/stripe/webhook":       20,
+  "/api/newsletter/subscribe":     5,
+  "/api/stripe/webhook":           20,
+  "/api/backtest":                 5,
+  "/api/allocator":                5,
+  "/api/search":                   30,
+  "/api/newsletter/unsubscribe":   5,
 };
 
 function isRateLimited(ip: string, pathname: string): boolean {
