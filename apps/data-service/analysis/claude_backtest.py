@@ -296,7 +296,6 @@ def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
         ("FMP",           _stock_fmp),
         ("Massive",       _stock_massive),
         ("Alpha Vantage", _stock_alphavantage),
-        ("Massive",       _stock_massive),
     ]
     frames: list[pd.DataFrame] = []
     for name, fn in sources:
@@ -341,7 +340,6 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
         ("fmp",           _stock_fmp),
         ("massive",       _stock_massive),
         ("alpha_vantage", _stock_alphavantage),
-        ("massive",       _stock_massive),
     ]
 
     report: dict = {
