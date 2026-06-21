@@ -474,6 +474,57 @@ def _fetch_crypto_ohlcv(cg_id: str) -> pd.DataFrame | None:
     return df[["open", "high", "low", "close", "volume"]].astype(float)
 
 
+def _cg_ohlc_days_param() -> str:
+    """Pick the smallest CoinGecko /ohlc lookback bucket that reaches DATE_FROM.
+    Demo tier allows 1/7/14/30/90/180/365/max. We count back from the real
+    current date (the API ignores from/to on this endpoint)."""
+    needed = (datetime.utcnow().date()
+              - datetime.strptime(DATE_FROM, "%Y-%m-%d").date()).days + 10
+    for bucket in (90, 180, 365):
+        if needed <= bucket:
+            return str(bucket)
+    return "max"
+
+
+def _fetch_crypto_ohlc_candles(cg_id: str) -> pd.DataFrame | None:
+    """Real OHLC candles from CoinGecko's /ohlc endpoint (free Demo tier).
+
+    Unlike market_chart/range (which gives daily CLOSES only — open=high=low=close),
+    this returns genuine high/low ranges. Caveats on the free tier:
+      • 31+ day lookbacks are aggregated to 4-DAY candles (no daily granularity).
+      • NO volume is returned.
+    So we use this ONLY as a real high/low overlay for catastrophic-stop checks in
+    crypto evaluation. Daily closes, volume, and indicators still come from
+    market_chart/range via _fetch_crypto_ohlcv()."""
+    days = _cg_ohlc_days_param()
+    url = f"{CG_BASE}/coins/{cg_id}/ohlc?vs_currency=usd&days={days}"
+    headers: dict = {}
+    if CG_KEY:
+        headers["x-cg-demo-api-key"] = CG_KEY
+
+    data = _get_json(url, headers)
+    if not data or not isinstance(data, list):
+        return None
+
+    rows = []
+    for c in data:
+        if not isinstance(c, (list, tuple)) or len(c) < 5:
+            continue
+        rows.append({
+            "timestamp": pd.Timestamp(c[0], unit="ms", tz="UTC").tz_localize(None),
+            "open": c[1], "high": c[2], "low": c[3], "close": c[4],
+        })
+    if not rows:
+        return None
+
+    df = pd.DataFrame(rows).sort_values("timestamp").set_index("timestamp")
+    df = df[(df.index >= pd.Timestamp(DATE_FROM)) & (df.index <= pd.Timestamp(DATE_TO))]
+    time.sleep(1.2)
+    if df.empty:
+        return None
+    return df[["open", "high", "low", "close"]].astype(float)
+
+
 # ─── Indicator computation ───────────────────────────────────────────────────
 
 def _compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -683,15 +734,22 @@ CATASTROPHIC_STOP = {
     ("stock", "intraday"):  0.06,
     ("stock", "swing"):     0.10,
     ("stock", "longterm"):  0.15,
+    # Crypto is far more volatile and we only have 4-day candle H/L (see
+    # _fetch_crypto_ohlc_candles), so these are deliberately WIDE — they cut
+    # only genuine disasters, not normal crypto chop, to avoid stopping winners.
+    ("crypto", "intraday"): 0.12,
+    ("crypto", "swing"):    0.22,
+    ("crypto", "longterm"): 0.32,
 }
 
 # Stocks: real OHLC from FMP/Massive — supports intraday high/low stop checks.
 STOCK_WINDOWS = {"intraday": 2, "swing": 8, "longterm": 20}
 
-# Crypto: CoinGecko gives daily CLOSES only (open=high=low=close), so there are
-# no real intraday highs/lows to check — catastrophic stops are impossible to
-# evaluate honestly. Crypto also trades 24/7 and moves faster, so windows are
-# shorter and the win/loss dead zone is wider (1.5% vs 0.5%) to ignore noise.
+# Crypto: daily closes + volume come from market_chart/range (close-only). Real
+# high/low ranges come separately from the /ohlc endpoint (4-day candles on the
+# free tier) and are used ONLY for catastrophic-stop checks. Crypto trades 24/7
+# and moves fast, so windows are shorter and the win/loss dead zone is wider
+# (1.5% vs 0.5%) to ignore noise.
 CRYPTO_WINDOWS = {"intraday": 1, "swing": 6, "longterm": 14}
 CRYPTO_DEAD_ZONE = 0.015
 
@@ -711,14 +769,16 @@ def _evaluate_claude_signal(
     signal: ClaudeSignalResult,
     df: pd.DataFrame,
     sample_idx: int,
+    hl_df: pd.DataFrame | None = None,
 ) -> ClaudeSignalResult:
     """Dispatch to asset-specific evaluation — stocks and crypto have
-    fundamentally different data quality and market behavior."""
+    fundamentally different data quality and market behavior. `hl_df` carries
+    real high/low candles for crypto (from the /ohlc endpoint)."""
     if signal.direction == "HOLD":
         signal.outcome = "HOLD"
         return signal
     if signal.asset_class == "crypto":
-        return _evaluate_crypto_signal(signal, df, sample_idx)
+        return _evaluate_crypto_signal(signal, df, sample_idx, hl_df=hl_df)
     return _evaluate_stock_signal(signal, df, sample_idx)
 
 
@@ -799,12 +859,16 @@ def _evaluate_crypto_signal(
     signal: ClaudeSignalResult,
     df: pd.DataFrame,
     sample_idx: int,
+    hl_df: pd.DataFrame | None = None,
 ) -> ClaudeSignalResult:
     """
-    Crypto eval: close-to-close only. CoinGecko has no real intraday highs/lows,
-    so we can't honestly check catastrophic stops — grade purely on direction at
-    window end. Shorter windows, wider dead zone to ignore crypto noise.
-    High-conviction longterm calls get extended windows.
+    Crypto eval. Daily closes (entry, window-end grade) come from `df`
+    (market_chart/range). If real high/low candles are available via `hl_df`
+    (the /ohlc endpoint), we additionally check for a catastrophic intraday
+    breach and cut the loss early — same asymmetry protection stocks get.
+    Stops are wide (see CATASTROPHIC_STOP) and candles are 4-day on the free
+    tier, so only genuine disasters trip them. Falls back to pure close-to-close
+    grading when no real candles exist. Shorter windows, wider dead zone.
     """
     max_days = CRYPTO_WINDOWS.get(signal.time_horizon, 6)
     if signal.time_horizon == "longterm" and signal.confidence >= 75:
@@ -816,34 +880,68 @@ def _evaluate_crypto_signal(
         return signal
 
     entry = signal.entry_price
+    entry_date = df.index[sample_idx]
+    end_date = df.index[end_idx]
 
-    # Track close-to-close excursion for analytics (no intraday data exists).
     max_favorable = 0.0
     max_adverse = 0.0
-    for i in range(sample_idx + 1, end_idx + 1):
-        close_i = float(df.iloc[i]["close"])
+    stopped_out = False
+
+    # ── Real high/low overlay: catastrophic stop check (if /ohlc data exists) ──
+    cat_stop = CATASTROPHIC_STOP.get((signal.asset_class, signal.time_horizon))
+    if hl_df is not None and not hl_df.empty and cat_stop is not None:
+        window = hl_df[(hl_df.index >= entry_date) & (hl_df.index <= end_date)]
+        for _, candle in window.iterrows():
+            high = float(candle["high"])
+            low = float(candle["low"])
+            if signal.direction == "BUY":
+                max_favorable = max(max_favorable, (high - entry) / entry)
+                max_adverse = max(max_adverse, (entry - low) / entry)
+                if (entry - low) / entry >= cat_stop:
+                    signal.exit_price = round(entry * (1 - cat_stop), 6)
+                    signal.return_pct = round(-cat_stop * 100, 2)
+                    signal.outcome = "LOSS"
+                    signal.exit_reason = f"catastrophic_stop at -{cat_stop*100:.0f}%"
+                    stopped_out = True
+                    break
+            else:
+                max_favorable = max(max_favorable, (entry - low) / entry)
+                max_adverse = max(max_adverse, (high - entry) / entry)
+                if (high - entry) / entry >= cat_stop:
+                    signal.exit_price = round(entry * (1 + cat_stop), 6)
+                    signal.return_pct = round(-cat_stop * 100, 2)
+                    signal.outcome = "LOSS"
+                    signal.exit_reason = f"catastrophic_stop at -{cat_stop*100:.0f}%"
+                    stopped_out = True
+                    break
+
+    if not stopped_out:
+        # Close-to-close excursion (real-candle fallback / analytics).
+        for i in range(sample_idx + 1, end_idx + 1):
+            close_i = float(df.iloc[i]["close"])
+            if signal.direction == "BUY":
+                max_favorable = max(max_favorable, (close_i - entry) / entry)
+                max_adverse = max(max_adverse, (entry - close_i) / entry)
+            else:
+                max_favorable = max(max_favorable, (entry - close_i) / entry)
+                max_adverse = max(max_adverse, (close_i - entry) / entry)
+
+        exit_close = float(df.iloc[end_idx]["close"])
+        signal.exit_price = exit_close
         if signal.direction == "BUY":
-            max_favorable = max(max_favorable, (close_i - entry) / entry)
-            max_adverse = max(max_adverse, (entry - close_i) / entry)
+            pnl = (exit_close - entry) / entry
         else:
-            max_favorable = max(max_favorable, (entry - close_i) / entry)
-            max_adverse = max(max_adverse, (close_i - entry) / entry)
+            pnl = (entry - exit_close) / entry
+        signal.return_pct = round(pnl * 100, 2)
+        suffix = "_realhl" if (hl_df is not None and not hl_df.empty) else ""
+        signal.exit_reason = f"window_{max_days}d_close{suffix}"
 
-    exit_close = float(df.iloc[end_idx]["close"])
-    signal.exit_price = exit_close
-    if signal.direction == "BUY":
-        pnl = (exit_close - entry) / entry
-    else:
-        pnl = (entry - exit_close) / entry
-    signal.return_pct = round(pnl * 100, 2)
-    signal.exit_reason = f"window_{max_days}d_close"
-
-    if pnl > CRYPTO_DEAD_ZONE:
-        signal.outcome = "WIN"
-    elif pnl < -CRYPTO_DEAD_ZONE:
-        signal.outcome = "LOSS"
-    else:
-        signal.outcome = "NEUTRAL"
+        if pnl > CRYPTO_DEAD_ZONE:
+            signal.outcome = "WIN"
+        elif pnl < -CRYPTO_DEAD_ZONE:
+            signal.outcome = "LOSS"
+        else:
+            signal.outcome = "NEUTRAL"
 
     signal.max_favorable = round(max_favorable * 100, 2)
     signal.max_adverse = round(max_adverse * 100, 2)
@@ -1002,11 +1100,19 @@ def run_claude_backtest(
 
     # ── Crypto ───────────────────────────────────────────────────────────────
     crypto_data: dict[str, pd.DataFrame] = {}
+    crypto_hl: dict[str, pd.DataFrame] = {}
     for symbol, cg_id in crypto:
         logger.info("[claude_backtest] Fetching crypto data: {}", symbol)
         df = _fetch_crypto_ohlcv(cg_id)
         if df is not None and not df.empty:
             crypto_data[symbol] = _compute_indicators(df)
+            hl = _fetch_crypto_ohlc_candles(cg_id)
+            if hl is not None and not hl.empty:
+                crypto_hl[symbol] = hl
+                logger.info("[claude_backtest] {} — real OHLC candles: {} rows ({} to {})",
+                            symbol, len(hl), hl.index[0].date(), hl.index[-1].date())
+            else:
+                logger.info("[claude_backtest] {} — no real OHLC candles (using close-only fallback)", symbol)
 
     fg_history = _fetch_fear_greed_history() if crypto_data else {}
 
@@ -1070,7 +1176,7 @@ def run_claude_backtest(
                     volume_ratio=round(float(row["volume_ratio"]), 2) if pd.notna(row.get("volume_ratio")) else None,
                     change_24h=round(float(row["change_1d"]), 2) if pd.notna(row.get("change_1d")) else None,
                 )
-                result = _evaluate_claude_signal(result, df, idx)
+                result = _evaluate_claude_signal(result, df, idx, hl_df=crypto_hl.get(symbol))
                 results.append(result)
 
                 time.sleep(0.5)
@@ -1088,6 +1194,10 @@ def run_claude_backtest(
         "signals_below_floor": conviction_filtered,
         "spy_regime_suppressed": regime_filtered,
         "btc_regime_suppressed": btc_gated,
+    }
+    agg["crypto_real_candles"] = {
+        "symbols_with_real_ohlc": sorted(crypto_hl.keys()),
+        "count": len(crypto_hl),
     }
     if _recent_errors:
         agg["error_samples"] = list(_recent_errors)
