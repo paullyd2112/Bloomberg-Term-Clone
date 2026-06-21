@@ -52,13 +52,12 @@ MASSIVE_BASE   = "https://api.massive.com"
 FINNHUB_CANDLE = "https://finnhub.io/api/v1/stock/candle"
 AV_URL         = "https://www.alphavantage.co/query"
 
-DATE_FROM = "2025-11-01"
+DATE_FROM = "2026-02-01"
 DATE_TO   = "2026-06-16"
 
-# Sample across the FULL range — uptrends, chop, AND the May-June selloff —
-# so the win rate reflects all market regimes, not one cherry-picked window.
-SAMPLE_DATES = ["2026-02-13", "2026-02-27", "2026-03-13", "2026-03-27",
-                "2026-04-10", "2026-04-24", "2026-05-08", "2026-05-22"]
+SAMPLE_DATES = ["2026-02-20", "2026-03-12", "2026-03-27",
+                "2026-04-10", "2026-04-24", "2026-05-08",
+                "2026-05-22", "2026-06-04"]
 
 SAMPLE_STOCKS = ["AAPL", "NVDA", "TSLA", "PLTR", "AMD",
                  "META", "GOOGL", "COIN", "SOFI", "HOOD"]
