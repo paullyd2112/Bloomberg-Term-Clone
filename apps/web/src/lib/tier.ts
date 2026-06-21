@@ -22,7 +22,7 @@ export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
   ],
   elite: [
     "Everything in Pro",
-    "Prediction market signals (Kalshi + Polymarket)",
+    "Prediction market signals — coming soon (Kalshi + Polymarket)",
     "Pleby — AI trading analyst chat",
     "Ask Pleby about any asset anytime",
     "Personalised morning briefing",

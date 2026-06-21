@@ -18,7 +18,7 @@ export default function SignalFeed({ signals }: { signals: Signal[] }) {
 
   const filtered =
     activeTab === "all"
-      ? signals
+      ? signals.filter((s) => s.asset_type !== "prediction")
       : signals.filter((s) => s.asset_type === activeTab);
 
   return (
@@ -37,17 +37,39 @@ export default function SignalFeed({ signals }: { signals: Signal[] }) {
             )}
           >
             {tab.label}
-            <span className="ml-1.5 text-xs text-zinc-600 tabular-nums">
-              {tab.id === "all"
-                ? signals.length
-                : signals.filter((s) => s.asset_type === tab.id).length}
-            </span>
+            {tab.id === "prediction" && (
+              <span className="ml-1.5 text-[10px] text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded px-1 py-px">
+                Soon
+              </span>
+            )}
+            {tab.id !== "prediction" && (
+              <span className="ml-1.5 text-xs text-zinc-600 tabular-nums">
+                {tab.id === "all"
+                  ? signals.filter((s) => s.asset_type !== "prediction").length
+                  : signals.filter((s) => s.asset_type === tab.id).length}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
-      {/* Feed */}
-      {filtered.length === 0 ? (
+      {/* Coming Soon overlay for predictions */}
+      {activeTab === "prediction" ? (
+        <div className="py-20 text-center space-y-4">
+          <div className="text-5xl">🎯</div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Prediction Markets — Coming Soon</h3>
+            <p className="text-sm text-zinc-400 mt-2 max-w-sm mx-auto">
+              AI-powered signals for Kalshi and Polymarket contracts.
+              We&apos;re building a live track record before going live.
+            </p>
+          </div>
+          <div className="inline-flex items-center gap-2 text-xs text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-full px-4 py-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            Scoring in background — launching soon
+          </div>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="py-16 text-center text-zinc-500 text-sm">
           No signals yet — check back soon.
         </div>

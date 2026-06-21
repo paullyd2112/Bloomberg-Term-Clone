@@ -18,6 +18,7 @@ from ingestion.options_flow import ingest_options_flow
 from ingestion.short_interest import ingest_short_interest
 from ingestion.earnings import ingest_earnings
 from ingestion.macro_events import seed_macro_events
+from ingestion.fred import enrich_macro_events
 from scoring.engine import score_stocks, score_crypto, score_prediction_markets
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
@@ -92,6 +93,9 @@ def job_ingest_earnings():
 
 def job_seed_macro_events():
     return seed_macro_events()
+
+def job_enrich_fred():
+    return enrich_macro_events()
 
 def job_ingest_congressional():
     return ingest_congressional()
@@ -190,6 +194,8 @@ scheduler.add_job(lambda: _run_stock_job("ingest_earnings", job_ingest_earnings)
                   CronTrigger(hour=6, minute=0, day_of_week="mon-fri"), id="ingest_earnings")
 scheduler.add_job(lambda: _run_stock_job("seed_macro_events", job_seed_macro_events),
                   CronTrigger(hour=6, minute=30, day_of_week="mon-fri"), id="seed_macro_events")
+scheduler.add_job(lambda: _run_stock_job("enrich_fred", job_enrich_fred),
+                  CronTrigger(hour=6, minute=45, day_of_week="mon-fri"), id="enrich_fred")
 
 # Congressional — daily at 8am ET (FMP Basic API)
 scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressional),

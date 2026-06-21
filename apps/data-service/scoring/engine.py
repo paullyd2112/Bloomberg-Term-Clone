@@ -261,15 +261,35 @@ def _get_market_benchmark() -> dict:
 
 
 def _get_upcoming_macro(days: int = 2) -> list[str]:
-    """Fetch macro events within next N days as short strings for context."""
+    """Fetch macro events + FRED indicator snapshot for scoring context."""
     from ingestion.macro_events import get_upcoming_events
+
+    lines: list[str] = []
+
+    # Current economic indicators from FRED
+    try:
+        from ingestion.fred import get_macro_context_for_scoring
+        fred_lines = get_macro_context_for_scoring()
+        if fred_lines:
+            lines.extend(fred_lines)
+    except Exception as e:
+        logger.debug("FRED context unavailable: {}", e)
+
+    # Upcoming calendar events
     events = get_upcoming_events(days=days)
-    lines = []
     for e in events[:5]:
         name = e.get("event_name", "")
         importance = e.get("importance", "")
         event_date = e.get("event_date", "")
-        lines.append(f"{event_date} — {name} ({importance})")
+        actual = e.get("actual")
+        previous = e.get("previous")
+        detail = ""
+        if actual is not None and previous is not None:
+            detail = f" | Actual: {actual}, Previous: {previous}"
+        elif actual is not None:
+            detail = f" | Actual: {actual}"
+        lines.append(f"{event_date} — {name} ({importance}){detail}")
+
     return lines
 
 
