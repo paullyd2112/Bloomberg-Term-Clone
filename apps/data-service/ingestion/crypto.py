@@ -160,7 +160,8 @@ def _fetch_messari_metrics(symbol: str) -> dict | None:
 
 # ─── CCXT / Binance OHLCV ────────────────────────────────────────────────────
 
-_exchange = ccxt.binance({"enableRateLimit": True})
+_binance = ccxt.binance({"enableRateLimit": True})
+_kraken  = ccxt.kraken({"enableRateLimit": True})
 
 # Finnhub uses its own crypto symbol format: BINANCE:BTCUSDT
 _FINNHUB_CRYPTO_SYMBOLS: dict[str, str] = {
@@ -173,9 +174,62 @@ _FINNHUB_CRYPTO_SYMBOLS: dict[str, str] = {
     "LTC": "BINANCE:LTCUSDT", "ATOM": "BINANCE:ATOMUSDT",
 }
 
+# Kraken uses different pair names for some coins
+_KRAKEN_PAIR_MAP: dict[str, str] = {
+    "BTC": "BTC/USD", "ETH": "ETH/USD", "SOL": "SOL/USD",
+    "XRP": "XRP/USD", "DOGE": "DOGE/USD", "ADA": "ADA/USD",
+    "AVAX": "AVAX/USD", "LINK": "LINK/USD", "DOT": "DOT/USD",
+    "LTC": "LTC/USD", "ATOM": "ATOM/USD", "UNI": "UNI/USD",
+}
+
+# CoinGecko symbol → CoinGecko ID for /ohlc endpoint
+_CG_IDS: dict[str, str] = {
+    "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana",
+    "BNB": "binancecoin", "XRP": "ripple", "DOGE": "dogecoin",
+    "ADA": "cardano", "AVAX": "avalanche-2", "LINK": "chainlink",
+    "DOT": "polkadot", "MATIC": "matic-network", "UNI": "uniswap",
+    "LTC": "litecoin", "ATOM": "cosmos", "PEPE": "pepe",
+    "SHIB": "shiba-inu", "APT": "aptos", "SUI": "sui",
+    "NEAR": "near", "ARB": "arbitrum", "OP": "optimism",
+}
+
+
+def _fetch_ohlcv_binance(symbol: str) -> pd.DataFrame | None:
+    """Binance via CCXT — 1h resolution, 7 days."""
+    pair = CCXT_SYMBOL_MAP.get(symbol, f"{symbol}/USDT")
+    try:
+        raw = _binance.fetch_ohlcv(pair, timeframe="1h", limit=168)
+        if not raw:
+            return None
+        df = pd.DataFrame(raw, columns=["timestamp", "open", "high", "low", "close", "volume"])
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+        df = df.set_index("timestamp").astype(float)
+        return df
+    except Exception as e:
+        logger.debug("{}: Binance OHLCV failed — {}", symbol, e)
+        return None
+
+
+def _fetch_ohlcv_kraken(symbol: str) -> pd.DataFrame | None:
+    """Kraken via CCXT — 1h resolution, 7 days. No API key needed."""
+    pair = _KRAKEN_PAIR_MAP.get(symbol)
+    if not pair:
+        return None
+    try:
+        raw = _kraken.fetch_ohlcv(pair, timeframe="1h", limit=168)
+        if not raw:
+            return None
+        df = pd.DataFrame(raw, columns=["timestamp", "open", "high", "low", "close", "volume"])
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+        df = df.set_index("timestamp").astype(float)
+        return df
+    except Exception as e:
+        logger.debug("{}: Kraken OHLCV failed — {}", symbol, e)
+        return None
+
 
 def _fetch_ohlcv_finnhub_crypto(symbol: str) -> pd.DataFrame | None:
-    """Finnhub crypto candles — 1h resolution, 7 days. Uses existing key."""
+    """Finnhub crypto candles — 1h resolution, 7 days."""
     if not FINNHUB_KEY:
         return None
     fh_symbol = _FINNHUB_CRYPTO_SYMBOLS.get(symbol.upper())
@@ -206,20 +260,69 @@ def _fetch_ohlcv_finnhub_crypto(symbol: str) -> pd.DataFrame | None:
         return None
 
 
-def _fetch_ohlcv(symbol: str) -> pd.DataFrame | None:
-    """Binance (primary) → Finnhub crypto (fallback). Returns 1h OHLCV."""
-    pair = CCXT_SYMBOL_MAP.get(symbol, f"{symbol}/USDT")
+def _fetch_ohlcv_coingecko(symbol: str) -> pd.DataFrame | None:
+    """CoinGecko /ohlc — daily resolution fallback. Free tier gives 4-day candles
+    for 7d+ lookback but still useful as last resort for price data."""
+    cg_id = _CG_IDS.get(symbol.upper())
+    if not cg_id:
+        return None
     try:
-        raw = _exchange.fetch_ohlcv(pair, timeframe="1h", limit=168)
-        if not raw:
-            raise ValueError("empty response")
-        df = pd.DataFrame(raw, columns=["timestamp", "open", "high", "low", "close", "volume"])
+        headers = _coingecko_headers()
+        resp = httpx.get(
+            f"https://api.coingecko.com/api/v3/coins/{cg_id}/ohlc",
+            params={"vs_currency": "usd", "days": "7"},
+            headers=headers,
+            timeout=REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not data:
+            return None
+        df = pd.DataFrame(data, columns=["timestamp", "open", "high", "low", "close"])
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-        df = df.set_index("timestamp").astype(float)
+        df["volume"] = 0.0
+        df = df.set_index("timestamp").sort_index().astype(float)
         return df
     except Exception as e:
-        logger.debug("{}: Binance OHLCV failed — trying Finnhub — {}", symbol, e)
-        return _fetch_ohlcv_finnhub_crypto(symbol)
+        logger.debug("{}: CoinGecko OHLC failed — {}", symbol, e)
+        return None
+
+
+def _fetch_ohlcv(symbol: str) -> pd.DataFrame | None:
+    """Fetch from ALL sources, merge into one DataFrame for best coverage.
+    Same pattern as stocks — try every source and fill gaps."""
+    sources = [
+        ("Binance",       _fetch_ohlcv_binance),
+        ("Kraken",        _fetch_ohlcv_kraken),
+        ("Finnhub",       _fetch_ohlcv_finnhub_crypto),
+        ("CoinGecko",     _fetch_ohlcv_coingecko),
+    ]
+    frames: list[pd.DataFrame] = []
+    for name, fn in sources:
+        try:
+            df = fn(symbol)
+            if df is not None and not df.empty:
+                df.columns = [c.lower() for c in df.columns]
+                logger.debug("{}: {} returned {} rows", symbol, name, len(df))
+                frames.append(df[["open", "high", "low", "close", "volume"]])
+            else:
+                logger.debug("{}: {} — no data", symbol, name)
+        except Exception as e:
+            logger.debug("{}: {} — error: {}", symbol, name, e)
+
+    if not frames:
+        logger.warning("{}: ALL crypto sources returned no data", symbol)
+        return None
+
+    merged = frames[0]
+    for extra in frames[1:]:
+        new_ts = extra.index.difference(merged.index)
+        if len(new_ts) > 0:
+            merged = pd.concat([merged, extra.loc[new_ts]]).sort_index()
+            logger.debug("{}: filled {} gap timestamps from additional source", symbol, len(new_ts))
+
+    logger.info("{}: merged OHLCV — {} rows from {} sources", symbol, len(merged), len(frames))
+    return merged
 
 
 # ─── Technical indicators ─────────────────────────────────────────────────────
@@ -355,12 +458,22 @@ def _ingest_coin(cg_data: dict) -> bool:
         },
     }
 
-    # Enrich with CCXT OHLCV + Pandas-TA indicators
+    ohlcv_sources: list[str] = []
+
+    # Enrich with multi-source OHLCV + Pandas-TA indicators
     df = _fetch_ohlcv(symbol)
     if df is not None:
         try:
             indicators = _compute_crypto_indicators(df)
             record["metadata"].update(indicators)
+            ohlcv_sources.append("ohlcv_merged")
+
+            # If CoinGecko spot price is missing, use latest OHLCV close
+            if record["price"] is None and indicators.get("close"):
+                record["price"] = indicators["close"]
+                record["metadata"]["price_source"] = "ohlcv_fallback"
+                logger.info("{}: CoinGecko price missing, using OHLCV close: {}",
+                            symbol, indicators["close"])
         except Exception as e:
             logger.warning("{}: indicator computation failed — {}", symbol, e)
 
@@ -368,9 +481,9 @@ def _ingest_coin(cg_data: dict) -> bool:
     messari = _fetch_messari_metrics(symbol)
     if messari:
         record["metadata"].update(messari)
-        record["metadata"]["sources"] = "coingecko+messari"
-    else:
-        record["metadata"]["sources"] = "coingecko"
+        ohlcv_sources.append("messari")
+
+    record["metadata"]["sources"] = "+".join(["coingecko"] + ohlcv_sources) if ohlcv_sources else "coingecko"
 
     try:
         supabase.table("raw_prices").insert(record).execute()
@@ -383,10 +496,46 @@ def _ingest_coin(cg_data: dict) -> bool:
 
 # ─── Main ingestion function ───────────────────────────────────────────────────
 
+def _ingest_coin_ohlcv_only(symbol: str) -> bool:
+    """Fallback: ingest a coin using only exchange OHLCV data (no CoinGecko)."""
+    df = _fetch_ohlcv(symbol)
+    if df is None:
+        return False
+
+    try:
+        indicators = _compute_crypto_indicators(df)
+    except Exception as e:
+        logger.warning("{}: indicator computation failed (ohlcv-only) — {}", symbol, e)
+        return False
+
+    record = {
+        "asset_type": "crypto",
+        "identifier": symbol,
+        "price":      indicators["close"],
+        "volume":     indicators.get("volume_24h"),
+        "change_24h": None,
+        "metadata": {
+            "source":       "ohlcv_only",
+            "price_source": "exchange_close",
+            **indicators,
+        },
+    }
+
+    try:
+        supabase.table("raw_prices").insert(record).execute()
+        logger.info("{}: ingested via OHLCV-only fallback (price={})", symbol, indicators["close"])
+        return True
+    except Exception as e:
+        logger.error("{}: raw_prices insert failed (ohlcv-only) — {}", symbol, e)
+        return False
+
+
 def ingest_crypto() -> str:
     """
-    Fetch top 50 CoinGecko coins + priority list, enrich with CCXT indicators,
+    Fetch top 50 CoinGecko coins + priority list, enrich with multi-source
+    OHLCV indicators (Binance, Kraken, Finnhub, CoinGecko),
     store Fear & Greed, fetch crypto news.
+    If CoinGecko is down, priority coins still get ingested via exchange data.
     Returns summary string for scheduler log.
     """
     logger.info("Starting crypto ingestion")
@@ -452,6 +601,23 @@ def ingest_crypto() -> str:
             sentry_sdk.capture_exception(e)
             failed += 1
 
+    # If CoinGecko failed entirely, ingest priority coins via exchange data alone
+    ingested_symbols = {_coingecko_to_symbol(c) for c in unique}
+    ohlcv_fallback = 0
+    if len(unique) == 0:
+        logger.warning("CoinGecko returned 0 coins — falling back to OHLCV-only for priority symbols")
+        for sym in PRIORITY_SYMBOLS:
+            if sym not in ingested_symbols:
+                try:
+                    if _ingest_coin_ohlcv_only(sym):
+                        ohlcv_fallback += 1
+                        success += 1
+                    else:
+                        failed += 1
+                except Exception as e:
+                    logger.error("{}: OHLCV-only fallback failed — {}", sym, e)
+                    failed += 1
+
     # General crypto news
     news_count = _fetch_and_store_crypto_news()
 
@@ -460,5 +626,7 @@ def ingest_crypto() -> str:
         f"{news_count} news items, "
         f"F&G={fg['value'] if fg else 'N/A'}"
     )
+    if ohlcv_fallback:
+        summary += f", {ohlcv_fallback} via OHLCV fallback"
     logger.info("Crypto ingestion complete — {}", summary)
     return summary
