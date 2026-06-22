@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import TickerBar from "@/components/TickerBar";
+import LiveSignalFeed from "@/components/LiveSignalFeed";
 
 export const metadata: Metadata = {
   title: "Plebs — Hedge fund tools. Retail prices.",
@@ -129,90 +130,11 @@ function Hero() {
 
           {/* Right — live panel */}
           <div className="lg:col-span-6">
-            <TerminalMockup />
+            <LiveSignalFeed />
           </div>
         </div>
       </div>
     </section>
-  );
-}
-
-// ─── Terminal mockup (premium product shot) ────────────────────────────────────
-
-function TerminalMockup() {
-  const rows = [
-    { dir: "BUY",  ticker: "NVDA",     asset: "Equity",  conf: 84, up: true  },
-    { dir: "YES",  ticker: "BTC>100K", asset: "Kalshi",  conf: 71, up: true  },
-    { dir: "SELL", ticker: "GME",      asset: "Equity",  conf: 78, up: false },
-    { dir: "BUY",  ticker: "ETH",      asset: "Crypto",  conf: 67, up: true  },
-    { dir: "NO",   ticker: "FED-CUT",  asset: "Polymkt", conf: 62, up: false },
-  ];
-
-  return (
-    <div className="relative">
-      <div className="pointer-events-none absolute -inset-6 bg-emerald-500/[0.06] blur-3xl rounded-full" />
-
-      <div className="relative rounded-2xl border border-white/10 bg-zinc-950/90 backdrop-blur-sm overflow-hidden ring-hairline shadow-2xl shadow-black/60">
-        {/* window chrome */}
-        <div className="flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
-          <span className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
-          <span className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
-          <span className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
-          <div className="ml-3 font-mono text-[11px] text-zinc-500">
-            <span className="text-zinc-400">plebs</span>
-            <span className="text-zinc-700"> / </span>
-            <span>live signal feed</span>
-          </div>
-          <span className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-emerald-700/40 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] text-emerald-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            LIVE
-          </span>
-        </div>
-
-        {/* rows */}
-        <div className="divide-y divide-white/[0.04]">
-          {rows.map((r) => (
-            <div
-              key={r.ticker}
-              className="grid grid-cols-[52px_1fr_auto] gap-3 px-4 py-3.5 items-center hover:bg-white/[0.02] transition-colors"
-            >
-              <span
-                className={`text-[10px] font-bold px-1.5 py-0.5 rounded border font-mono text-center ${
-                  r.up
-                    ? "text-emerald-400 border-emerald-700/50 bg-emerald-500/10"
-                    : "text-rose-400 border-rose-700/50 bg-rose-500/10"
-                }`}
-              >
-                {r.dir}
-              </span>
-
-              <div className="min-w-0">
-                <div className="font-mono font-semibold text-white text-sm tabular-nums truncate">
-                  {r.ticker}
-                </div>
-                <div className="text-[11px] text-zinc-600">{r.asset}</div>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <div className="h-1 w-20 sm:w-28 bg-white/5 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${r.conf >= 75 ? "bg-emerald-500" : "bg-emerald-500/50"}`}
-                    style={{ width: `${r.conf}%` }}
-                  />
-                </div>
-                <span className="font-mono text-xs text-zinc-300 tabular-nums w-8 text-right">
-                  {r.conf}%
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="border-t border-white/[0.06] bg-white/[0.02] px-4 py-2.5 font-mono text-[10px] text-zinc-600">
-          Sample feed — your dashboard refreshes in real time.
-        </div>
-      </div>
-    </div>
   );
 }
 
