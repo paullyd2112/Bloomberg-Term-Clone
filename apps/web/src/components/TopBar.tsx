@@ -34,6 +34,12 @@ export default function TopBar({ user, tier }: { user: User; tier: Tier }) {
         <span className="hidden sm:block text-xs text-zinc-500 truncate max-w-[180px]">
           {user.email}
         </span>
+        <a
+          href="/dashboard/settings"
+          className="text-xs text-zinc-400 hover:text-white transition-colors"
+        >
+          Settings
+        </a>
         <button
           onClick={signOut}
           className="text-xs text-zinc-400 hover:text-white transition-colors"

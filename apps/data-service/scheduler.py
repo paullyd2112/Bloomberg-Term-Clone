@@ -14,6 +14,7 @@ from ingestion.prediction_markets import ingest_prediction_markets
 from ingestion.stocks import ingest_stocks
 from ingestion.crypto import ingest_crypto
 from ingestion.congressional import ingest_congressional
+from ingestion.sec_form4 import ingest_insider_trades
 from ingestion.options_flow import ingest_options_flow
 from ingestion.short_interest import ingest_short_interest
 from ingestion.earnings import ingest_earnings
@@ -99,6 +100,9 @@ def job_enrich_fred():
 
 def job_ingest_congressional():
     return ingest_congressional()
+
+def job_ingest_insider_trades():
+    return ingest_insider_trades()
 
 def job_generate_newsletter():
     return generate_newsletter()
@@ -200,6 +204,9 @@ scheduler.add_job(lambda: _run_stock_job("enrich_fred", job_enrich_fred),
 # Congressional — daily at 8am ET (FMP Basic API)
 scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressional),
                   CronTrigger(hour=8, minute=0), id="ingest_congressional")
+# Insider trades (SEC Form 4) — daily at 8:15am ET (FMP)
+scheduler.add_job(lambda: _run_job("ingest_insider_trades", job_ingest_insider_trades),
+                  CronTrigger(hour=8, minute=15), id="ingest_insider_trades")
 
 # Newsletter — generate at 6:30am, send at 7:00am ET weekdays
 scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newsletter),

@@ -1,9 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { checkRateLimit, upstashConfigured } from "@/lib/ratelimit";
 
-// Simple in-memory rate limiter (best-effort; not shared across Edge instances)
+// In-memory fallback limiter (best-effort; not shared across Edge instances).
+// Used only when Upstash Redis is not configured.
 const _rl = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_WINDOW_S  = 60;
 
 const RATE_LIMITS: Record<string, number> = {
   "/api/newsletter/subscribe":     5,
@@ -12,6 +15,7 @@ const RATE_LIMITS: Record<string, number> = {
   "/api/allocator":                5,
   "/api/search":                   30,
   "/api/newsletter/unsubscribe":   5,
+  "/api/profile":                  10,
 };
 
 function isRateLimited(ip: string, pathname: string): boolean {
@@ -36,7 +40,13 @@ export async function middleware(request: NextRequest) {
 
   if (pathname in RATE_LIMITS) {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-    if (isRateLimited(ip, pathname)) {
+    const max = RATE_LIMITS[pathname];
+
+    const limited = upstashConfigured
+      ? !(await checkRateLimit(`${ip}:${pathname}`, max, RATE_LIMIT_WINDOW_S))
+      : isRateLimited(ip, pathname);
+
+    if (limited) {
       return new NextResponse(JSON.stringify({ error: "Too many requests" }), {
         status: 429,
         headers: { "Content-Type": "application/json" },
