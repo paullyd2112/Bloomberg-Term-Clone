@@ -6,6 +6,64 @@ import SubscribeGate from "@/components/ui/SubscribeGate";
 
 export const revalidate = 60;
 
+type AssetAccuracy = {
+  asset_type: string;
+  identifier: string;
+  total_signals: number;
+  win_rate: number | null;
+  wins: number;
+  losses: number;
+  neutrals: number;
+  avg_confidence: number | null;
+};
+
+type PlatformAccuracy = {
+  overallWinRate: number;
+  totalResolved: number;
+  totalWins: number;
+  totalLosses: number;
+  byAssetClass: { asset_type: string; winRate: number; resolved: number }[];
+};
+
+async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("asset_accuracy")
+    .select("asset_type, total_signals, win_rate, wins, losses, neutrals");
+
+  if (error || !data || data.length === 0) {
+    console.error("asset_accuracy fetch error:", error?.message);
+    return null;
+  }
+
+  const rows = data as AssetAccuracy[];
+  const totalWins = rows.reduce((s, r) => s + (r.wins ?? 0), 0);
+  const totalLosses = rows.reduce((s, r) => s + (r.losses ?? 0), 0);
+  const totalResolved = totalWins + totalLosses;
+  const overallWinRate = totalResolved > 0 ? totalWins / totalResolved : 0;
+
+  // Group by asset_type
+  const grouped = new Map<string, { wins: number; losses: number }>();
+  for (const r of rows) {
+    const key = r.asset_type ?? "unknown";
+    const g = grouped.get(key) ?? { wins: 0, losses: 0 };
+    g.wins += r.wins ?? 0;
+    g.losses += r.losses ?? 0;
+    grouped.set(key, g);
+  }
+
+  const byAssetClass = Array.from(grouped.entries()).map(([asset_type, g]) => {
+    const resolved = g.wins + g.losses;
+    return {
+      asset_type,
+      winRate: resolved > 0 ? g.wins / resolved : 0,
+      resolved,
+    };
+  });
+
+  return { overallWinRate, totalResolved, totalWins, totalLosses, byAssetClass };
+}
+
 async function fetchSignals(): Promise<Signal[]> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("get_dashboard_signals", {
@@ -44,9 +102,10 @@ async function fetchTopMovers() {
 export default async function DashboardPage() {
   const user    = await getUser();
   const tier    = await getUserTier();
-  const [signals, movers] = await Promise.all([
+  const [signals, movers, accuracy] = await Promise.all([
     fetchSignals(),
     fetchTopMovers(),
+    fetchPlatformAccuracy(),
   ]);
 
   const winCount  = signals.filter((s) => s.outcome === "WIN").length;
@@ -66,6 +125,59 @@ export default async function DashboardPage() {
         <StatCard label="Wins" value={winCount} color="green" />
         <StatCard label="Losses" value={lossCount} color="red" />
       </div>
+
+      {/* Platform accuracy */}
+      {accuracy && (
+        <section>
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-2">
+            Platform accuracy
+          </h2>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 flex flex-wrap gap-x-6 gap-y-2 items-baseline">
+            <div>
+              <span
+                className={`text-2xl font-bold tabular-nums ${
+                  accuracy.overallWinRate * 100 >= 60
+                    ? "text-green-400"
+                    : accuracy.overallWinRate * 100 >= 45
+                    ? "text-amber-400"
+                    : "text-red-400"
+                }`}
+              >
+                {(accuracy.overallWinRate * 100).toFixed(1)}%
+              </span>
+              <span className="text-xs text-zinc-500 ml-1.5">win rate</span>
+            </div>
+            <div>
+              <span className="text-lg font-semibold text-white tabular-nums">
+                {accuracy.totalResolved}
+              </span>
+              <span className="text-xs text-zinc-500 ml-1.5">resolved</span>
+            </div>
+            <span className="text-zinc-700">|</span>
+            {accuracy.byAssetClass.map((a) => (
+              <div key={a.asset_type} className="flex items-baseline gap-1.5">
+                <span className="text-xs text-zinc-400 capitalize">
+                  {a.asset_type}
+                </span>
+                <span
+                  className={`text-sm font-semibold tabular-nums ${
+                    a.winRate * 100 >= 60
+                      ? "text-green-400"
+                      : a.winRate * 100 >= 45
+                      ? "text-amber-400"
+                      : "text-red-400"
+                  }`}
+                >
+                  {(a.winRate * 100).toFixed(1)}%
+                </span>
+                <span className="text-xs text-zinc-600">
+                  ({a.resolved})
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Top movers */}
       {movers.length > 0 && (

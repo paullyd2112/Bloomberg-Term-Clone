@@ -8,6 +8,7 @@ import WatchlistToggle from "@/components/watchlist/WatchlistToggle";
 import AccuracyBadge from "@/components/asset/AccuracyBadge";
 import OptionsFlowTable from "@/components/asset/OptionsFlowTable";
 import PriceHeader from "@/components/asset/PriceHeader";
+import PriceChart, { type PricePoint } from "@/components/asset/PriceChart";
 
 export const revalidate = 60;
 
@@ -21,7 +22,7 @@ type PageProps = {
 async function fetchAssetData(assetType: AssetType, identifier: string, userId: string) {
   const supabase = createClient();
 
-  const [priceRes, signalsRes, accuracyRes, newsRes, optionsRes, watchlistRes] =
+  const [priceRes, historyRes, signalsRes, accuracyRes, newsRes, optionsRes, watchlistRes] =
     await Promise.all([
       supabase
         .from("raw_prices")
@@ -31,6 +32,14 @@ async function fetchAssetData(assetType: AssetType, identifier: string, userId: 
         .order("captured_at", { ascending: false })
         .limit(1)
         .single(),
+
+      supabase
+        .from("raw_prices")
+        .select("price, captured_at")
+        .eq("asset_type", assetType)
+        .eq("identifier", identifier)
+        .order("captured_at", { ascending: false })
+        .limit(500),
 
       supabase
         .from("signals")
@@ -74,8 +83,21 @@ async function fetchAssetData(assetType: AssetType, identifier: string, userId: 
         .single(),
     ]);
 
+  // Build chart points: dedupe by timestamp, ascending, drop nulls
+  const seen = new Set<number>();
+  const history: PricePoint[] = [];
+  for (const row of (historyRes.data ?? [])) {
+    if (row.price == null) continue;
+    const time = Math.floor(new Date(row.captured_at).getTime() / 1000);
+    if (seen.has(time)) continue;
+    seen.add(time);
+    history.push({ time, value: Number(row.price) });
+  }
+  history.sort((a, b) => a.time - b.time);
+
   return {
     price:       priceRes.data,
+    history,
     signals:     (signalsRes.data ?? []) as Signal[],
     accuracy:    accuracyRes.data,
     news:        newsRes.data ?? [],
@@ -94,7 +116,7 @@ export default async function AssetPage({ params }: PageProps) {
   const tier = await getUserTier();
   const canSeeOptions = canAccessFeature(tier, "real_time");
 
-  const { price, signals, accuracy, news, options, watchlistId } =
+  const { price, history, signals, accuracy, news, options, watchlistId } =
     await fetchAssetData(type, identifier, user!.id);
 
   if (!price && signals.length === 0) notFound();
@@ -120,6 +142,13 @@ export default async function AssetPage({ params }: PageProps) {
           watchlistId={watchlistId}
         />
       </div>
+
+      {/* Price chart */}
+      {history.length > 1 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+          <PriceChart data={history} assetType={type} />
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left: signals */}

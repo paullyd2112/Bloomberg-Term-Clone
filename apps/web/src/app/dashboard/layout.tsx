@@ -24,6 +24,11 @@ export default async function DashboardLayout({
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar user={user} tier={tier} />
         <TickerBar />
+        <div className="px-4 py-1 bg-zinc-950 border-b border-zinc-800/50 text-center flex-shrink-0">
+          <p className="text-[10px] text-zinc-600">
+            For informational purposes only. Not financial advice. Past performance is not indicative of future results.
+          </p>
+        </div>
         {/* pb-16 reserves space for the mobile bottom nav */}
         <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">{children}</main>
       </div>

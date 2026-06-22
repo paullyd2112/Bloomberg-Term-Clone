@@ -27,6 +27,9 @@ export const STRIPE_PRICE_QUARTERLY          = () => requireEnv("STRIPE_PRICE_QU
 export const STRIPE_PRICE_ANNUAL             = () => requireEnv("STRIPE_PRICE_ANNUAL");
 export const STRIPE_PRICE_ELITE_MONTHLY      = () => requireEnv("STRIPE_PRICE_ELITE_MONTHLY");
 export const STRIPE_PRICE_ELITE_ANNUAL       = () => requireEnv("STRIPE_PRICE_ELITE_ANNUAL");
+export const STRIPE_PRICE_LIFETIME           = () => requireEnv("STRIPE_PRICE_LIFETIME");
+export const STRIPE_PRICE_LIFETIME_ELITE     = () => requireEnv("STRIPE_PRICE_LIFETIME_ELITE");
+export const STRIPE_PRICE_ELITE_QUARTERLY    = () => requireEnv("STRIPE_PRICE_ELITE_QUARTERLY");
 
 // ─── Email ────────────────────────────────────────────────────────────────────
 export const RESEND_API_KEY                  = () => requireEnv("RESEND_API_KEY");
@@ -36,7 +39,7 @@ export const NEXT_PUBLIC_SENTRY_DSN          = process.env.NEXT_PUBLIC_SENTRY_DS
 export const SENTRY_AUTH_TOKEN               = () => requireEnv("SENTRY_AUTH_TOKEN");
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
-export const ADMIN_EMAIL                     = () => requireEnv("ADMIN_EMAIL");
+export const ADMIN_EMAILS                    = () => requireEnv("ADMIN_EMAILS");
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export const NEXT_PUBLIC_APP_URL             = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";

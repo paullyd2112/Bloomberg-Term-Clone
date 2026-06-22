@@ -3,6 +3,7 @@ import { getUser, getUserTier } from "@/lib/user";
 import { WATCHLIST_LIMIT } from "@/lib/tier";
 import AddToWatchlist from "@/components/watchlist/AddToWatchlist";
 import WatchlistRow from "@/components/watchlist/WatchlistRow";
+import SubscribeGate from "@/components/ui/SubscribeGate";
 
 export const revalidate = 60;
 
@@ -67,8 +68,11 @@ async function fetchWatchlist(userId: string): Promise<WatchlistItem[]> {
 }
 
 export default async function WatchlistPage() {
-  const user  = await getUser();
-  const tier  = await getUserTier();
+  const user = await getUser();
+  const tier = await getUserTier();
+
+  if (tier === "free") return <SubscribeGate />;
+
   const items = await fetchWatchlist(user!.id);
 
   const limit        = WATCHLIST_LIMIT[tier];
@@ -84,7 +88,6 @@ export default async function WatchlistPage() {
           <p className="text-xs text-zinc-500 mt-0.5">
             {count}
             {limit === Infinity ? "" : ` / ${limit}`} assets
-            {tier === "free" && " · free tier limit"}
           </p>
         </div>
         <AddToWatchlist limitReached={limitReached} />
@@ -103,8 +106,8 @@ export default async function WatchlistPage() {
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
           <div className="flex items-center gap-3 px-4 py-2 border-b border-zinc-800 text-xs font-semibold text-zinc-500 uppercase tracking-widest">
             <div className="flex-1">Asset</div>
-            <div className="min-w-[80px] text-right">Price</div>
-            <div className="min-w-[64px] text-right">Signal</div>
+            <div className="min-w-[64px] sm:min-w-[80px] text-right">Price</div>
+            <div className="min-w-[52px] sm:min-w-[64px] text-right">Signal</div>
             <div className="w-6" />
           </div>
 
@@ -114,14 +117,6 @@ export default async function WatchlistPage() {
         </div>
       )}
 
-      {tier === "free" && count > 0 && (
-        <p className="text-xs text-zinc-600 text-center">
-          Free plan is limited to {limit} assets.{" "}
-          <a href="/dashboard/upgrade" className="text-green-400 hover:text-green-300">
-            Upgrade for unlimited →
-          </a>
-        </p>
-      )}
     </div>
   );
 }

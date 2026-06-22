@@ -16,7 +16,6 @@ type CongressTrade = {
 };
 
 type Filter = {
-  party:       "all" | "D" | "R" | "I";
   transaction: "all" | "buy" | "sell";
   search:      string;
 };
@@ -29,11 +28,11 @@ const PARTY_LABEL: Record<string, { label: string; cls: string }> = {
   I:          { label: "I", cls: "bg-zinc-600/40 text-zinc-400 border-zinc-500" },
 };
 
-function partyKey(party: string): string {
+function partyBadge(party: string): { label: string; cls: string } {
   const p = party.trim();
-  if (p === "D" || p.toLowerCase().startsWith("dem")) return "D";
-  if (p === "R" || p.toLowerCase().startsWith("rep")) return "R";
-  return "I";
+  if (p === "D" || p.toLowerCase().startsWith("dem")) return PARTY_LABEL["D"];
+  if (p === "R" || p.toLowerCase().startsWith("rep")) return PARTY_LABEL["R"];
+  return PARTY_LABEL["I"];
 }
 
 function reportingDelay(tradeDate: string, reportDate: string | null): string | null {
@@ -48,7 +47,7 @@ function reportingDelay(tradeDate: string, reportDate: string | null): string | 
 export default function CongressPage() {
   const [trades, setTrades]       = useState<CongressTrade[]>([]);
   const [loading, setLoading]     = useState(true);
-  const [filter, setFilter]       = useState<Filter>({ party: "all", transaction: "all", search: "" });
+  const [filter, setFilter]       = useState<Filter>({ transaction: "all", search: "" });
   const [, startTransition]       = useTransition();
 
   useEffect(() => {
@@ -65,7 +64,6 @@ export default function CongressPage() {
   }, []);
 
   const filtered = trades.filter((t) => {
-    if (filter.party !== "all" && partyKey(t.party) !== filter.party) return false;
     if (filter.transaction !== "all" && t.transaction !== filter.transaction) return false;
     if (filter.search) {
       const q = filter.search.toUpperCase();
@@ -90,9 +88,9 @@ export default function CongressPage() {
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Total trades",  value: filtered.length, cls: "text-white" },
-          { label: "Buys",          value: buys,            cls: "text-green-400" },
-          { label: "Sells",         value: sells,           cls: "text-red-400" },
+          { label: "Total trades", value: filtered.length, cls: "text-white" },
+          { label: "Buys",         value: buys,            cls: "text-green-400" },
+          { label: "Sells",        value: sells,           cls: "text-red-400" },
         ].map(({ label, value, cls }) => (
           <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
             <div className={`text-2xl font-bold ${cls}`}>{value}</div>
@@ -111,25 +109,8 @@ export default function CongressPage() {
           onChange={(e) =>
             startTransition(() => setFilter((f) => ({ ...f, search: e.target.value })))
           }
-          className="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 w-52"
+          className="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 w-full sm:w-52"
         />
-
-        {/* Party filter */}
-        <div className="flex rounded-md overflow-hidden border border-zinc-700">
-          {(["all", "D", "R", "I"] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setFilter((f) => ({ ...f, party: p }))}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                filter.party === p
-                  ? "bg-zinc-700 text-white"
-                  : "bg-zinc-900 text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              {p === "all" ? "All" : p === "D" ? "Dem" : p === "R" ? "Rep" : "Ind"}
-            </button>
-          ))}
-        </div>
 
         {/* Transaction filter */}
         <div className="flex rounded-md overflow-hidden border border-zinc-700">
@@ -176,8 +157,7 @@ export default function CongressPage() {
               </thead>
               <tbody>
                 {filtered.map((t) => {
-                  const pk    = partyKey(t.party);
-                  const pInfo = PARTY_LABEL[pk] ?? PARTY_LABEL["I"];
+                  const pInfo = partyBadge(t.party);
                   const delay = reportingDelay(t.trade_date, t.report_date);
                   const delayNum = delay ? parseInt(delay) : null;
 
@@ -189,12 +169,14 @@ export default function CongressPage() {
                       {/* Politician */}
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <span
-                            className={`inline-flex items-center border rounded px-1.5 py-0.5 text-[10px] font-bold ${pInfo.cls}`}
-                          >
-                            {pInfo.label}
-                          </span>
-                          <span className="text-zinc-200 font-medium truncate max-w-[160px]">
+                          {t.party && (
+                            <span
+                              className={`inline-flex items-center border rounded px-1.5 py-0.5 text-[10px] font-bold ${pInfo.cls}`}
+                            >
+                              {pInfo.label}
+                            </span>
+                          )}
+                          <span className="text-zinc-200 font-medium truncate max-w-[180px]">
                             {t.politician || "—"}
                           </span>
                         </div>
@@ -265,7 +247,7 @@ export default function CongressPage() {
 
       {/* Footer note */}
       <p className="text-zinc-600 text-xs">
-        Source: Quiver Quant · STOCK Act disclosures · Last 90 days ·{" "}
+        Source: Financial Modeling Prep (FMP) · STOCK Act disclosures · Last 90 days ·{" "}
         <span className="text-amber-500/70">Delays &gt;30 days highlighted</span>
       </p>
     </div>

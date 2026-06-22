@@ -1,5 +1,6 @@
 """
-Stocks ingestion — yfinance + Pandas-TA indicators + Finnhub news.
+Stocks ingestion — yfinance (OHLCV) + FMP (fundamentals fallback) +
+Alpha Vantage (price fallback) + Finnhub (news) + Pandas-TA indicators.
 Runs every 60 minutes weekdays 9am-5pm ET via scheduler.
 """
 
@@ -8,7 +9,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
-import pandas_ta as ta
+import pandas_ta_classic as ta
 import yfinance as yf
 import httpx
 import sentry_sdk
@@ -20,14 +21,50 @@ from supabase_client import supabase
 load_dotenv()
 
 FINNHUB_KEY    = os.environ.get("FINNHUB_API_KEY", "")
+FMP_KEY        = os.environ.get("FMP_API_KEY", "")
+AV_KEY         = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
+MASSIVE_KEY    = os.environ.get("_MASSIVE_API_KEY", "")
 FINNHUB_URL    = "https://finnhub.io/api/v1/company-news"
+FINNHUB_CANDLE = "https://finnhub.io/api/v1/stock/candle"
+FMP_QUOTE_URL  = "https://financialmodelingprep.com/api/v3/quote"
+AV_URL         = "https://www.alphavantage.co/query"
+MASSIVE_BASE   = "https://api.massive.com"
 TICKER_DELAY_S = 0.5   # stay well under rate limits
 
 DEFAULT_WATCHLIST = [
-    "AAPL", "TSLA", "NVDA", "MSFT", "AMZN",
-    "META", "GOOGL", "AMD",  "COIN", "PLTR",
-    "SPY",  "QQQ",  "ARKK", "GME",  "AMC",
-    "HOOD", "SOFI", "MSTR", "ARM",  "SMCI",
+    # Mega-cap tech
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "NFLX",
+
+    # Semiconductors & hardware
+    "AMD", "INTC", "MU", "MRVL", "QCOM", "AVGO", "ARM", "SMCI",
+    "LRCX", "AMAT", "ALAB",
+
+    # AI / cloud / SaaS
+    "PLTR", "SNOW", "DDOG", "NET", "CRWD", "ZS", "COIN",
+
+    # Fintech
+    "HOOD", "SOFI", "SQ", "PYPL", "AFRM", "UPST",
+
+    # Space, defense & hard tech
+    "RKLB", "ASTS", "LUNR", "KTOS", "HII", "LMT",
+
+    # EV & clean energy
+    "RIVN", "LCID", "NIO", "ENPH", "FSLR", "VRT",
+
+    # Biotech
+    "MRNA", "BNTX", "RXRX", "CELH",
+
+    # Consumer / retail tech
+    "SHOP", "MELI", "CHWY", "RDDT",
+
+    # Quantum & emerging AI
+    "IONQ", "RGTI", "SOUN",
+
+    # Momentum / meme
+    "GME", "AMC", "MSTR",
+
+    # Sector ETFs (give macro context)
+    "SPY", "QQQ", "ARKK", "SOXX", "XBI",
 ]
 
 
@@ -81,11 +118,26 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
     volume_sma = float(volume_sma_raw) if pd.notna(volume_sma_raw) and volume_sma_raw else None
     vol_ratio  = (float(latest["volume"]) / volume_sma) if volume_sma else None
 
+    def _prev_col(prefix: str) -> float | None:
+        match = [c for c in df.columns if c.startswith(prefix.lower())]
+        if not match:
+            return None
+        val = prev[match[0]]
+        return float(val) if pd.notna(val) else None
+
+    week_return = None
+    if len(df) >= 6:
+        week_ago = df.iloc[-6]
+        week_return = round(
+            (float(latest["close"]) - float(week_ago["close"])) / float(week_ago["close"]) * 100, 2
+        )
+
     return {
         "rsi_14":              _col("rsi_"),
         "macd_line":           _col("macd_"),
         "macd_signal":         _col("macds_"),
         "macd_hist":           _col("macdh_"),
+        "prev_macd_hist":      _prev_col("macdh_"),
         "bb_upper":            _col("bbu_"),
         "bb_middle":           _col("bbm_"),
         "bb_lower":            _col("bbl_"),
@@ -95,6 +147,7 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
         "sma_50":              float(latest["sma_50"]) if pd.notna(latest["sma_50"]) else None,
         "price_vs_sma50_pct":  round(float(latest["price_vs_sma50_pct"]), 2)
                                if pd.notna(latest["price_vs_sma50_pct"]) else None,
+        "week_return_pct":     week_return,
         "close":               float(latest["close"]),
         "volume":              float(latest["volume"]),
         "change_1d_pct":       round(
@@ -103,31 +156,173 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
     }
 
 
-# ─── Price fetch ──────────────────────────────────────────────────────────────
+# ─── Price fetch (yfinance → FMP → Alpha Vantage) ────────────────────────────
 
-def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
-    """Fetch 90 days of daily OHLCV via yfinance."""
+def _fetch_ohlcv_yfinance(ticker: str) -> pd.DataFrame | None:
     try:
-        df = yf.download(
-            ticker,
-            period="90d",
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-        )
+        df = yf.download(ticker, period="90d", interval="1d",
+                         auto_adjust=True, progress=False)
         if df.empty:
-            logger.warning("{}: empty OHLCV response", ticker)
             return None
-        # yfinance returns MultiIndex columns when downloading single ticker
-        # with some versions — flatten if needed
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         df.columns = [c.lower() for c in df.columns]
         return df
     except Exception as e:
-        logger.error("{}: OHLCV fetch failed — {}", ticker, e)
-        sentry_sdk.capture_exception(e)
+        logger.debug("{}: yfinance failed — {}", ticker, e)
         return None
+
+
+def _fetch_ohlcv_finnhub(ticker: str) -> pd.DataFrame | None:
+    """Finnhub stock candles — we already have the key, use it."""
+    if not FINNHUB_KEY:
+        return None
+    try:
+        end   = int(datetime.now(timezone.utc).timestamp())
+        start = int((datetime.now(timezone.utc) - timedelta(days=90)).timestamp())
+        resp = httpx.get(
+            FINNHUB_CANDLE,
+            params={"symbol": ticker, "resolution": "D",
+                    "from": start, "to": end, "token": FINNHUB_KEY},
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("s") != "ok" or not data.get("t"):
+            return None
+        df = pd.DataFrame({
+            "date":   pd.to_datetime(data["t"], unit="s", utc=True).tz_localize(None),
+            "open":   data["o"],
+            "high":   data["h"],
+            "low":    data["l"],
+            "close":  data["c"],
+            "volume": data["v"],
+        }).set_index("date").sort_index()
+        return df
+    except Exception as e:
+        logger.debug("{}: Finnhub candle failed — {}", ticker, e)
+        return None
+
+
+def _fetch_ohlcv_fmp(ticker: str) -> pd.DataFrame | None:
+    """FMP historical daily via stable endpoint."""
+    if not FMP_KEY:
+        return None
+    try:
+        resp = httpx.get(
+            "https://financialmodelingprep.com/stable/historical-price-eod/full",
+            params={"symbol": ticker, "apikey": FMP_KEY},
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        hist = data if isinstance(data, list) else data.get("historical", [])
+        if not hist:
+            return None
+        df = pd.DataFrame(hist)
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.sort_values("date").set_index("date")
+        df.columns = [c.lower() for c in df.columns]
+        df = df.tail(90)
+        return df[["open", "high", "low", "close", "volume"]]
+    except Exception as e:
+        logger.debug("{}: FMP OHLCV failed — {}", ticker, e)
+        return None
+
+
+def _fetch_ohlcv_av(ticker: str) -> pd.DataFrame | None:
+    """Alpha Vantage daily (free tier)."""
+    if not AV_KEY:
+        return None
+    try:
+        resp = httpx.get(
+            AV_URL,
+            params={"function": "TIME_SERIES_DAILY", "symbol": ticker,
+                    "outputsize": "compact", "apikey": AV_KEY},
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        ts = resp.json().get("Time Series (Daily)", {})
+        if not ts:
+            return None
+        rows = [
+            {"date": pd.Timestamp(d), "open": float(v["1. open"]),
+             "high": float(v["2. high"]), "low": float(v["3. low"]),
+             "close": float(v["4. close"]), "volume": float(v["5. volume"])}
+            for d, v in ts.items()
+        ]
+        df = pd.DataFrame(rows).sort_values("date").set_index("date")
+        return df[["open", "high", "low", "close", "volume"]]
+    except Exception as e:
+        logger.debug("{}: Alpha Vantage failed — {}", ticker, e)
+        return None
+
+
+def _fetch_ohlcv_massive(ticker: str) -> pd.DataFrame | None:
+    """Massive aggregate bars — EOD on free plan."""
+    if not MASSIVE_KEY:
+        return None
+    try:
+        end = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        start = (datetime.now(timezone.utc) - timedelta(days=90)).strftime("%Y-%m-%d")
+        resp = httpx.get(
+            f"{MASSIVE_BASE}/v2/aggs/ticker/{ticker}/range/1/day/{start}/{end}",
+            params={"apiKey": MASSIVE_KEY},
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        results = resp.json().get("results", [])
+        if not results:
+            return None
+        rows = []
+        for r in results:
+            rows.append({
+                "date": pd.Timestamp(r["t"], unit="ms").tz_localize(None),
+                "open": r["o"], "high": r["h"], "low": r["l"],
+                "close": r["c"], "volume": r.get("v", 0),
+            })
+        df = pd.DataFrame(rows).sort_values("date").set_index("date")
+        return df[["open", "high", "low", "close", "volume"]]
+    except Exception as e:
+        logger.debug("{}: Massive OHLCV failed — {}", ticker, e)
+        return None
+
+
+def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
+    """Fetch from ALL 5 sources, merge into one DataFrame for best coverage."""
+    sources = [
+        ("yfinance",      _fetch_ohlcv_yfinance),
+        ("Finnhub",       _fetch_ohlcv_finnhub),
+        ("FMP",           _fetch_ohlcv_fmp),
+        ("Alpha Vantage", _fetch_ohlcv_av),
+        ("Massive",       _fetch_ohlcv_massive),
+    ]
+    frames: list[pd.DataFrame] = []
+    for name, fn in sources:
+        try:
+            df = fn(ticker)
+            if df is not None and not df.empty:
+                df.columns = [c.lower() for c in df.columns]
+                logger.debug("{}: {} returned {} rows", ticker, name, len(df))
+                frames.append(df[["open", "high", "low", "close", "volume"]])
+            else:
+                logger.debug("{}: {} — no data", ticker, name)
+        except Exception as e:
+            logger.debug("{}: {} — error: {}", ticker, name, e)
+
+    if not frames:
+        logger.warning("{}: ALL 5 sources returned no data", ticker)
+        return None
+
+    merged = frames[0]
+    for extra in frames[1:]:
+        new_dates = extra.index.difference(merged.index)
+        if len(new_dates) > 0:
+            merged = pd.concat([merged, extra.loc[new_dates]]).sort_index()
+            logger.debug("{}: filled {} gap dates from additional source", ticker, len(new_dates))
+
+    logger.info("{}: merged OHLCV — {} rows from {} sources", ticker, len(merged), len(frames))
+    return merged
 
 
 # ─── News fetch ───────────────────────────────────────────────────────────────

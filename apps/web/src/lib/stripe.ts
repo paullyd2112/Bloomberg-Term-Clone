@@ -16,9 +16,14 @@ export const PLANS = {
   pro_monthly:   { priceEnvKey: "STRIPE_PRICE_MONTHLY",       tier: "pro"   as const },
   pro_quarterly: { priceEnvKey: "STRIPE_PRICE_QUARTERLY",     tier: "pro"   as const },
   pro_annual:    { priceEnvKey: "STRIPE_PRICE_ANNUAL",        tier: "pro"   as const },
-  elite_monthly: { priceEnvKey: "STRIPE_PRICE_ELITE_MONTHLY", tier: "elite" as const },
-  elite_annual:  { priceEnvKey: "STRIPE_PRICE_ELITE_ANNUAL",  tier: "elite" as const },
-  lifetime_pro:  { priceEnvKey: "STRIPE_PRICE_LIFETIME",      tier: "pro"   as const },
+  elite_monthly:   { priceEnvKey: "STRIPE_PRICE_ELITE_MONTHLY",   tier: "elite" as const },
+  elite_quarterly: { priceEnvKey: "STRIPE_PRICE_ELITE_QUARTERLY", tier: "elite" as const },
+  elite_annual:    { priceEnvKey: "STRIPE_PRICE_ELITE_ANNUAL",    tier: "elite" as const },
+  lifetime_pro:   { priceEnvKey: "STRIPE_PRICE_LIFETIME",       tier: "pro"   as const },
+  lifetime_elite: { priceEnvKey: "STRIPE_PRICE_LIFETIME_ELITE", tier: "elite" as const },
+  // Founding plans — same price as monthly, no trial, price-locked forever
+  founding_pro:   { priceEnvKey: "STRIPE_PRICE_MONTHLY",       tier: "pro"   as const },
+  founding_elite: { priceEnvKey: "STRIPE_PRICE_ELITE_MONTHLY", tier: "elite" as const },
 } as const;
 
 export type PlanKey = keyof typeof PLANS;

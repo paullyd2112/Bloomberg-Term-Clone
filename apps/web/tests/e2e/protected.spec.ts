@@ -7,6 +7,11 @@ const PROTECTED_ROUTES = [
   "/dashboard/alerts",
   "/dashboard/briefing",
   "/dashboard/congress",
+  "/dashboard/calendar",
+  "/dashboard/backtest",
+  "/dashboard/pleby",
+  "/dashboard/allocator",
+  "/dashboard/referrals",
   "/onboarding",
 ];
 

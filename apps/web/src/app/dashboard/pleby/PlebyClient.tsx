@@ -34,13 +34,13 @@ function extractToolCalls(content: Message["content"]): string[] {
 }
 
 const TOOL_LABELS: Record<string, string> = {
-  get_asset_overview:       "Pulling latest price",
-  get_recent_signals:       "Checking recent signals",
-  get_signal_accuracy:      "Looking up historical accuracy",
-  get_news:                 "Scanning news",
-  get_options_flow:         "Reading options flow",
-  get_congressional_trades: "Checking congressional trades",
-  get_upcoming_earnings:    "Looking up earnings",
+  get_asset_overview:         "Pulling latest price",
+  get_recent_signals:         "Checking recent signals",
+  get_signal_accuracy:        "Looking up historical accuracy",
+  get_news:                   "Scanning news",
+  get_options_flow:           "Reading options flow",
+  get_upcoming_earnings:      "Looking up earnings",
+  get_congressional_trades:   "Checking congressional trades",
 };
 
 export default function PlebyClient() {
@@ -233,10 +233,11 @@ export default function PlebyClient() {
           <div className="max-w-3xl mx-auto space-y-6">
             {messages.length === 0 && !streaming && (
               <div className="text-center py-12 space-y-3">
-                <div className="text-5xl">🤖</div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/pleby-mascot.png" alt="Pleby" className="h-36 w-auto mx-auto" />
                 <h2 className="text-white font-semibold text-lg">Ask Pleby</h2>
                 <p className="text-zinc-500 text-sm max-w-md mx-auto">
-                  Your AI trading analyst. Ask about any stock, crypto, or prediction market — Pleby pulls live signals, options flow, congressional trades, and news to give you a synthesized take.
+                  Your AI trading analyst. Ask about any stock, crypto, or prediction market — Pleby pulls live signals, options flow, earnings, and news to give you a synthesized take.
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center pt-2">
                   {[

@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 
-export default function LifetimeButton() {
+export default function LifetimeButton({
+  plan,
+}: {
+  plan: "lifetime_pro" | "lifetime_elite";
+}) {
   const [loading, setLoading] = useState(false);
 
   async function handleCheckout() {
@@ -11,7 +15,7 @@ export default function LifetimeButton() {
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: "lifetime_pro" }),
+        body: JSON.stringify({ plan }),
       });
       const data = await res.json();
       if (data.url) {

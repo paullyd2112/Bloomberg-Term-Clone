@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { syncToBeehiiv } from "@/lib/beehiiv";
 
 const Body = z.object({
   email: z.string().email(),
@@ -39,6 +40,8 @@ export async function POST(req: Request) {
     console.error("newsletter subscribe error:", error.message);
     return NextResponse.json({ error: "Failed to subscribe" }, { status: 500 });
   }
+
+  void syncToBeehiiv(email.toLowerCase(), "newsletter");
 
   return NextResponse.json({ ok: true });
 }
