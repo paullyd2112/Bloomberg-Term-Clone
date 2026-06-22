@@ -22,7 +22,7 @@ from prompts import prediction_markets as pred_prompt
 load_dotenv()
 
 MODEL              = "claude-sonnet-4-6"
-SIGNAL_COOLDOWN_H  = 2      # skip if signal generated within this many hours
+SIGNAL_COOLDOWN_H  = 4      # skip if signal generated within this many hours
 MAX_TOKENS         = 1024
 
 _anthropic = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
@@ -233,6 +233,46 @@ def _get_short_interest_context(ticker: str) -> dict | None:
         return None
 
 
+# ─── Macro context ───────────────────────────────────────────────────────────
+
+def _get_market_benchmark() -> dict:
+    """Fetch SPY + QQQ 24h change to give Claude broad market context."""
+    benchmarks = {}
+    for sym in ("SPY", "QQQ"):
+        try:
+            result = (
+                supabase.table("raw_prices")
+                .select("price, change_24h")
+                .eq("asset_type", "stock")
+                .eq("identifier", sym)
+                .order("captured_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                row = result.data[0]
+                benchmarks[sym] = {
+                    "price":     float(row["price"]) if row.get("price") else None,
+                    "change_24h": float(row["change_24h"]) if row.get("change_24h") else None,
+                }
+        except Exception:
+            pass
+    return benchmarks
+
+
+def _get_upcoming_macro(days: int = 2) -> list[str]:
+    """Fetch macro events within next N days as short strings for context."""
+    from ingestion.macro_events import get_upcoming_events
+    events = get_upcoming_events(days=days)
+    lines = []
+    for e in events[:5]:
+        name = e.get("event_name", "")
+        importance = e.get("importance", "")
+        event_date = e.get("event_date", "")
+        lines.append(f"{event_date} — {name} ({importance})")
+    return lines
+
+
 # ─── Signal writer ────────────────────────────────────────────────────────────
 
 def _write_signal(asset_type: str, identifier: str, price: float | None, signal) -> dict:
@@ -281,6 +321,10 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
 
     # ── Build asset-specific context & call Claude ──────────────────────────
 
+    # Fetch macro context once, share across asset types
+    benchmarks  = _get_market_benchmark()
+    macro_events = _get_upcoming_macro(days=2)
+
     try:
         if asset_type == "stock":
             context = {
@@ -292,6 +336,8 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
                 "earnings_context":     _get_earnings_context(identifier),
                 "options_context":      _get_options_context(identifier),
                 "short_interest_context": _get_short_interest_context(identifier),
+                "market_benchmarks":    benchmarks,
+                "upcoming_macro":       macro_events,
             }
             signal: StockSignal = client.chat.completions.create(
                 model=MODEL,
@@ -310,6 +356,8 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
                 "fear_greed":          _get_fear_greed(),
                 "market_cap":          meta.get("market_cap"),
                 "news_headlines":      news,
+                "market_benchmarks":   benchmarks,
+                "upcoming_macro":      macro_events,
             }
             signal: CryptoSignal = client.chat.completions.create(
                 model=MODEL,
@@ -399,99 +447,194 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
 # ─── Batch scoring functions (called by scheduler) ───────────────────────────
 
 def score_stocks() -> str:
-    from ingestion.stocks import get_default_watchlist
-    tickers = get_default_watchlist()
-    logger.info("Scoring {} stocks", len(tickers))
+    from scoring.scanner import scan_stocks
+    from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
+
+    scan_results = scan_stocks(use_movers=True)
+    core_always_score = {"AAPL", "NVDA", "TSLA", "GOOGL", "META", "AMZN", "MSFT", "SPY", "QQQ"}
+
+    haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
 
-    for ticker in tickers:
+    for item in scan_results:
+        ticker = item["ticker"]
+
+        if ticker in core_always_score:
+            try:
+                result = score_asset("stock", ticker)
+                sonnet_calls += 1
+                if result is None:
+                    skipped += 1
+                else:
+                    success += 1
+            except Exception as e:
+                logger.error("score_stocks error for {}: {}", ticker, e)
+                sentry_sdk.capture_exception(e)
+                failed += 1
+            continue
+
+        meta = {
+            "rsi_14": item.get("rsi"),
+            "volume_ratio": item.get("volume_ratio"),
+            "change_24h": item.get("change_24h"),
+        }
+        quick = prescreen_stock(ticker, meta, price=item.get("price"),
+                                change_24h=item.get("change_24h"))
+        haiku_calls += 1
+
+        if not should_escalate_to_sonnet(quick):
+            skipped += 1
+            continue
+
         try:
             result = score_asset("stock", ticker)
+            sonnet_calls += 1
             if result is None:
                 skipped += 1
             else:
                 success += 1
         except Exception as e:
-            logger.error("score_stocks unhandled error for {}: {}", ticker, e)
+            logger.error("score_stocks error for {}: {}", ticker, e)
             sentry_sdk.capture_exception(e)
             failed += 1
 
-    return f"{success} scored, {skipped} skipped (cooldown), {failed} failed"
+    for core_ticker in core_always_score:
+        if not any(s["ticker"] == core_ticker for s in scan_results):
+            try:
+                result = score_asset("stock", core_ticker)
+                sonnet_calls += 1
+                if result is None:
+                    skipped += 1
+                else:
+                    success += 1
+            except Exception as e:
+                logger.error("score_stocks error for {}: {}", core_ticker, e)
+                sentry_sdk.capture_exception(e)
+                failed += 1
+
+    return (f"{success} scored, {skipped} skipped, {failed} failed — "
+            f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet")
 
 
 def score_crypto() -> str:
+    from scoring.haiku_prescreen import prescreen_crypto, should_escalate_to_sonnet
+
     try:
         result = (
             supabase.table("raw_prices")
-            .select("identifier")
+            .select("identifier, price, change_24h, metadata")
             .eq("asset_type", "crypto")
             .neq("identifier", "MARKET_SENTIMENT")
             .order("captured_at", desc=True)
-            .limit(60)
+            .limit(20)
             .execute()
         )
-        # Deduplicate preserving order
-        seen, identifiers = set(), []
+        seen, rows = set(), []
         for r in result.data:
             sym = r["identifier"]
             if sym not in seen:
                 seen.add(sym)
-                identifiers.append(sym)
+                rows.append(r)
     except Exception as e:
         logger.error("score_crypto: failed to fetch identifiers — {}", e)
         return "failed to fetch identifiers"
 
-    logger.info("Scoring {} crypto assets", len(identifiers))
+    core_always_score = {"BTC", "ETH", "SOL", "XRP", "ADA"}
+    fg = _get_fear_greed()
+    haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
 
-    for sym in identifiers:
+    for row in rows:
+        sym = row["identifier"]
+        meta = row.get("metadata") or {}
+
+        if sym in core_always_score:
+            try:
+                result = score_asset("crypto", sym)
+                sonnet_calls += 1
+                if result is None:
+                    skipped += 1
+                else:
+                    success += 1
+            except Exception as e:
+                logger.error("score_crypto error for {}: {}", sym, e)
+                sentry_sdk.capture_exception(e)
+                failed += 1
+            continue
+
+        quick = prescreen_crypto(sym, meta, price=row.get("price"),
+                                 change_24h=row.get("change_24h"),
+                                 fear_greed=fg.get("value"))
+        haiku_calls += 1
+
+        if not should_escalate_to_sonnet(quick):
+            skipped += 1
+            continue
+
         try:
             result = score_asset("crypto", sym)
+            sonnet_calls += 1
             if result is None:
                 skipped += 1
             else:
                 success += 1
         except Exception as e:
-            logger.error("score_crypto unhandled error for {}: {}", sym, e)
+            logger.error("score_crypto error for {}: {}", sym, e)
             sentry_sdk.capture_exception(e)
             failed += 1
 
-    return f"{success} scored, {skipped} skipped (cooldown), {failed} failed"
+    return (f"{success} scored, {skipped} skipped, {failed} failed — "
+            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet")
 
 
 def score_prediction_markets() -> str:
+    from scoring.haiku_prescreen import prescreen_prediction, should_escalate_to_sonnet
+
     try:
         result = (
             supabase.table("raw_prices")
-            .select("identifier")
+            .select("identifier, price, volume, metadata")
             .eq("asset_type", "prediction")
             .order("volume", desc=True)
-            .limit(40)
+            .limit(20)
             .execute()
         )
-        seen, identifiers = set(), []
+        seen, rows = set(), []
         for r in result.data:
             ident = r["identifier"]
             if ident not in seen:
                 seen.add(ident)
-                identifiers.append(ident)
+                rows.append(r)
     except Exception as e:
         logger.error("score_prediction_markets: failed to fetch identifiers — {}", e)
         return "failed to fetch identifiers"
 
-    logger.info("Scoring {} prediction markets", len(identifiers))
+    haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
 
-    for ident in identifiers:
+    for row in rows:
+        ident = row["identifier"]
+
+        quick = prescreen_prediction(ident, price=row.get("price"),
+                                     volume=row.get("volume"),
+                                     metadata=row.get("metadata"))
+        haiku_calls += 1
+
+        if not should_escalate_to_sonnet(quick):
+            skipped += 1
+            continue
+
         try:
             result = score_asset("prediction", ident)
+            sonnet_calls += 1
             if result is None:
                 skipped += 1
             else:
                 success += 1
         except Exception as e:
-            logger.error("score_prediction_markets unhandled error for {}: {}", ident, e)
+            logger.error("score_prediction_markets error for {}: {}", ident, e)
             sentry_sdk.capture_exception(e)
             failed += 1
 
-    return f"{success} scored, {skipped} skipped (cooldown), {failed} failed"
+    return (f"{success} scored, {skipped} skipped, {failed} failed — "
+            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet")

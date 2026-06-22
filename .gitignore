@@ -19,6 +19,9 @@ node_modules/
 out/
 coverage/
 
+# Claude Code
+.claude/
+
 # Misc
 .DS_Store
 *.pem

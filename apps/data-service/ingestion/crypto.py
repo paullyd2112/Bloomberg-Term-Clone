@@ -1,6 +1,6 @@
 """
-Crypto ingestion — CoinGecko (market data) + CCXT/Binance (OHLCV) +
-Fear & Greed index + Finnhub news.
+Crypto ingestion — CoinGecko (primary) + Messari (enrichment/fallback) +
+CCXT/Binance (OHLCV indicators) + Fear & Greed index + Finnhub news.
 Runs every 60 minutes all hours via scheduler.
 """
 
@@ -12,7 +12,7 @@ import ccxt
 import httpx
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
+import pandas_ta_classic as ta
 import sentry_sdk
 from loguru import logger
 from dotenv import load_dotenv
@@ -21,10 +21,12 @@ from supabase_client import supabase
 
 load_dotenv()
 
-FINNHUB_KEY      = os.environ.get("FINNHUB_API_KEY", "")
-COINGECKO_KEY    = os.environ.get("COINGECKO_API_KEY", "")
+FINNHUB_KEY    = os.environ.get("FINNHUB_API_KEY", "")
+COINGECKO_KEY  = os.environ.get("COINGECKO_API_KEY", "")
+MESSARI_KEY    = os.environ.get("MESSARI_API_KEY", "")
 
 COINGECKO_URL  = "https://api.coingecko.com/api/v3/coins/markets"
+MESSARI_URL    = "https://data.messari.io/api/v1/assets"
 FEAR_GREED_URL = "https://api.alternative.me/fng/?limit=1"
 FINNHUB_NEWS   = "https://finnhub.io/api/v1/news"
 
@@ -103,25 +105,121 @@ def _coingecko_to_symbol(coin: dict) -> str:
     return coin.get("symbol", "").upper()
 
 
+# ─── Messari enrichment ───────────────────────────────────────────────────────
+
+# CoinGecko symbol → Messari slug
+_MESSARI_SLUGS: dict[str, str] = {
+    "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana", "BNB": "binancecoin",
+    "XRP": "xrp", "ADA": "cardano", "DOGE": "dogecoin", "AVAX": "avalanche",
+    "LINK": "chainlink", "DOT": "polkadot", "MATIC": "polygon", "UNI": "uniswap",
+    "LTC": "litecoin", "ATOM": "cosmos", "PEPE": "pepe", "SHIB": "shiba-inu",
+    "APT": "aptos", "SUI": "sui",
+}
+
+
+def _fetch_messari_metrics(symbol: str) -> dict | None:
+    """
+    Fetch Messari asset metrics — developer activity, token supply, ROI.
+    Returns a dict of extra metadata to merge into the coin record.
+    Messari free tier works without a key; key increases rate limits.
+    """
+    slug = _MESSARI_SLUGS.get(symbol.upper())
+    if not slug:
+        return None
+
+    headers: dict = {}
+    if MESSARI_KEY:
+        headers["x-messari-api-key"] = MESSARI_KEY
+
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT, headers=headers) as client:
+            resp = client.get(f"{MESSARI_URL}/{slug}/metrics")
+            if resp.status_code == 429:
+                logger.debug("Messari rate limit hit for {}", symbol)
+                return None
+            resp.raise_for_status()
+            data = resp.json().get("data", {})
+    except Exception as e:
+        logger.debug("{}: Messari fetch failed — {}", symbol, e)
+        return None
+
+    market = data.get("market_data", {})
+    supply = data.get("supply", {})
+    roi    = data.get("roi_data", {})
+    dev    = data.get("developer_activity", {})
+
+    return {
+        "messari_real_volume_24h":    market.get("real_volume_last_24_hours"),
+        "messari_liquid_supply_pct":  supply.get("liquid") and supply.get("max") and
+                                      round(supply["liquid"] / supply["max"] * 100, 2),
+        "messari_roi_30d":            roi.get("percent_change_last_1_month"),
+        "messari_roi_90d":            roi.get("percent_change_last_3_months"),
+        "messari_dev_commits_30d":    dev.get("commit_count_30_days"),
+    }
+
+
 # ─── CCXT / Binance OHLCV ────────────────────────────────────────────────────
 
 _exchange = ccxt.binance({"enableRateLimit": True})
 
+# Finnhub uses its own crypto symbol format: BINANCE:BTCUSDT
+_FINNHUB_CRYPTO_SYMBOLS: dict[str, str] = {
+    "BTC": "BINANCE:BTCUSDT", "ETH": "BINANCE:ETHUSDT",
+    "SOL": "BINANCE:SOLUSDT", "BNB": "BINANCE:BNBUSDT",
+    "XRP": "BINANCE:XRPUSDT", "DOGE": "BINANCE:DOGEUSDT",
+    "ADA": "BINANCE:ADAUSDT", "AVAX": "BINANCE:AVAXUSDT",
+    "LINK": "BINANCE:LINKUSDT", "DOT": "BINANCE:DOTUSDT",
+    "MATIC": "BINANCE:MATICUSDT", "UNI": "BINANCE:UNIUSDT",
+    "LTC": "BINANCE:LTCUSDT", "ATOM": "BINANCE:ATOMUSDT",
+}
+
+
+def _fetch_ohlcv_finnhub_crypto(symbol: str) -> pd.DataFrame | None:
+    """Finnhub crypto candles — 1h resolution, 7 days. Uses existing key."""
+    if not FINNHUB_KEY:
+        return None
+    fh_symbol = _FINNHUB_CRYPTO_SYMBOLS.get(symbol.upper())
+    if not fh_symbol:
+        return None
+    try:
+        import time as _time
+        end   = int(_time.time())
+        start = end - 7 * 24 * 3600
+        resp = httpx.get(
+            "https://finnhub.io/api/v1/crypto/candle",
+            params={"symbol": fh_symbol, "resolution": "60",
+                    "from": start, "to": end, "token": FINNHUB_KEY},
+            timeout=REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("s") != "ok" or not data.get("t"):
+            return None
+        df = pd.DataFrame({
+            "timestamp": pd.to_datetime(data["t"], unit="s", utc=True),
+            "open": data["o"], "high": data["h"],
+            "low":  data["l"], "close": data["c"], "volume": data["v"],
+        }).set_index("timestamp").sort_index()
+        return df
+    except Exception as e:
+        logger.debug("{}: Finnhub crypto candle failed — {}", symbol, e)
+        return None
+
 
 def _fetch_ohlcv(symbol: str) -> pd.DataFrame | None:
-    """Fetch 168 hours (7 days) of 1h OHLCV from Binance."""
+    """Binance (primary) → Finnhub crypto (fallback). Returns 1h OHLCV."""
     pair = CCXT_SYMBOL_MAP.get(symbol, f"{symbol}/USDT")
     try:
         raw = _exchange.fetch_ohlcv(pair, timeframe="1h", limit=168)
         if not raw:
-            return None
+            raise ValueError("empty response")
         df = pd.DataFrame(raw, columns=["timestamp", "open", "high", "low", "close", "volume"])
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
         df = df.set_index("timestamp").astype(float)
         return df
     except Exception as e:
-        logger.warning("{}: CCXT OHLCV fetch failed — {}", symbol, e)
-        return None
+        logger.debug("{}: Binance OHLCV failed — trying Finnhub — {}", symbol, e)
+        return _fetch_ohlcv_finnhub_crypto(symbol)
 
 
 # ─── Technical indicators ─────────────────────────────────────────────────────
@@ -265,6 +363,14 @@ def _ingest_coin(cg_data: dict) -> bool:
             record["metadata"].update(indicators)
         except Exception as e:
             logger.warning("{}: indicator computation failed — {}", symbol, e)
+
+    # Enrich with Messari metrics (developer activity, real volume, ROI)
+    messari = _fetch_messari_metrics(symbol)
+    if messari:
+        record["metadata"].update(messari)
+        record["metadata"]["sources"] = "coingecko+messari"
+    else:
+        record["metadata"]["sources"] = "coingecko"
 
     try:
         supabase.table("raw_prices").insert(record).execute()

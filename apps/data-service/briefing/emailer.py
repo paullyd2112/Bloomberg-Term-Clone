@@ -13,7 +13,7 @@ from loguru import logger
 
 from supabase_client import supabase
 
-resend.api_key = os.environ.get("RESEND_API_KEY", "")
+resend.api_key = os.environ.get("RESEND_API_KEY", "") or os.environ.get("RESEND_API_KEY_", "")
 
 FROM_ADDRESS  = "Plebs Morning Brief <brief@plebs.finance>"
 SUBJECT_PREFIX = "☀️ Plebs Brief"

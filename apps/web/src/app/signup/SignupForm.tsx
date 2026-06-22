@@ -56,7 +56,7 @@ export default function SignupForm() {
         <h2 className="text-white font-semibold">Check your email</h2>
         <p className="text-zinc-400 text-sm">
           We sent a confirmation link to <span className="text-white">{email}</span>.
-          Click it to activate your account and start your 7-day free trial.
+          Click it to activate your account and start your 14-day free trial.
         </p>
         <Link href="/login" className="text-green-400 text-sm hover:text-green-300">
           Back to sign in

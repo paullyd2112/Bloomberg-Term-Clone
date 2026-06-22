@@ -120,7 +120,7 @@ export default async function AlertsPage() {
 
       {alerts.length > 0 && (
         <p className="text-xs text-zinc-700 text-center">
-          Alerts check every 30 minutes. Email delivery coming soon.
+          Alerts check every 30 minutes. Alerts will appear on your dashboard when triggered.
         </p>
       )}
     </div>

@@ -2,6 +2,11 @@
 Outcome resolver — runs nightly at midnight UTC.
 Marks PENDING signals as WIN / LOSS / NEUTRAL based on price movement.
 Also handles alert evaluation every 30 minutes.
+
+Resolution timing and thresholds are specific to asset type and time_horizon:
+  - Stocks:  tighter thresholds, shorter eval windows
+  - Crypto:  wider thresholds (higher vol), same eval windows
+  - Predictions: settlement-based (no price thresholds)
 """
 
 import asyncio
@@ -13,10 +18,38 @@ from loguru import logger
 
 from supabase_client import supabase
 
-WIN_THRESHOLD  = 0.01   # 1% move in signal direction = WIN
-LOSS_THRESHOLD = 0.01   # 1% move against signal direction = LOSS
-
 REQUEST_TIMEOUT = 10.0
+
+# ─── Resolution config by (asset_type, time_horizon) ────────────────────────
+# Each tuple: (min_age_hours, win_threshold, loss_threshold)
+# min_age_hours  = how long to wait before evaluating
+# win_threshold  = % move in signal direction to count as WIN
+# loss_threshold = % move against signal direction to count as LOSS
+
+RESOLUTION_CONFIG: dict[tuple[str, str], tuple[float, float, float]] = {
+    # Stocks
+    ("stock", "intraday"):  (6,    0.005, 0.015),   # 6h,  0.5% win / 1.5% loss
+    ("stock", "swing"):     (120,  0.02,  0.05),     # 5 trading days, 2% win / 5% loss
+    ("stock", "longterm"):  (360,  0.05,  0.10),     # 15 trading days, 5% win / 10% loss
+    # Crypto — wider thresholds due to higher volatility
+    ("crypto", "intraday"): (6,    0.015, 0.03),     # 6h,  1.5% win / 3% loss
+    ("crypto", "swing"):    (120,  0.05,  0.10),     # 5 days, 5% win / 10% loss
+    ("crypto", "longterm"): (360,  0.10,  0.20),     # 15 days, 10% win / 20% loss
+}
+
+# Fallback for signals with missing/unknown time_horizon
+DEFAULT_CONFIG: dict[str, tuple[float, float, float]] = {
+    "stock":  (24, 0.01, 0.03),     # legacy 24h, 1% win / 3% loss
+    "crypto": (24, 0.02, 0.05),     # legacy 24h, 2% win / 5% loss
+}
+
+
+def _get_resolution_config(asset_type: str, time_horizon: str | None) -> tuple[float, float, float]:
+    if time_horizon:
+        key = (asset_type, time_horizon)
+        if key in RESOLUTION_CONFIG:
+            return RESOLUTION_CONFIG[key]
+    return DEFAULT_CONFIG.get(asset_type, (24, 0.01, 0.01))
 
 
 # ─── Price helpers ────────────────────────────────────────────────────────────
@@ -38,7 +71,13 @@ def _get_current_price(asset_type: str, identifier: str) -> float | None:
         return None
 
 
-def _score_outcome(direction: str, entry: float, current: float) -> str:
+def _score_outcome(
+    direction: str,
+    entry: float,
+    current: float,
+    win_threshold: float,
+    loss_threshold: float,
+) -> str:
     if direction == "HOLD":
         return "NEUTRAL"
 
@@ -48,16 +87,16 @@ def _score_outcome(direction: str, entry: float, current: float) -> str:
     pct_change = (current - entry) / entry
 
     if direction in ("BUY", "YES"):
-        if pct_change >= WIN_THRESHOLD:
+        if pct_change >= win_threshold:
             return "WIN"
-        if pct_change <= -LOSS_THRESHOLD:
+        if pct_change <= -loss_threshold:
             return "LOSS"
         return "NEUTRAL"
 
     if direction in ("SELL", "NO"):
-        if pct_change <= -WIN_THRESHOLD:
+        if pct_change <= -win_threshold:
             return "WIN"
-        if pct_change >= LOSS_THRESHOLD:
+        if pct_change >= loss_threshold:
             return "LOSS"
         return "NEUTRAL"
 
@@ -144,11 +183,15 @@ async def _fetch_resolved_polymarket(identifiers: list[str]) -> dict[str, str]:
 
 def resolve_outcomes() -> str:
     """
-    Find PENDING signals older than 24h and resolve them.
-    Stocks/crypto: price-based WIN/LOSS/NEUTRAL.
+    Find PENDING signals and resolve those that have aged past their
+    time_horizon-specific evaluation window.
+
+    Stocks/crypto: price-based WIN/LOSS/NEUTRAL with asset-specific thresholds.
     Predictions: settlement from Kalshi/Polymarket APIs.
     """
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    # Fetch ALL pending non-backtest signals — we filter by age per-signal
+    # using the earliest possible cutoff (6h for intraday)
+    earliest_cutoff = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
 
     try:
         result = (
@@ -156,51 +199,75 @@ def resolve_outcomes() -> str:
             .select("*")
             .eq("outcome", "PENDING")
             .eq("is_backtest", False)
-            .lte("created_at", cutoff)
+            .lte("created_at", earliest_cutoff)
             .execute()
         )
         pending = result.data or []
     except Exception as e:
         logger.error("resolve_outcomes: failed to fetch pending signals — {}", e)
         sentry_sdk.capture_exception(e)
-        return "failed to fetch pending signals"
+        return f"failed to fetch pending signals: {e}"
 
     if not pending:
         logger.info("resolve_outcomes: no pending signals to resolve")
         return "0 resolved"
 
-    logger.info("resolve_outcomes: resolving {} pending signals", len(pending))
+    logger.info("resolve_outcomes: {} pending signals past 6h cutoff", len(pending))
+
+    now = datetime.now(timezone.utc)
 
     # Split by asset type
     stock_crypto = [s for s in pending if s["asset_type"] in ("stock", "crypto")]
     predictions  = [s for s in pending if s["asset_type"] == "prediction"]
 
     resolved_count = 0
+    skipped_too_young = 0
 
-    # ── Stocks & Crypto: price-based ──────────────────────────────────────────
+    # ── Stocks & Crypto: price-based with per-signal thresholds ──────────────
     for signal in stock_crypto:
         try:
+            asset_type   = signal["asset_type"]
+            time_horizon = signal.get("time_horizon")
+            min_age_h, win_thresh, loss_thresh = _get_resolution_config(asset_type, time_horizon)
+
+            created = datetime.fromisoformat(
+                signal["created_at"].replace("Z", "+00:00")
+            )
+            age_hours = (now - created).total_seconds() / 3600
+
+            if age_hours < min_age_h:
+                skipped_too_young += 1
+                continue
+
             entry_price = signal.get("price_at_signal")
             if not entry_price:
                 continue
 
-            current_price = _get_current_price(signal["asset_type"], signal["identifier"])
+            current_price = _get_current_price(asset_type, signal["identifier"])
             if not current_price:
                 continue
 
-            outcome = _score_outcome(signal["direction"], float(entry_price), current_price)
+            outcome = _score_outcome(
+                signal["direction"],
+                float(entry_price),
+                current_price,
+                win_thresh,
+                loss_thresh,
+            )
 
             supabase.table("signals").update({
                 "outcome":       outcome,
-                "resolved_at":   datetime.now(timezone.utc).isoformat(),
+                "resolved_at":   now.isoformat(),
                 "outcome_price": current_price,
             }).eq("id", signal["id"]).execute()
 
             resolved_count += 1
             logger.debug(
-                "Resolved {}/{} signal {} → {} (entry={} current={})",
-                signal["asset_type"], signal["identifier"],
-                signal["id"], outcome, entry_price, current_price,
+                "Resolved {}/{} signal {} → {} (horizon={}, entry={}, current={}, "
+                "win_thresh={:.1%}, loss_thresh={:.1%})",
+                asset_type, signal["identifier"],
+                signal["id"], outcome, time_horizon,
+                entry_price, current_price, win_thresh, loss_thresh,
             )
         except Exception as e:
             logger.error("resolve error for signal {}: {}", signal.get("id"), e)
@@ -249,7 +316,10 @@ def resolve_outcomes() -> str:
                 logger.error("prediction resolve write failed for {}: {}", ident, e)
                 sentry_sdk.capture_exception(e)
 
-    summary = f"{resolved_count}/{len(pending)} signals resolved"
+    summary = (
+        f"{resolved_count}/{len(pending)} signals resolved"
+        f" ({skipped_too_young} too young for their time_horizon)"
+    )
     logger.info("resolve_outcomes complete — {}", summary)
     return summary
 
