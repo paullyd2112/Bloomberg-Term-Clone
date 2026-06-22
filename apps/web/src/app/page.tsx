@@ -26,9 +26,10 @@ function Nav() {
   return (
     <nav className="fixed top-0 inset-x-0 z-50 border-b border-white/[0.06] bg-black/70 backdrop-blur-xl">
       <div className="max-w-6xl mx-auto px-5 sm:px-8 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Plebs" className="h-7 w-auto" />
+        <Link href="/" className="flex items-center gap-2" aria-label="Plebs home">
+          <span className="text-lg font-semibold tracking-tight text-white">
+            Plebs<span className="text-emerald-400">.</span>
+          </span>
         </Link>
 
         <div className="hidden md:flex items-center gap-8 text-sm text-zinc-400">
@@ -74,9 +75,8 @@ function SectionLabel({ index, children }: { index: string; children: React.Reac
 function Hero() {
   return (
     <section className="relative px-5 sm:px-8 overflow-hidden">
-      {/* backdrop grid + glow */}
+      {/* backdrop glow */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-grid mask-fade" />
         <div className="absolute -top-20 left-1/4 h-[480px] w-[680px] -translate-x-1/2 rounded-full bg-emerald-500/[0.08] blur-[130px]" />
       </div>
 
@@ -500,7 +500,6 @@ function CTAStrip() {
   return (
     <section className="py-24 px-5 sm:px-8 border-t border-white/[0.06]">
       <div className="relative max-w-5xl mx-auto rounded-3xl border border-white/[0.08] bg-zinc-950 overflow-hidden ring-hairline">
-        <div className="pointer-events-none absolute inset-0 bg-grid opacity-60" />
         <div className="pointer-events-none absolute -top-24 left-1/2 h-[320px] w-[680px] -translate-x-1/2 rounded-full bg-emerald-500/[0.10] blur-[120px]" />
 
         <div className="relative px-6 sm:px-12 py-16 text-center">
