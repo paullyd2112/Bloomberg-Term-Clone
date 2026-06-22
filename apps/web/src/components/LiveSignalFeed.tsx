@@ -28,6 +28,14 @@ function formatPrice(n: number) {
 export default function LiveSignalFeed() {
   const [prices, setPrices] = useState<Record<string, TickerItem>>({});
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [now, setNow] = useState<Date | null>(null);
+
+  // Tick the clock every second so the timestamp stays live.
+  useEffect(() => {
+    setNow(new Date());
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -127,8 +135,8 @@ export default function LiveSignalFeed() {
         <div className="flex items-center justify-between border-t border-white/[0.06] bg-white/[0.02] px-4 py-2.5 font-mono text-[10px] text-zinc-600">
           <span>Live prices · signals are representative</span>
           <span className="tabular-nums">
-            {updatedAt
-              ? `Updated ${updatedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
+            {now && updatedAt
+              ? `Live ${now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
               : "Connecting…"}
           </span>
         </div>
