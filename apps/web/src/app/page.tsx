@@ -227,7 +227,7 @@ function Stats() {
   ];
 
   return (
-    <section className="px-5 sm:px-8 border-t border-white/[0.06]">
+    <section className="px-5 sm:px-8">
       <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 divide-x divide-white/[0.06]">
         {items.map((item) => (
           <div key={item.label} className="py-10 px-6 first:pl-0">
@@ -280,7 +280,7 @@ const FEATURES = [
 
 function Features() {
   return (
-    <section id="terminal" className="py-24 px-5 sm:px-8 border-t border-white/[0.06]">
+    <section id="terminal" className="py-24 px-5 sm:px-8">
       <div className="max-w-6xl mx-auto">
         <div className="max-w-2xl mb-14">
           <SectionLabel index="01">The terminal</SectionLabel>
@@ -347,7 +347,7 @@ const QUOTES = [
 
 function SocialProof() {
   return (
-    <section id="proof" className="py-24 px-5 sm:px-8 border-t border-white/[0.06]">
+    <section id="proof" className="py-24 px-5 sm:px-8">
       <div className="max-w-6xl mx-auto">
         <div className="max-w-2xl mb-14">
           <SectionLabel index="02">Results</SectionLabel>
@@ -422,7 +422,7 @@ const PLANS = [
 
 function Pricing() {
   return (
-    <section id="pricing" className="py-24 px-5 sm:px-8 border-t border-white/[0.06]">
+    <section id="pricing" className="py-24 px-5 sm:px-8">
       <div className="max-w-5xl mx-auto">
         <div className="max-w-2xl mb-14">
           <SectionLabel index="03">Pricing</SectionLabel>
@@ -498,7 +498,7 @@ function Pricing() {
 
 function CTAStrip() {
   return (
-    <section className="py-24 px-5 sm:px-8 border-t border-white/[0.06]">
+    <section className="py-24 px-5 sm:px-8">
       <div className="relative max-w-5xl mx-auto rounded-3xl border border-white/[0.08] bg-zinc-950 overflow-hidden ring-hairline">
         <div className="pointer-events-none absolute -top-24 left-1/2 h-[320px] w-[680px] -translate-x-1/2 rounded-full bg-emerald-500/[0.10] blur-[120px]" />
 
