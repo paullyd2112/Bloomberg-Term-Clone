@@ -12,12 +12,14 @@ export const WATCHLIST_LIMIT: Record<Tier, number> = {
 export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
   pro: [
     "AI signals — stocks & crypto",
+    "Customisable signal screener",
     "Unlimited watchlist",
     "Unusual options flow",
     "Congressional trade tracker",
     "Morning briefing email (8:45am ET)",
     "Portfolio tracker + P&L",
-    "Price & signal alerts",
+    "Performance analytics + equity curve",
+    "Email alerts when signals fire",
     "Per-asset AI accuracy tracking",
   ],
   elite: [
@@ -30,12 +32,14 @@ export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
   ],
 };
 
-export function canAccessFeature(tier: Tier, feature: "pleby" | "portfolio" | "alerts" | "real_time" | "prediction_markets"): boolean {
+export function canAccessFeature(tier: Tier, feature: "pleby" | "portfolio" | "alerts" | "real_time" | "prediction_markets" | "screener" | "performance"): boolean {
   if (feature === "pleby")               return tier === "elite";
   if (feature === "prediction_markets")  return tier === "elite";
   if (feature === "portfolio")           return tier === "pro" || tier === "elite";
   if (feature === "alerts")              return tier === "pro" || tier === "elite";
   if (feature === "real_time")           return tier === "pro" || tier === "elite";
+  if (feature === "screener")            return tier === "pro" || tier === "elite";
+  if (feature === "performance")         return tier === "pro" || tier === "elite";
   return false;
 }
 

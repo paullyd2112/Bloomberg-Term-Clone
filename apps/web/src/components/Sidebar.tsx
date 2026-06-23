@@ -12,8 +12,10 @@ const NAV: {
   tier?: "pro" | "elite";
 }[] = [
   { href: "/dashboard",            label: "Signals",       icon: "⚡" },
+  { href: "/dashboard/screener",   label: "Screener",      icon: "🔎", tier: "pro" },
   { href: "/dashboard/watchlist",  label: "Watchlist",     icon: "★" },
   { href: "/dashboard/portfolio",  label: "Portfolio",     icon: "◈",  tier: "pro" },
+  { href: "/dashboard/performance", label: "Performance",  icon: "📈", tier: "pro" },
   { href: "/dashboard/alerts",     label: "Alerts",        icon: "🔔", tier: "pro" },
   { href: "/dashboard/congress",   label: "Congress",      icon: "🏛" },
   { href: "/dashboard/insiders",   label: "Insiders",      icon: "🕵" },

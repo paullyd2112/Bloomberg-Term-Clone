@@ -8,6 +8,7 @@ const Body = z.object({
   phone_number:       z.string().max(30).nullable().optional(),
   trading_experience: z.enum(["beginner", "intermediate", "advanced"]).optional(),
   asset_preferences:  z.array(z.enum(["stocks", "crypto", "predictions"])).optional(),
+  email_alerts:       z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -29,12 +30,20 @@ export async function POST(req: Request) {
   };
   if (parsed.data.trading_experience) update.trading_experience = parsed.data.trading_experience;
   if (parsed.data.asset_preferences)  update.asset_preferences  = parsed.data.asset_preferences;
+  if (parsed.data.email_alerts !== undefined) update.email_alerts = parsed.data.email_alerts;
 
   const supabase = createClient();
-  const { error } = await supabase
+  let { error } = await supabase
     .from("profiles")
     .update(update)
     .eq("id", user.id);
+
+  // email_alerts ships in migration 005 — if it isn't applied yet the update
+  // fails on the unknown column. Retry once without it so the rest still saves.
+  if (error && "email_alerts" in update) {
+    delete update.email_alerts;
+    ({ error } = await supabase.from("profiles").update(update).eq("id", user.id));
+  }
 
   if (error) {
     console.error("profile update error:", error.message);

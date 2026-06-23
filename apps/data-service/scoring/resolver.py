@@ -17,6 +17,7 @@ import sentry_sdk
 from loguru import logger
 
 from supabase_client import supabase
+from briefing.alert_emails import send_alert_notification
 
 REQUEST_TIMEOUT = 10.0
 
@@ -373,6 +374,15 @@ def evaluate_alerts() -> str:
                     alert["identifier"], alert["trigger_type"],
                 )
 
+                # Deliver the notification email (best-effort, never blocks).
+                try:
+                    ctx = _build_alert_context(alert)
+                    send_alert_notification(alert, ctx)
+                except Exception as e:
+                    logger.error("alert email dispatch failed for alert {}: {}",
+                                 alert.get("id"), e)
+                    sentry_sdk.capture_exception(e)
+
         except Exception as e:
             logger.error("alert evaluation error for alert {}: {}", alert.get("id"), e)
             sentry_sdk.capture_exception(e)
@@ -458,3 +468,49 @@ def _check_news_drop(alert: dict) -> bool:
         return bool(result.data)
     except Exception:
         return False
+
+
+def _build_alert_context(alert: dict) -> dict:
+    """Gather the detail shown in a fired-alert email, keyed by trigger type."""
+    kind       = alert.get("trigger_type")
+    asset_type = alert["asset_type"]
+    identifier = alert["identifier"]
+
+    if kind == "signal_fired":
+        try:
+            res = (
+                supabase.table("signals")
+                .select("direction, confidence, reasoning")
+                .eq("asset_type", asset_type)
+                .eq("identifier", identifier)
+                .eq("is_backtest", False)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if res.data:
+                return res.data[0]
+        except Exception:
+            pass
+        return {}
+
+    if kind == "price_threshold":
+        return {"price": _get_current_price(asset_type, identifier)}
+
+    if kind == "news_drop":
+        try:
+            res = (
+                supabase.table("news_items")
+                .select("headline")
+                .eq("identifier", identifier)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if res.data:
+                return {"headline": res.data[0].get("headline", "")}
+        except Exception:
+            pass
+        return {}
+
+    return {}

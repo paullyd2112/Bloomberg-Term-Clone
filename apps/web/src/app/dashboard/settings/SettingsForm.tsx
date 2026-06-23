@@ -22,6 +22,7 @@ type Props = {
   initialPhone:       string;
   initialExperience:  Experience | null;
   initialAssets:      AssetPref[];
+  initialEmailAlerts: boolean;
 };
 
 export default function SettingsForm({
@@ -29,11 +30,13 @@ export default function SettingsForm({
   initialPhone,
   initialExperience,
   initialAssets,
+  initialEmailAlerts,
 }: Props) {
   const [fullName, setFullName]     = useState(initialFullName);
   const [phone, setPhone]           = useState(initialPhone);
   const [experience, setExperience] = useState<Experience | null>(initialExperience);
   const [assets, setAssets]         = useState<Set<AssetPref>>(new Set(initialAssets));
+  const [emailAlerts, setEmailAlerts] = useState(initialEmailAlerts);
   const [saving, setSaving]         = useState(false);
   const [status, setStatus]         = useState<"idle" | "saved" | "error">("idle");
 
@@ -58,6 +61,7 @@ export default function SettingsForm({
           phone_number:       phone.trim() || null,
           trading_experience: experience ?? undefined,
           asset_preferences:  assets.size > 0 ? Array.from(assets) : undefined,
+          email_alerts:       emailAlerts,
         }),
       });
       if (!res.ok) throw new Error("Failed");
@@ -144,6 +148,25 @@ export default function SettingsForm({
             );
           })}
         </div>
+      </div>
+
+      {/* Notifications */}
+      <div>
+        <label className="block text-xs text-zinc-400 mb-1.5">Notifications</label>
+        <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={emailAlerts}
+            onChange={(e) => { setEmailAlerts(e.target.checked); setStatus("idle"); }}
+            className="accent-green-500 w-4 h-4"
+          />
+          <span className="text-sm text-zinc-300">
+            Email me when my alerts fire
+          </span>
+        </label>
+        <p className="text-[11px] text-zinc-600 mt-1.5">
+          Get an email the moment a signal, price, or news alert you set is triggered.
+        </p>
       </div>
 
       {/* Save */}

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getUser, getUserProfile } from "@/lib/user";
+import { createClient } from "@/lib/supabase/server";
 import { isPaidTier, type Tier } from "@/lib/tier";
 import BillingPortalButton from "@/app/dashboard/upgrade/BillingPortalButton";
 import SettingsForm from "./SettingsForm";
@@ -17,6 +18,21 @@ export default async function SettingsPage() {
 
   const profile = await getUserProfile();
   const tier = (profile?.tier as Tier) ?? "free";
+
+  // Fetched separately + defensively: the email_alerts column ships in
+  // migration 005, which may not be applied yet. Default to opted-in.
+  let emailAlerts = true;
+  try {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("profiles")
+      .select("email_alerts")
+      .eq("id", user.id)
+      .single();
+    if (data && typeof data.email_alerts === "boolean") emailAlerts = data.email_alerts;
+  } catch {
+    // column not present yet — keep default
+  }
 
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const planLabel = profile?.billing_interval === "lifetime"
@@ -84,6 +100,7 @@ export default async function SettingsPage() {
         initialPhone={(profile?.phone_number as string) ?? ""}
         initialExperience={(profile?.trading_experience as Experience) ?? null}
         initialAssets={(profile?.asset_preferences as AssetPref[]) ?? []}
+        initialEmailAlerts={emailAlerts}
       />
 
       <p className="text-zinc-600 text-xs">
