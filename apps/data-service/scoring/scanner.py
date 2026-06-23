@@ -87,15 +87,22 @@ ALL_FILTERS = [
     _check_gap_move,
 ]
 
+EVENT_ONLY_FILTERS = [
+    _check_volume_surge,
+    _check_gap_move,
+]
 
-def scan_stocks(tickers: list[str] | None = None, use_movers: bool = True) -> list[dict]:
+
+def scan_stocks(tickers: list[str] | None = None, use_movers: bool = True,
+                event_only: bool = False) -> list[dict]:
     """
     Pre-screen stocks from raw_prices for technical setups.
     Returns list of {ticker, triggers: [...], trigger_count} for stocks
-    that pass MIN_FILTERS_TO_QUALIFY or more filters.
+    that pass the minimum filter threshold.
 
-    When use_movers=True, expands the scan universe with market movers
-    (top gainers, losers, most active) for whole-market coverage.
+    When event_only=True, only checks intraday event filters (gap moves,
+    volume surges) with a threshold of 1. Used for midday scans where
+    daily-bar indicators (RSI, MACD, Bollinger) haven't changed.
     """
     if tickers is None:
         if use_movers:
@@ -131,13 +138,16 @@ def scan_stocks(tickers: list[str] | None = None, use_movers: bool = True) -> li
             meta["price"] = row.get("price")
             meta["change_24h"] = row.get("change_24h")
 
+            filters = EVENT_ONLY_FILTERS if event_only else ALL_FILTERS
+            min_threshold = 1 if event_only else MIN_FILTERS_TO_QUALIFY
+
             triggers: list[str] = []
-            for check in ALL_FILTERS:
+            for check in filters:
                 result_str = check(meta)
                 if result_str:
                     triggers.append(result_str)
 
-            if len(triggers) >= MIN_FILTERS_TO_QUALIFY:
+            if len(triggers) >= min_threshold:
                 qualified.append({
                     "ticker": ticker,
                     "triggers": triggers,
@@ -152,9 +162,10 @@ def scan_stocks(tickers: list[str] | None = None, use_movers: bool = True) -> li
             logger.debug("Scanner error for {}: {}", ticker, e)
 
     qualified.sort(key=lambda x: x["trigger_count"], reverse=True)
+    mode_label = "event-only" if event_only else "full"
     logger.info(
-        "Scanner: {}/{} stocks qualified with {}+ triggers",
-        len(qualified), len(tickers), MIN_FILTERS_TO_QUALIFY,
+        "Scanner ({}): {}/{} stocks qualified with {}+ triggers",
+        mode_label, len(qualified), len(tickers), 1 if event_only else MIN_FILTERS_TO_QUALIFY,
     )
     return qualified
 

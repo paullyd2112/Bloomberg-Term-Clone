@@ -38,7 +38,7 @@
 - **Paper trading mode** — test automations against live data before committing real money
 - **Audit log** — full record of every automated action Pleby takes on a user's behalf
 
-> **Note:** Phase 3 has regulatory considerations (potential RIA/broker-dealer classification depending on framing). Requires legal review, guardrails, kill switches, and likely insurance before shipping. Target when revenue supports proper compliance infrastructure.
+> **Gate:** Phase 3 is blocked until **1,000+ users OR $30k MRR** (whichever comes first). Brokerage account connections have significant regulatory risk (SEC Investment Advisers Act, FINRA broker-dealer rules, state securities regs). Requires securities attorney consultation (~$2-5k), potential RIA registration, proper compliance infrastructure, and likely insurance before shipping.
 
 ---
 

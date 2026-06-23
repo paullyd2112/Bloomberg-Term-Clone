@@ -536,6 +536,49 @@ def score_stocks() -> str:
             f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet")
 
 
+def score_stocks_event_only() -> str:
+    """Midday event-driven scan — skips core tickers and daily-bar indicators.
+    Only scores stocks with intraday events (gap moves, volume surges)."""
+    from scoring.scanner import scan_stocks
+    from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
+
+    scan_results = scan_stocks(use_movers=True, event_only=True)
+
+    haiku_calls, sonnet_calls = 0, 0
+    success, skipped, failed = 0, 0, 0
+
+    for item in scan_results:
+        ticker = item["ticker"]
+
+        meta = {
+            "rsi_14": item.get("rsi"),
+            "volume_ratio": item.get("volume_ratio"),
+            "change_24h": item.get("change_24h"),
+        }
+        quick = prescreen_stock(ticker, meta, price=item.get("price"),
+                                change_24h=item.get("change_24h"))
+        haiku_calls += 1
+
+        if not should_escalate_to_sonnet(quick):
+            skipped += 1
+            continue
+
+        try:
+            result = score_asset("stock", ticker)
+            sonnet_calls += 1
+            if result is None:
+                skipped += 1
+            else:
+                success += 1
+        except Exception as e:
+            logger.error("score_stocks_event_only error for {}: {}", ticker, e)
+            sentry_sdk.capture_exception(e)
+            failed += 1
+
+    return (f"[event-only] {success} scored, {skipped} skipped, {failed} failed — "
+            f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet")
+
+
 def score_crypto() -> str:
     from scoring.haiku_prescreen import prescreen_crypto, should_escalate_to_sonnet
 

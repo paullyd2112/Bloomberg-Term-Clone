@@ -20,7 +20,7 @@ from ingestion.short_interest import ingest_short_interest
 from ingestion.earnings import ingest_earnings
 from ingestion.macro_events import seed_macro_events
 from ingestion.fred import enrich_macro_events
-from scoring.engine import score_stocks, score_crypto, score_prediction_markets
+from scoring.engine import score_stocks, score_stocks_event_only, score_crypto, score_prediction_markets
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
 from briefing.newsletter import generate_newsletter
@@ -76,6 +76,9 @@ def job_ingest_stocks():
 
 def job_score_stocks():
     return score_stocks()
+
+def job_score_stocks_event_only():
+    return score_stocks_event_only()
 
 def job_ingest_crypto():
     return ingest_crypto()
@@ -177,17 +180,19 @@ scheduler.add_job(lambda: _run_job("ingest_prediction_markets", job_ingest_predi
 scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
                   CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
 
-# Stocks — every 2 hours during market hours, weekdays only, skip holidays
+# Stocks — full scoring at open + close, event-only midday, weekdays only
 scheduler.add_job(lambda: _run_stock_job("ingest_stocks", job_ingest_stocks),
                   CronTrigger(minute=0, hour="9,11,13,15", day_of_week="mon-fri"), id="ingest_stocks")
 scheduler.add_job(lambda: _run_stock_job("score_stocks", job_score_stocks),
-                  CronTrigger(minute=20, hour="9,11,13,15", day_of_week="mon-fri"), id="score_stocks")
+                  CronTrigger(minute=20, hour="9,15", day_of_week="mon-fri"), id="score_stocks")
+scheduler.add_job(lambda: _run_stock_job("score_stocks_event", job_score_stocks_event_only),
+                  CronTrigger(minute=20, hour="11,13", day_of_week="mon-fri"), id="score_stocks_event")
 
-# Crypto — every 2 hours (was every 60 min)
+# Crypto — every hour
 scheduler.add_job(lambda: _run_job("ingest_crypto", job_ingest_crypto),
-                  IntervalTrigger(hours=2), id="ingest_crypto")
+                  IntervalTrigger(hours=1), id="ingest_crypto")
 scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
-                  CronTrigger(hour="*/2", minute=20), id="score_crypto")
+                  CronTrigger(minute=20, hour="*"), id="score_crypto")
 
 # Enrichment — weekdays, skip holidays
 scheduler.add_job(lambda: _run_stock_job("ingest_options_flow", job_ingest_options_flow),
