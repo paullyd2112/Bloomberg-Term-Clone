@@ -22,9 +22,16 @@ self.addEventListener("push", (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+function isSafeUrl(url) {
+  if (url.startsWith("/")) return true;
+  try { return new URL(url).origin === self.location.origin; }
+  catch { return false; }
+}
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || "/dashboard";
+  const raw = event.notification.data?.url || "/dashboard";
+  const url = isSafeUrl(raw) ? raw : "/dashboard";
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
