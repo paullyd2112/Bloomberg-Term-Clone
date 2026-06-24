@@ -125,6 +125,11 @@ export default function SignalCard({ signal }: { signal: Signal }) {
           <ShareButton signalId={signal.id} />
         </div>
       </div>
+
+      {/* Disclaimer */}
+      <p className="text-[10px] text-zinc-700 leading-tight">
+        AI analysis only — not financial advice. Do your own research.
+      </p>
     </div>
   );
 }

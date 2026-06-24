@@ -20,7 +20,7 @@ from ingestion.short_interest import ingest_short_interest
 from ingestion.earnings import ingest_earnings
 from ingestion.macro_events import seed_macro_events
 from ingestion.fred import enrich_macro_events
-from scoring.engine import score_stocks, score_crypto, score_prediction_markets
+from scoring.engine import score_stocks, score_stocks_event_only, score_crypto, score_prediction_markets
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
 from briefing.newsletter import generate_newsletter
@@ -77,6 +77,9 @@ def job_ingest_stocks():
 def job_score_stocks():
     return score_stocks()
 
+def job_score_stocks_event_only():
+    return score_stocks_event_only()
+
 def job_ingest_crypto():
     return ingest_crypto()
 
@@ -121,6 +124,68 @@ def job_refresh_asset_accuracy():
 
 def job_evaluate_alerts():
     return evaluate_alerts()
+
+
+_uptime_fail_count = 0
+UPTIME_ALERT_THRESHOLD = 2  # alert after 2 consecutive failures (10 min)
+UPTIME_URLS = [
+    os.environ.get("NEXT_PUBLIC_APP_URL", "https://plebs.finance"),
+]
+ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "paulsolomonaqua@gmail.com")
+
+
+def job_uptime_check():
+    import httpx
+    import resend as _resend
+
+    global _uptime_fail_count
+
+    _resend.api_key = os.environ.get("RESEND_API_KEY", "")
+    down_urls = []
+
+    for url in UPTIME_URLS:
+        if not url:
+            continue
+        try:
+            resp = httpx.get(url, timeout=10, follow_redirects=True)
+            if resp.status_code >= 500:
+                down_urls.append(f"{url} — HTTP {resp.status_code}")
+        except Exception as e:
+            down_urls.append(f"{url} — {e}")
+
+    if not down_urls:
+        if _uptime_fail_count > 0:
+            logger.info("Uptime recovered after {} consecutive failures", _uptime_fail_count)
+            if _uptime_fail_count >= UPTIME_ALERT_THRESHOLD and _resend.api_key:
+                try:
+                    _resend.Emails.send({
+                        "from": "Plebs Uptime <alerts@plebs.finance>",
+                        "to": [ALERT_EMAIL],
+                        "subject": "Plebs.finance is BACK UP",
+                        "text": f"All endpoints recovered after {_uptime_fail_count} consecutive failures.",
+                    })
+                except Exception:
+                    pass
+        _uptime_fail_count = 0
+        return "all endpoints healthy"
+
+    _uptime_fail_count += 1
+    logger.warning("Uptime check failed ({}/{}): {}", _uptime_fail_count, UPTIME_ALERT_THRESHOLD, down_urls)
+
+    if _uptime_fail_count == UPTIME_ALERT_THRESHOLD and _resend.api_key:
+        try:
+            _resend.Emails.send({
+                "from": "Plebs Uptime <alerts@plebs.finance>",
+                "to": [ALERT_EMAIL],
+                "subject": "Plebs.finance is DOWN",
+                "text": f"The following endpoints are unreachable:\n\n" + "\n".join(down_urls) +
+                        f"\n\nFailing for {_uptime_fail_count * 5} minutes.",
+            })
+            logger.info("Uptime alert email sent to {}", ALERT_EMAIL)
+        except Exception as e:
+            logger.error("Failed to send uptime alert: {}", e)
+
+    return f"DOWN: {down_urls}"
 
 
 # ─── US Market Holiday Guard ──────────────────────────────────────────────────
@@ -174,20 +239,23 @@ def _run_stock_job(name: str, fn):
 # Prediction markets — every 2 hours (was every 30 min)
 scheduler.add_job(lambda: _run_job("ingest_prediction_markets", job_ingest_prediction_markets),
                   IntervalTrigger(minutes=30), id="ingest_prediction_markets")
-scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
-                  CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
+# Prediction scoring disabled until data matures (~3 weeks of ingestion)
+# scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
+#                   CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
 
-# Stocks — every 2 hours during market hours, weekdays only, skip holidays
+# Stocks — full scoring at open + close, event-only midday, weekdays only
 scheduler.add_job(lambda: _run_stock_job("ingest_stocks", job_ingest_stocks),
                   CronTrigger(minute=0, hour="9,11,13,15", day_of_week="mon-fri"), id="ingest_stocks")
 scheduler.add_job(lambda: _run_stock_job("score_stocks", job_score_stocks),
-                  CronTrigger(minute=20, hour="9,11,13,15", day_of_week="mon-fri"), id="score_stocks")
+                  CronTrigger(minute=20, hour="9,15", day_of_week="mon-fri"), id="score_stocks")
+scheduler.add_job(lambda: _run_stock_job("score_stocks_event", job_score_stocks_event_only),
+                  CronTrigger(minute=20, hour="11,13", day_of_week="mon-fri"), id="score_stocks_event")
 
-# Crypto — every 2 hours (was every 60 min)
+# Crypto — every hour
 scheduler.add_job(lambda: _run_job("ingest_crypto", job_ingest_crypto),
-                  IntervalTrigger(hours=2), id="ingest_crypto")
+                  IntervalTrigger(hours=1), id="ingest_crypto")
 scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
-                  CronTrigger(hour="*/2", minute=20), id="score_crypto")
+                  CronTrigger(minute=20, hour="*"), id="score_crypto")
 
 # Enrichment — weekdays, skip holidays
 scheduler.add_job(lambda: _run_stock_job("ingest_options_flow", job_ingest_options_flow),
@@ -226,6 +294,10 @@ scheduler.add_job(lambda: _run_job("refresh_asset_accuracy", job_refresh_asset_a
 scheduler.add_job(lambda: _run_job("evaluate_alerts", job_evaluate_alerts),
                   IntervalTrigger(minutes=30), id="evaluate_alerts")
 
+# Uptime monitor — every 5 min, alerts via Resend if web app is down
+scheduler.add_job(lambda: _run_job("uptime_check", job_uptime_check),
+                  IntervalTrigger(minutes=5), id="uptime_check")
+
 # Portfolio allocations — notify users on the 1st of each month at 8am ET
 # Actual regeneration is user-triggered via the dashboard or Pleby
 scheduler.add_job(
@@ -244,6 +316,34 @@ def add_cors(response):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
+
+@app.route("/score-asset", methods=["POST"])
+def score_asset_endpoint():
+    """
+    On-demand scoring for a single asset. Called by the web app
+    when an Elite user views a ticker with no recent signal.
+    """
+    from flask import request as flask_request
+    from scoring.engine import score_asset
+
+    body = flask_request.get_json(silent=True) or {}
+    asset_type = body.get("asset_type")
+    identifier = body.get("identifier", "").upper()
+
+    if asset_type not in ("stock", "crypto", "prediction"):
+        return jsonify({"error": "Invalid asset_type"}), 400
+    if not identifier:
+        return jsonify({"error": "Missing identifier"}), 400
+
+    try:
+        result = score_asset(asset_type, identifier)
+        if result is None:
+            return jsonify({"status": "skipped", "reason": "recently scored or no data"})
+        return jsonify({"status": "ok", "signal": result})
+    except Exception as e:
+        logger.error("On-demand score failed for {}/{}: {}", asset_type, identifier, e)
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/score-now", methods=["GET", "POST"])
 def score_now():

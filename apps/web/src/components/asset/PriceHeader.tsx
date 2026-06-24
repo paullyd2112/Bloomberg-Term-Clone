@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
 type PriceData = {
   price: number | null;
   change_24h: number | null;
@@ -6,6 +10,33 @@ type PriceData = {
   captured_at: string;
 };
 
+function LiveClock() {
+  const [time, setTime] = useState("");
+
+  useEffect(() => {
+    function update() {
+      setTime(
+        new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      );
+    }
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!time) return null;
+
+  return (
+    <span className="text-xs text-zinc-600 font-mono tabular-nums">
+      {time}
+    </span>
+  );
+}
+
 export default function PriceHeader({
   price: data,
   assetType,
@@ -13,12 +44,8 @@ export default function PriceHeader({
   price: PriceData;
   assetType: string;
 }) {
-  const price     = data.price;
-  const change    = data.change_24h;
-  const updatedAt = new Date(data.captured_at).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const price  = data.price;
+  const change = data.change_24h;
 
   const formattedPrice =
     price == null
@@ -43,7 +70,7 @@ export default function PriceHeader({
           {change >= 0 ? "+" : ""}{Number(change).toFixed(2)}%
         </span>
       )}
-      <span className="text-xs text-zinc-600">updated {updatedAt}</span>
+      <LiveClock />
     </div>
   );
 }

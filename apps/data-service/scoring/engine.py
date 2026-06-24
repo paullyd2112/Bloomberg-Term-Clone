@@ -536,6 +536,58 @@ def score_stocks() -> str:
             f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet")
 
 
+def score_stocks_event_only() -> str:
+    """Midday event-driven scan — skips core tickers and daily-bar indicators.
+    Only scores stocks with intraday events (gap moves, volume surges)."""
+    from scoring.scanner import scan_stocks
+    from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
+
+    scan_results = scan_stocks(use_movers=True, event_only=True)
+
+    haiku_calls, sonnet_calls = 0, 0
+    success, skipped, failed = 0, 0, 0
+
+    for item in scan_results:
+        ticker = item["ticker"]
+
+        meta = {
+            "rsi_14": item.get("rsi"),
+            "volume_ratio": item.get("volume_ratio"),
+            "change_24h": item.get("change_24h"),
+        }
+        quick = prescreen_stock(ticker, meta, price=item.get("price"),
+                                change_24h=item.get("change_24h"))
+        haiku_calls += 1
+
+        if not should_escalate_to_sonnet(quick):
+            skipped += 1
+            continue
+
+        try:
+            result = score_asset("stock", ticker)
+            sonnet_calls += 1
+            if result is None:
+                skipped += 1
+            else:
+                success += 1
+        except Exception as e:
+            logger.error("score_stocks_event_only error for {}: {}", ticker, e)
+            sentry_sdk.capture_exception(e)
+            failed += 1
+
+    return (f"[event-only] {success} scored, {skipped} skipped, {failed} failed — "
+            f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet")
+
+
+CORE_CRYPTO   = {"BTC", "ETH", "SOL", "XRP", "ADA"}
+TIER1_CRYPTO  = {
+    "BNB", "DOGE", "AVAX", "DOT", "LINK", "UNI", "ATOM",
+    "LTC", "NEAR", "APT", "ARB", "OP", "FIL", "INJ", "SUI", "SEI",
+    "PEPE", "WIF", "SHIB", "TIA", "AAVE", "MKR", "RENDER", "FET",
+}
+CRYPTO_MOVER_THRESHOLD = 5.0  # % change to qualify lower-tier coins
+
+
 def score_crypto() -> str:
     from scoring.haiku_prescreen import prescreen_crypto, should_escalate_to_sonnet
 
@@ -546,7 +598,7 @@ def score_crypto() -> str:
             .eq("asset_type", "crypto")
             .neq("identifier", "MARKET_SENTIMENT")
             .order("captured_at", desc=True)
-            .limit(20)
+            .limit(200)
             .execute()
         )
         seen, rows = set(), []
@@ -559,16 +611,16 @@ def score_crypto() -> str:
         logger.error("score_crypto: failed to fetch identifiers — {}", e)
         return "failed to fetch identifiers"
 
-    core_always_score = {"BTC", "ETH", "SOL", "XRP", "ADA"}
     fg = _get_fear_greed()
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
+    tier_skipped = 0
 
     for row in rows:
         sym = row["identifier"]
         meta = row.get("metadata") or {}
 
-        if sym in core_always_score:
+        if sym in CORE_CRYPTO:
             try:
                 result = score_asset("crypto", sym)
                 sonnet_calls += 1
@@ -581,6 +633,12 @@ def score_crypto() -> str:
                 sentry_sdk.capture_exception(e)
                 failed += 1
             continue
+
+        if sym not in TIER1_CRYPTO:
+            change = row.get("change_24h")
+            if change is None or abs(float(change)) < CRYPTO_MOVER_THRESHOLD:
+                tier_skipped += 1
+                continue
 
         quick = prescreen_crypto(sym, meta, price=row.get("price"),
                                  change_24h=row.get("change_24h"),
@@ -604,7 +662,7 @@ def score_crypto() -> str:
             failed += 1
 
     return (f"{success} scored, {skipped} skipped, {failed} failed — "
-            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet")
+            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet, {tier_skipped} tier-skipped")
 
 
 def score_prediction_markets() -> str:

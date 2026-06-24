@@ -474,6 +474,12 @@ function Footer() {
         <div className="font-mono text-xs text-zinc-600">
           © {new Date().getFullYear()} Plebs · Not financial advice
         </div>
+        <p className="text-[11px] text-zinc-600 text-center max-w-2xl leading-relaxed">
+          Plebs.finance provides AI-generated market analysis for informational purposes only.
+          Nothing on this platform constitutes financial, investment, or trading advice.
+          Always do your own research and consult a licensed financial advisor before making investment decisions.
+          Past performance of AI signals does not guarantee future results.
+        </p>
       </div>
     </footer>
   );

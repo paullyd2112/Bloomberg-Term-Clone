@@ -41,22 +41,22 @@ export default function WatchlistRow({ item }: { item: WatchlistItem }) {
   const change = item.latest_price?.change_24h;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800 hover:bg-zinc-800/30 transition-colors group">
+    <div className="flex items-center gap-3 px-3 sm:px-4 py-3 border-b border-zinc-800 hover:bg-zinc-800/30 transition-colors group min-w-[320px]">
       {/* Asset info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <Link
             href={`/dashboard/asset/${item.asset_type}/${encodeURIComponent(item.identifier)}`}
-            className="font-mono font-semibold text-white text-sm hover:text-green-400 transition-colors"
+            className="font-mono font-semibold text-white text-sm hover:text-green-400 transition-colors truncate"
           >
             {item.identifier}
           </Link>
-          <span className="text-xs text-zinc-600 capitalize">{item.asset_type}</span>
+          <span className="text-xs text-zinc-600 capitalize hidden sm:inline">{item.asset_type}</span>
         </div>
       </div>
 
       {/* Price */}
-      <div className="text-right min-w-[64px] sm:min-w-[80px]">
+      <div className="text-right min-w-[56px] sm:min-w-[80px]">
         {item.latest_price?.price != null ? (
           <>
             <div className="text-sm text-white font-mono tabular-nums">
@@ -76,7 +76,7 @@ export default function WatchlistRow({ item }: { item: WatchlistItem }) {
       </div>
 
       {/* Latest signal */}
-      <div className="min-w-[52px] sm:min-w-[64px] text-right">
+      <div className="min-w-[48px] sm:min-w-[64px] text-right">
         {item.latest_signal ? (
           <div className="flex items-center gap-1 justify-end">
             <span className={`text-xs font-bold ${DIR_COLOR[item.latest_signal.direction] ?? "text-zinc-400"}`}>
@@ -95,7 +95,7 @@ export default function WatchlistRow({ item }: { item: WatchlistItem }) {
       <button
         onClick={handleRemove}
         disabled={removing}
-        className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-all text-sm px-1"
+        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-all text-sm px-1"
         title="Remove from watchlist"
       >
         {removing ? "…" : "✕"}

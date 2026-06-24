@@ -4,6 +4,7 @@ import { getUser, getUserTier } from "@/lib/user";
 import { canAccessFeature } from "@/lib/tier";
 import AlertRow from "@/components/alerts/AlertRow";
 import AddAlertModal from "@/components/alerts/AddAlertModal";
+import PushToggle from "@/components/notifications/PushToggle";
 
 export const revalidate = 60;
 
@@ -67,6 +68,11 @@ export default async function AlertsPage() {
           </p>
         </div>
         <AddAlertModal />
+      </div>
+
+      {/* Browser push opt-in */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+        <PushToggle />
       </div>
 
       {/* How it works */}

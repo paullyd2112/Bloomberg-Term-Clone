@@ -6,6 +6,7 @@ Pro/Elite subscribers get the same editorial + their signal data layered on top.
 
 import html
 import os
+import re
 from datetime import date
 
 import resend
@@ -74,31 +75,51 @@ def _get_user_signals(user_id: str, top_signals: list[dict]) -> list[dict]:
 
 # ─── HTML renderers ───────────────────────────────────────────────────────────
 
+def _md_to_html(text: str) -> str:
+    """Convert markdown links and bold to styled HTML for email."""
+    safe = html.escape(text)
+    safe = re.sub(
+        r'\[(.+?)\]\((.+?)\)',
+        lambda m: f'<a href="{m.group(2)}" style="color:#22c55e;text-decoration:underline;">{m.group(1)}</a>',
+        safe,
+    )
+    safe = re.sub(
+        r'\*\*(.+?)\*\*',
+        r'<strong style="color:#fff;font-weight:700;">\1</strong>',
+        safe,
+    )
+    return safe
+
+
 def _story_html(story: dict) -> str:
+    category      = html.escape(story.get("category", ""))
     headline      = html.escape(story.get("headline", ""))
-    what_happened = html.escape(story.get("what_happened", ""))
-    what_we_know  = html.escape(story.get("what_we_know", ""))
-    could_mean    = html.escape(story.get("could_mean", ""))
-    watch         = html.escape(story.get("watch", ""))
+    what_happened = _md_to_html(story.get("what_happened", ""))
+    what_we_know  = _md_to_html(story.get("what_we_know", ""))
+    could_mean    = _md_to_html(story.get("could_mean", ""))
+    watch         = _md_to_html(story.get("watch", ""))
 
     return f"""
-    <div style="margin-bottom:28px;">
-      <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:12px;line-height:1.3;">{headline}</div>
+    <div style="margin-bottom:32px;">
       <div style="margin-bottom:8px;">
+        <span style="display:inline-block;background:#22c55e22;color:#22c55e;border:1px solid #22c55e55;border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">{category}</span>
+      </div>
+      <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:14px;line-height:1.3;">{headline}</div>
+      <div style="margin-bottom:10px;">
         <span style="font-size:10px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;">What happened</span>
-        <div style="color:#d4d4d8;font-size:14px;line-height:1.6;margin-top:3px;">{what_happened}</div>
+        <div style="color:#d4d4d8;font-size:14px;line-height:1.7;margin-top:4px;">{what_happened}</div>
       </div>
-      <div style="margin-bottom:8px;">
+      <div style="margin-bottom:10px;">
         <span style="font-size:10px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;">What we know</span>
-        <div style="color:#d4d4d8;font-size:14px;line-height:1.6;margin-top:3px;">{what_we_know}</div>
+        <div style="color:#d4d4d8;font-size:14px;line-height:1.7;margin-top:4px;">{what_we_know}</div>
       </div>
-      <div style="margin-bottom:8px;">
+      <div style="margin-bottom:10px;">
         <span style="font-size:10px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;">What it could mean</span>
-        <div style="color:#d4d4d8;font-size:14px;line-height:1.6;margin-top:3px;">{could_mean}</div>
+        <div style="color:#d4d4d8;font-size:14px;line-height:1.7;margin-top:4px;">{could_mean}</div>
       </div>
       <div>
         <span style="font-size:10px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.08em;">What to watch</span>
-        <div style="color:#d4d4d8;font-size:14px;line-height:1.6;margin-top:3px;">{watch}</div>
+        <div style="color:#d4d4d8;font-size:14px;line-height:1.7;margin-top:4px;">{watch}</div>
       </div>
     </div>"""
 
@@ -110,13 +131,15 @@ def _signals_html(signals: list[dict]) -> str:
     for s in signals:
         direction  = html.escape(s.get("direction", ""))
         identifier = html.escape(s.get("identifier", ""))
+        asset_type = html.escape(s.get("asset_type", "stock"))
         confidence = s.get("confidence", 0)
         horizon    = html.escape(s.get("time_horizon", ""))
         dir_color  = "#22c55e" if direction in ("BUY", "YES") else "#ef4444"
+        asset_url  = f"{APP_URL}/dashboard/asset/{asset_type}/{identifier}"
         rows += f"""
         <tr>
           <td style="padding:8px 12px;border-bottom:1px solid #27272a;">
-            <span style="font-family:monospace;font-weight:700;color:#fff;">{identifier}</span>
+            <a href="{asset_url}" style="font-family:monospace;font-weight:700;color:#fff;text-decoration:none;">{identifier}</a>
             &nbsp;
             <span style="background:{dir_color}22;color:{dir_color};border:1px solid {dir_color}55;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">{direction}</span>
           </td>
@@ -156,8 +179,8 @@ def _options_html(options: list[dict]) -> str:
 def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
     content      = briefing.get("content_json") or {}
     subject_line = html.escape(briefing.get("headline", ""))
-    opening      = html.escape(content.get("opening_line", ""))
-    closing      = html.escape(content.get("closing_line", ""))
+    opening      = _md_to_html(content.get("opening_line", ""))
+    closing      = _md_to_html(content.get("closing_line", ""))
     stories      = content.get("stories", [])
     today        = date.today().strftime("%A, %B %-d")
     is_paid      = tier in ("pro", "elite")
@@ -205,6 +228,13 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
 </html>"""
 
 
+def _md_to_text(text: str) -> str:
+    """Strip markdown to plain text — links become 'text (url)', bold becomes plain."""
+    result = re.sub(r'\[(.+?)\]\((.+?)\)', r'\1 (\2)', text)
+    result = re.sub(r'\*\*(.+?)\*\*', r'\1', result)
+    return result
+
+
 def _render_text(briefing: dict) -> str:
     content  = briefing.get("content_json") or {}
     today    = date.today().strftime("%A, %B %-d")
@@ -214,20 +244,21 @@ def _render_text(briefing: dict) -> str:
         f"PLEBS.FINANCE — {today}",
         briefing.get("headline", ""),
         "",
-        content.get("opening_line", ""),
+        _md_to_text(content.get("opening_line", "")),
         "",
     ]
     for s in stories:
+        category = s.get("category", "").upper()
         lines += [
-            s.get("headline", "").upper(),
-            f"What happened: {s.get('what_happened', '')}",
-            f"What we know: {s.get('what_we_know', '')}",
-            f"What it could mean: {s.get('could_mean', '')}",
-            f"What to watch: {s.get('watch', '')}",
+            f"[{category}] {s.get('headline', '').upper()}" if category else s.get("headline", "").upper(),
+            f"What happened: {_md_to_text(s.get('what_happened', ''))}",
+            f"What we know: {_md_to_text(s.get('what_we_know', ''))}",
+            f"What it could mean: {_md_to_text(s.get('could_mean', ''))}",
+            f"What to watch: {_md_to_text(s.get('watch', ''))}",
             "",
         ]
     lines += [
-        content.get("closing_line", ""),
+        _md_to_text(content.get("closing_line", "")),
         "",
         f"Full platform: {APP_URL}",
         f"Not financial advice. Unsubscribe: {APP_URL}/unsubscribe",

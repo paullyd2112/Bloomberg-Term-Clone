@@ -383,6 +383,13 @@ def evaluate_alerts() -> str:
                                  alert.get("id"), e)
                     sentry_sdk.capture_exception(e)
 
+                # Deliver web push notification (no-op if push not configured)
+                try:
+                    from notifications.push import send_alert_push
+                    send_alert_push(alert["user_id"], alert)
+                except Exception as e:
+                    logger.warning("push delivery failed for alert {}: {}", alert.get("id"), e)
+
         except Exception as e:
             logger.error("alert evaluation error for alert {}: {}", alert.get("id"), e)
             sentry_sdk.capture_exception(e)

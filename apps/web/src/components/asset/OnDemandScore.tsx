@@ -1,0 +1,84 @@
+"use client";
+
+import { useState } from "react";
+
+type Props = {
+  assetType: string;
+  identifier: string;
+};
+
+export default function OnDemandScore({ assetType, identifier }: Props) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{
+    status: string;
+    signal?: { direction: string; confidence: number; reasoning: string };
+    error?: string;
+    reason?: string;
+  } | null>(null);
+
+  async function handleScore() {
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const resp = await fetch("/api/score-on-demand", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ asset_type: assetType, identifier }),
+      });
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        setResult({ status: "error", error: data.error });
+      } else {
+        setResult(data);
+      }
+    } catch {
+      setResult({ status: "error", error: "Request failed" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (result?.status === "ok" || result?.status === "cached") {
+    const s = result.signal!;
+    const color =
+      s.direction === "BUY" || s.direction === "YES"
+        ? "text-green-400"
+        : s.direction === "SELL" || s.direction === "NO"
+          ? "text-red-400"
+          : "text-zinc-400";
+
+    return (
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className={`text-sm font-bold ${color}`}>{s.direction}</span>
+          <span className="text-xs text-zinc-400">{s.confidence}% confidence</span>
+        </div>
+        <p className="text-xs text-zinc-300 leading-relaxed">{s.reasoning}</p>
+        {result.status === "cached" && (
+          <p className="text-[11px] text-zinc-600">From recent analysis</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-center py-6 space-y-3">
+      <p className="text-sm text-zinc-500">No signals yet for this ticker.</p>
+      <button
+        onClick={handleScore}
+        disabled={loading}
+        className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-xs font-semibold rounded-lg transition-colors"
+      >
+        {loading ? "Analyzing..." : "Generate AI Signal"}
+      </button>
+      {result?.status === "error" && (
+        <p className="text-xs text-red-400">{result.error}</p>
+      )}
+      {result?.status === "no_signal" && (
+        <p className="text-xs text-zinc-500">{result.reason}</p>
+      )}
+    </div>
+  );
+}

@@ -9,6 +9,7 @@ import AccuracyBadge from "@/components/asset/AccuracyBadge";
 import OptionsFlowTable from "@/components/asset/OptionsFlowTable";
 import PriceHeader from "@/components/asset/PriceHeader";
 import PriceChart, { type PricePoint } from "@/components/asset/PriceChart";
+import OnDemandScore from "@/components/asset/OnDemandScore";
 
 export const revalidate = 60;
 
@@ -115,6 +116,7 @@ export default async function AssetPage({ params }: PageProps) {
   const user = await getUser();
   const tier = await getUserTier();
   const canSeeOptions = canAccessFeature(tier, "real_time");
+  const canScoreOnDemand = canAccessFeature(tier, "on_demand_scoring");
 
   const { price, history, signals, accuracy, news, options, watchlistId } =
     await fetchAssetData(type, identifier, user!.id);
@@ -155,7 +157,11 @@ export default async function AssetPage({ params }: PageProps) {
         <div className="lg:col-span-2 space-y-4">
           <SectionHeader label="Signal history" count={signals.length} />
           {signals.length === 0 ? (
-            <div className="text-sm text-zinc-500 py-8 text-center">No signals yet for {identifier}.</div>
+            canScoreOnDemand ? (
+              <OnDemandScore assetType={type} identifier={identifier} />
+            ) : (
+              <div className="text-sm text-zinc-500 py-8 text-center">No signals yet for {identifier}.</div>
+            )
           ) : (
             <div className="space-y-3">
               {signals.map((s) => (
