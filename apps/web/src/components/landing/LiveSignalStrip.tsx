@@ -25,13 +25,17 @@ const HORIZON_LABEL: Record<string, string> = {
   before_close: "Before close",
 };
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
+function timeAgo(iso: string, now: number): string {
+  const diff = now - new Date(iso).getTime();
+  if (diff < 1000) return "0s ago";
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  const remainSecs = secs % 60;
+  if (mins < 60) return `${mins}m ${remainSecs}s ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  const remainMins = mins % 60;
+  if (hrs < 24) return `${hrs}h ${remainMins}m ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
@@ -49,10 +53,10 @@ export default function LiveSignalStrip({
   initial: LandingSignal[];
 }) {
   const [signals, setSignals] = useState(initial);
-  const [, setTick] = useState(0);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    const interval = setInterval(() => setTick((t) => t + 1), 30_000);
+    const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -132,7 +136,7 @@ export default function LiveSignalStrip({
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-zinc-600">
                   <span>{localTime(s.created_at)}</span>
-                  <span>{timeAgo(s.created_at)}</span>
+                  <span className="tabular-nums">{timeAgo(s.created_at, now)}</span>
                 </div>
               </div>
             );
