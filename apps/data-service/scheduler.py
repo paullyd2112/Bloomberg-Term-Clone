@@ -126,6 +126,68 @@ def job_evaluate_alerts():
     return evaluate_alerts()
 
 
+_uptime_fail_count = 0
+UPTIME_ALERT_THRESHOLD = 2  # alert after 2 consecutive failures (10 min)
+UPTIME_URLS = [
+    os.environ.get("NEXT_PUBLIC_APP_URL", "https://plebs.finance"),
+]
+ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "paulsolomonaqua@gmail.com")
+
+
+def job_uptime_check():
+    import httpx
+    import resend as _resend
+
+    global _uptime_fail_count
+
+    _resend.api_key = os.environ.get("RESEND_API_KEY", "")
+    down_urls = []
+
+    for url in UPTIME_URLS:
+        if not url:
+            continue
+        try:
+            resp = httpx.get(url, timeout=10, follow_redirects=True)
+            if resp.status_code >= 500:
+                down_urls.append(f"{url} — HTTP {resp.status_code}")
+        except Exception as e:
+            down_urls.append(f"{url} — {e}")
+
+    if not down_urls:
+        if _uptime_fail_count > 0:
+            logger.info("Uptime recovered after {} consecutive failures", _uptime_fail_count)
+            if _uptime_fail_count >= UPTIME_ALERT_THRESHOLD and _resend.api_key:
+                try:
+                    _resend.Emails.send({
+                        "from": "Plebs Uptime <alerts@plebs.finance>",
+                        "to": [ALERT_EMAIL],
+                        "subject": "Plebs.finance is BACK UP",
+                        "text": f"All endpoints recovered after {_uptime_fail_count} consecutive failures.",
+                    })
+                except Exception:
+                    pass
+        _uptime_fail_count = 0
+        return "all endpoints healthy"
+
+    _uptime_fail_count += 1
+    logger.warning("Uptime check failed ({}/{}): {}", _uptime_fail_count, UPTIME_ALERT_THRESHOLD, down_urls)
+
+    if _uptime_fail_count == UPTIME_ALERT_THRESHOLD and _resend.api_key:
+        try:
+            _resend.Emails.send({
+                "from": "Plebs Uptime <alerts@plebs.finance>",
+                "to": [ALERT_EMAIL],
+                "subject": "Plebs.finance is DOWN",
+                "text": f"The following endpoints are unreachable:\n\n" + "\n".join(down_urls) +
+                        f"\n\nFailing for {_uptime_fail_count * 5} minutes.",
+            })
+            logger.info("Uptime alert email sent to {}", ALERT_EMAIL)
+        except Exception as e:
+            logger.error("Failed to send uptime alert: {}", e)
+
+    return f"DOWN: {down_urls}"
+
+
 # ─── US Market Holiday Guard ──────────────────────────────────────────────────
 
 US_MARKET_HOLIDAYS_2026 = {
@@ -231,6 +293,10 @@ scheduler.add_job(lambda: _run_job("refresh_asset_accuracy", job_refresh_asset_a
 # Alerts — every 30 min
 scheduler.add_job(lambda: _run_job("evaluate_alerts", job_evaluate_alerts),
                   IntervalTrigger(minutes=30), id="evaluate_alerts")
+
+# Uptime monitor — every 5 min, alerts via Resend if web app is down
+scheduler.add_job(lambda: _run_job("uptime_check", job_uptime_check),
+                  IntervalTrigger(minutes=5), id="uptime_check")
 
 # Portfolio allocations — notify users on the 1st of each month at 8am ET
 # Actual regeneration is user-triggered via the dashboard or Pleby

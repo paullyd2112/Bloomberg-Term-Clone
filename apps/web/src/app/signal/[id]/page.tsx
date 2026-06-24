@@ -196,6 +196,11 @@ export default async function SharedSignalPage({
         </div>
         <p className="text-zinc-600 text-xs">14-day free trial · Credit card required</p>
       </div>
+
+      <p className="mt-6 text-[11px] text-zinc-700 text-center max-w-md mx-auto leading-relaxed">
+        AI-generated analysis for informational purposes only — not financial advice.
+        Always do your own research before making investment decisions.
+      </p>
     </div>
   );
 }

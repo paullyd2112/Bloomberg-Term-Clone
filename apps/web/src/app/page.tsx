@@ -547,19 +547,27 @@ function CTAStrip() {
 function Footer() {
   return (
     <footer className="border-t border-zinc-800/60 py-10 px-4">
-      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="text-base font-extrabold text-white tracking-tight">
-          plebs<span className="text-green-400">.finance</span>
+      <div className="max-w-6xl mx-auto flex flex-col items-center gap-6">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
+          <div className="text-base font-extrabold text-white tracking-tight">
+            plebs<span className="text-green-400">.finance</span>
+          </div>
+          <div className="flex items-center gap-6 text-xs text-zinc-500">
+            <Link href="/dashboard" className="hover:text-zinc-300 transition-colors">Dashboard</Link>
+            <Link href="/terms"     className="hover:text-zinc-300 transition-colors">Terms</Link>
+            <Link href="/privacy"   className="hover:text-zinc-300 transition-colors">Privacy</Link>
+            <Link href="/unsubscribe" className="hover:text-zinc-300 transition-colors">Unsubscribe</Link>
+          </div>
+          <div className="text-xs text-zinc-600">
+            © {new Date().getFullYear()} Plebs.io
+          </div>
         </div>
-        <div className="flex items-center gap-6 text-xs text-zinc-500">
-          <Link href="/dashboard" className="hover:text-zinc-300 transition-colors">Dashboard</Link>
-          <Link href="/terms"     className="hover:text-zinc-300 transition-colors">Terms</Link>
-          <Link href="/privacy"   className="hover:text-zinc-300 transition-colors">Privacy</Link>
-          <Link href="/unsubscribe" className="hover:text-zinc-300 transition-colors">Unsubscribe</Link>
-        </div>
-        <div className="text-xs text-zinc-600">
-          © {new Date().getFullYear()} Plebs.io · Not financial advice
-        </div>
+        <p className="text-[11px] text-zinc-600 text-center max-w-2xl leading-relaxed">
+          Plebs.finance provides AI-generated market analysis for informational purposes only.
+          Nothing on this platform constitutes financial, investment, or trading advice.
+          Always do your own research and consult a licensed financial advisor before making investment decisions.
+          Past performance of AI signals does not guarantee future results.
+        </p>
       </div>
     </footer>
   );
