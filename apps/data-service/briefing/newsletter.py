@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from supabase_client import supabase
 
 MODEL      = "claude-sonnet-4-6"
-MAX_TOKENS = 3000
+MAX_TOKENS = 4500
 
 _anthropic = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 client     = instructor.from_anthropic(_anthropic)
@@ -29,18 +29,18 @@ APP_URL = os.environ.get("NEXT_PUBLIC_APP_URL", "https://plebs.finance")
 # ─── Pydantic schemas ─────────────────────────────────────────────────────────
 
 class NewsletterStory(BaseModel):
-    headline:     str = Field(..., min_length=10, max_length=100)
-    what_happened: str = Field(..., min_length=40, max_length=300)
-    what_we_know:  str = Field(..., min_length=40, max_length=300)
-    could_mean:    str = Field(..., min_length=40, max_length=300)
-    watch:         str = Field(..., min_length=20, max_length=200)
+    headline:     str = Field(..., min_length=10, max_length=120)
+    what_happened: str = Field(..., min_length=60, max_length=500)
+    what_we_know:  str = Field(..., min_length=60, max_length=500)
+    could_mean:    str = Field(..., min_length=60, max_length=500)
+    watch:         str = Field(..., min_length=30, max_length=300)
 
 
 class NewsletterContent(BaseModel):
     subject_line:  str = Field(..., min_length=10, max_length=80)
-    opening_line:  str = Field(..., min_length=20, max_length=200)
-    stories:       list[NewsletterStory] = Field(..., min_length=2, max_length=4)
-    closing_line:  str = Field(..., min_length=20, max_length=200)
+    opening_line:  str = Field(..., min_length=30, max_length=300)
+    stories:       list[NewsletterStory] = Field(..., min_length=3, max_length=5)
+    closing_line:  str = Field(..., min_length=30, max_length=300)
     market_vibe:   Literal["bullish", "bearish", "mixed", "quiet"]
 
 
@@ -200,9 +200,12 @@ def _build_user_prompt(
             parts.append(line)
 
     parts.append(
-        "\nWrite 2-4 stories using the structure. Pick the most interesting data above. "
+        "\nWrite 3-5 stories using the structure. Pick the most interesting data above. "
         "If there's a congressional trade worth highlighting, work it into a story. "
-        "Opening line sets the tone for the day — make it count."
+        "Opening line sets the tone for the day — make it count.\n\n"
+        "IMPORTANT: Each section (what_happened, what_we_know, could_mean) should be "
+        "2-4 sentences — give real depth, not one-liners. The reader should walk away "
+        "feeling informed, not teased. Target 600-900 words total across all stories."
     )
 
     return "\n".join(parts)
