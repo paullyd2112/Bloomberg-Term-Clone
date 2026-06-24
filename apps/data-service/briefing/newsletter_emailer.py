@@ -74,12 +74,25 @@ def _get_user_signals(user_id: str, top_signals: list[dict]) -> list[dict]:
 
 # ─── HTML renderers ───────────────────────────────────────────────────────────
 
+def _sources_html(sources: list[dict]) -> str:
+    if not sources:
+        return ""
+    links = " · ".join(
+        f'<a href="{html.escape(s.get("url", ""))}" style="color:#22c55e;font-size:11px;text-decoration:none;">{html.escape(s.get("label", "Source"))}</a>'
+        for s in sources if s.get("url")
+    )
+    if not links:
+        return ""
+    return f'<div style="margin-top:8px;padding-top:6px;border-top:1px solid #1e1e1e;">{links}</div>'
+
+
 def _story_html(story: dict) -> str:
     headline      = html.escape(story.get("headline", ""))
     what_happened = html.escape(story.get("what_happened", ""))
     what_we_know  = html.escape(story.get("what_we_know", ""))
     could_mean    = html.escape(story.get("could_mean", ""))
     watch         = html.escape(story.get("watch", ""))
+    sources       = _sources_html(story.get("sources", []))
 
     return f"""
     <div style="margin-bottom:28px;">
@@ -100,6 +113,7 @@ def _story_html(story: dict) -> str:
         <span style="font-size:10px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.08em;">What to watch</span>
         <div style="color:#d4d4d8;font-size:14px;line-height:1.6;margin-top:3px;">{watch}</div>
       </div>
+      {sources}
     </div>"""
 
 
@@ -110,13 +124,15 @@ def _signals_html(signals: list[dict]) -> str:
     for s in signals:
         direction  = html.escape(s.get("direction", ""))
         identifier = html.escape(s.get("identifier", ""))
+        asset_type = html.escape(s.get("asset_type", "stock"))
         confidence = s.get("confidence", 0)
         horizon    = html.escape(s.get("time_horizon", ""))
         dir_color  = "#22c55e" if direction in ("BUY", "YES") else "#ef4444"
+        asset_url  = f"{APP_URL}/dashboard/asset/{asset_type}/{identifier}"
         rows += f"""
         <tr>
           <td style="padding:8px 12px;border-bottom:1px solid #27272a;">
-            <span style="font-family:monospace;font-weight:700;color:#fff;">{identifier}</span>
+            <a href="{asset_url}" style="font-family:monospace;font-weight:700;color:#fff;text-decoration:none;">{identifier}</a>
             &nbsp;
             <span style="background:{dir_color}22;color:{dir_color};border:1px solid {dir_color}55;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">{direction}</span>
           </td>

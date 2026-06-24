@@ -28,12 +28,18 @@ APP_URL = os.environ.get("NEXT_PUBLIC_APP_URL", "https://plebs.finance")
 
 # ─── Pydantic schemas ─────────────────────────────────────────────────────────
 
+class SourceLink(BaseModel):
+    label: str = Field(..., min_length=3, max_length=80)
+    url:   str = Field(..., min_length=10, max_length=500)
+
+
 class NewsletterStory(BaseModel):
     headline:     str = Field(..., min_length=10, max_length=120)
     what_happened: str = Field(..., min_length=60, max_length=500)
     what_we_know:  str = Field(..., min_length=60, max_length=500)
     could_mean:    str = Field(..., min_length=60, max_length=500)
     watch:         str = Field(..., min_length=30, max_length=300)
+    sources:      list[SourceLink] = Field(default_factory=list, max_length=3)
 
 
 class NewsletterContent(BaseModel):
@@ -155,6 +161,23 @@ def _fetch_macro_events_today() -> list[dict]:
         return []
 
 
+def _fetch_recent_news(limit: int = 15) -> list[dict]:
+    since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    try:
+        result = (
+            supabase.table("news_items")
+            .select("headline, source, url, identifier")
+            .gte("published_at", since)
+            .order("published_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+    except Exception as e:
+        logger.warning("newsletter: news fetch failed — {}", e)
+        return []
+
+
 # ─── Generator ────────────────────────────────────────────────────────────────
 
 def _build_user_prompt(
@@ -162,6 +185,7 @@ def _build_user_prompt(
     congress: list[dict],
     options: list[dict],
     macro: list[dict],
+    news: list[dict],
 ) -> str:
     today = date.today().strftime("%A, %B %-d, %Y")
 
@@ -199,13 +223,27 @@ def _build_user_prompt(
                 line += f" — forecast: {m['forecast']}"
             parts.append(line)
 
+    if news:
+        parts.append("\nRECENT NEWS (with source URLs — use these for citations):")
+        for n in news:
+            url = n.get("url", "")
+            source = n.get("source", "")
+            ticker = n.get("identifier", "")
+            parts.append(
+                f"  [{ticker}] {n.get('headline', '')} — {source}"
+                + (f" — {url}" if url else "")
+            )
+
     parts.append(
         "\nWrite 3-5 stories using the structure. Pick the most interesting data above. "
         "If there's a congressional trade worth highlighting, work it into a story. "
         "Opening line sets the tone for the day — make it count.\n\n"
         "IMPORTANT: Each section (what_happened, what_we_know, could_mean) should be "
         "2-4 sentences — give real depth, not one-liners. The reader should walk away "
-        "feeling informed, not teased. Target 600-900 words total across all stories."
+        "feeling informed, not teased. Target 600-900 words total across all stories.\n\n"
+        "SOURCES: For each story, include 1-3 source links from the news data above. "
+        "Use the actual URLs provided — these will be rendered as clickable links in the "
+        "email. Only cite URLs that were given to you, never fabricate a URL."
     )
 
     return "\n".join(parts)
@@ -216,8 +254,9 @@ def generate_newsletter() -> dict | None:
     congress = _fetch_congressional_trades()
     options  = _fetch_options_flow()
     macro    = _fetch_macro_events_today()
+    news     = _fetch_recent_news()
 
-    user_prompt = _build_user_prompt(signals, congress, options, macro)
+    user_prompt = _build_user_prompt(signals, congress, options, macro, news)
 
     try:
         content: NewsletterContent = client.chat.completions.create(
