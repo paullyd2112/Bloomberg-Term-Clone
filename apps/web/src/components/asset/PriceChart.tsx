@@ -28,6 +28,8 @@ export default function PriceChart({
     const lineColor = up ? "#4ade80" : "#f87171";
     const topColor = up ? "rgba(74, 222, 128, 0.25)" : "rgba(248, 113, 113, 0.25)";
 
+    const chartHeight = containerRef.current.clientWidth < 500 ? 220 : 280;
+
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
@@ -46,7 +48,7 @@ export default function PriceChart({
       rightPriceScale: { borderColor: "#27272a" },
       crosshair: { mode: 0 },
       width: containerRef.current.clientWidth,
-      height: 280,
+      height: chartHeight,
       handleScroll: false,
       handleScale: false,
     });
@@ -70,7 +72,8 @@ export default function PriceChart({
 
     const handleResize = () => {
       if (containerRef.current) {
-        chart.applyOptions({ width: containerRef.current.clientWidth });
+        const h = containerRef.current.clientWidth < 500 ? 220 : 280;
+        chart.applyOptions({ width: containerRef.current.clientWidth, height: h });
       }
     };
     window.addEventListener("resize", handleResize);
@@ -84,7 +87,7 @@ export default function PriceChart({
 
   if (data.length === 0) {
     return (
-      <div className="h-[280px] flex items-center justify-center text-sm text-zinc-600">
+      <div className="h-[220px] sm:h-[280px] flex items-center justify-center text-sm text-zinc-600">
         Not enough price history to chart yet.
       </div>
     );

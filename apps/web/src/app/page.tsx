@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import TickerBar from "@/components/TickerBar";
+import LiveSignalStrip from "@/components/landing/LiveSignalStrip";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const revalidate = 120;
@@ -91,28 +92,16 @@ type LandingSignal = {
   direction: string;
   confidence: number;
   time_horizon: string;
+  created_at: string;
 };
 
-const DIRECTION_COLOR: Record<string, string> = {
-  BUY:  "text-green-400 border-green-700 bg-green-500/10",
-  YES:  "text-green-400 border-green-700 bg-green-500/10",
-  SELL: "text-red-400 border-red-700 bg-red-500/10",
-  NO:   "text-red-400 border-red-700 bg-red-500/10",
-};
-
-const HORIZON_LABEL: Record<string, string> = {
-  intraday:     "Intraday",
-  swing:        "Swing",
-  longterm:     "Long-term",
-  before_close: "Before close",
-};
 
 async function fetchLandingSignals(): Promise<LandingSignal[]> {
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("signals")
-      .select("id, identifier, direction, confidence, time_horizon")
+      .select("id, identifier, direction, confidence, time_horizon, created_at")
       .eq("is_backtest", false)
       .neq("direction", "HOLD")
       .order("created_at", { ascending: false })
@@ -129,68 +118,6 @@ async function fetchLandingSignals(): Promise<LandingSignal[]> {
   }
 }
 
-function SignalStrip({ signals }: { signals: LandingSignal[] }) {
-  if (signals.length === 0) {
-    return (
-      <section className="pb-20 px-4">
-        <div className="max-w-6xl mx-auto">
-          <p className="text-center text-xs text-zinc-600 mb-4 uppercase tracking-widest font-semibold">
-            Latest signals
-          </p>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-8 text-center">
-            <p className="text-zinc-400 text-sm">
-              Signals generating — check back shortly.
-            </p>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="pb-20 px-4">
-      <div className="max-w-6xl mx-auto">
-        <p className="text-center text-xs text-zinc-600 mb-4 uppercase tracking-widest font-semibold">
-          Latest signals — live from the feed
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {signals.map((s) => {
-            const color = DIRECTION_COLOR[s.direction] ?? "text-zinc-400 border-zinc-600 bg-zinc-700/40";
-            const horizon = HORIZON_LABEL[s.time_horizon] ?? s.time_horizon;
-
-            return (
-              <div
-                key={s.id}
-                className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-xs font-bold px-2 py-0.5 rounded border ${color}`}
-                    >
-                      {s.direction}
-                    </span>
-                    <span className="font-mono font-semibold text-white">{s.identifier}</span>
-                  </div>
-                  <span className="text-xs text-zinc-500">{horizon}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${s.confidence >= 75 ? "bg-green-500" : "bg-amber-500"}`}
-                      style={{ width: `${s.confidence}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-zinc-400 tabular-nums">{s.confidence}%</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // ─── Features ─────────────────────────────────────────────────────────────────
 
@@ -586,7 +513,7 @@ export default async function LandingPage() {
       </div>
       <main>
         <Hero />
-        <SignalStrip signals={signals} />
+        <LiveSignalStrip initial={signals} />
         <Features />
         <Testimonials />
         <Stats />
