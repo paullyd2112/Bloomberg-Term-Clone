@@ -579,6 +579,15 @@ def score_stocks_event_only() -> str:
             f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet")
 
 
+CORE_CRYPTO   = {"BTC", "ETH", "SOL", "XRP", "ADA"}
+TIER1_CRYPTO  = {
+    "BNB", "DOGE", "AVAX", "DOT", "LINK", "UNI", "ATOM",
+    "LTC", "NEAR", "APT", "ARB", "OP", "FIL", "INJ", "SUI", "SEI",
+    "PEPE", "WIF", "SHIB", "TIA", "AAVE", "MKR", "RENDER", "FET",
+}
+CRYPTO_MOVER_THRESHOLD = 5.0  # % change to qualify lower-tier coins
+
+
 def score_crypto() -> str:
     from scoring.haiku_prescreen import prescreen_crypto, should_escalate_to_sonnet
 
@@ -589,7 +598,7 @@ def score_crypto() -> str:
             .eq("asset_type", "crypto")
             .neq("identifier", "MARKET_SENTIMENT")
             .order("captured_at", desc=True)
-            .limit(20)
+            .limit(200)
             .execute()
         )
         seen, rows = set(), []
@@ -602,16 +611,16 @@ def score_crypto() -> str:
         logger.error("score_crypto: failed to fetch identifiers — {}", e)
         return "failed to fetch identifiers"
 
-    core_always_score = {"BTC", "ETH", "SOL", "XRP", "ADA"}
     fg = _get_fear_greed()
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
+    tier_skipped = 0
 
     for row in rows:
         sym = row["identifier"]
         meta = row.get("metadata") or {}
 
-        if sym in core_always_score:
+        if sym in CORE_CRYPTO:
             try:
                 result = score_asset("crypto", sym)
                 sonnet_calls += 1
@@ -624,6 +633,12 @@ def score_crypto() -> str:
                 sentry_sdk.capture_exception(e)
                 failed += 1
             continue
+
+        if sym not in TIER1_CRYPTO:
+            change = row.get("change_24h")
+            if change is None or abs(float(change)) < CRYPTO_MOVER_THRESHOLD:
+                tier_skipped += 1
+                continue
 
         quick = prescreen_crypto(sym, meta, price=row.get("price"),
                                  change_24h=row.get("change_24h"),
@@ -647,7 +662,7 @@ def score_crypto() -> str:
             failed += 1
 
     return (f"{success} scored, {skipped} skipped, {failed} failed — "
-            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet")
+            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet, {tier_skipped} tier-skipped")
 
 
 def score_prediction_markets() -> str:

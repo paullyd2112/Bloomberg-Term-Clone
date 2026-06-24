@@ -16,6 +16,7 @@ const RATE_LIMITS: Record<string, number> = {
   "/api/search":                   30,
   "/api/newsletter/unsubscribe":   5,
   "/api/profile":                  10,
+  "/api/score-on-demand":          10,
 };
 
 function isRateLimited(ip: string, pathname: string): boolean {

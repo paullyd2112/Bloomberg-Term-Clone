@@ -177,8 +177,9 @@ def _run_stock_job(name: str, fn):
 # Prediction markets — every 2 hours (was every 30 min)
 scheduler.add_job(lambda: _run_job("ingest_prediction_markets", job_ingest_prediction_markets),
                   IntervalTrigger(minutes=30), id="ingest_prediction_markets")
-scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
-                  CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
+# Prediction scoring disabled until data matures (~3 weeks of ingestion)
+# scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
+#                   CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
 
 # Stocks — full scoring at open + close, event-only midday, weekdays only
 scheduler.add_job(lambda: _run_stock_job("ingest_stocks", job_ingest_stocks),
@@ -249,6 +250,34 @@ def add_cors(response):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
+
+@app.route("/score-asset", methods=["POST"])
+def score_asset_endpoint():
+    """
+    On-demand scoring for a single asset. Called by the web app
+    when an Elite user views a ticker with no recent signal.
+    """
+    from flask import request as flask_request
+    from scoring.engine import score_asset
+
+    body = flask_request.get_json(silent=True) or {}
+    asset_type = body.get("asset_type")
+    identifier = body.get("identifier", "").upper()
+
+    if asset_type not in ("stock", "crypto", "prediction"):
+        return jsonify({"error": "Invalid asset_type"}), 400
+    if not identifier:
+        return jsonify({"error": "Missing identifier"}), 400
+
+    try:
+        result = score_asset(asset_type, identifier)
+        if result is None:
+            return jsonify({"status": "skipped", "reason": "recently scored or no data"})
+        return jsonify({"status": "ok", "signal": result})
+    except Exception as e:
+        logger.error("On-demand score failed for {}/{}: {}", asset_type, identifier, e)
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/score-now", methods=["GET", "POST"])
 def score_now():
