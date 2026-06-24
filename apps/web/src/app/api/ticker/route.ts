@@ -130,19 +130,30 @@ async function liveCrypto(): Promise<TickerItem[]> {
 }
 
 export async function GET() {
-  // 1) Prefer real stored prices (no external calls, includes 24h change).
+  let items: TickerItem[] = [];
+
   try {
-    const stored = await fromRawPrices();
-    if (stored.length > 0) return NextResponse.json({ items: stored });
+    items = await fromRawPrices();
   } catch {
-    // fall through to live fetch
+    // fall through
   }
 
-  // 2) No fresh stored data — fetch real live quotes on demand.
-  const [stocks, crypto] = await Promise.all([liveStocks(), liveCrypto()]);
-  const live = [...stocks, ...crypto];
+  const have = new Set(items.map((i) => i.identifier));
+  const needStocks = TOP_STOCKS.some((s) => !have.has(s));
+  const needCrypto = TOP_CRYPTO.some((s) => !have.has(s));
 
-  // 3) If even the live fetch fails, return nothing (ticker hides itself)
-  //    rather than showing stale/fake numbers.
-  return NextResponse.json({ items: live });
+  if (needStocks || needCrypto) {
+    const [stocks, crypto] = await Promise.all([
+      needStocks ? liveStocks() : Promise.resolve([]),
+      needCrypto ? liveCrypto() : Promise.resolve([]),
+    ]);
+    for (const item of [...stocks, ...crypto]) {
+      if (!have.has(item.identifier)) {
+        items.push(item);
+        have.add(item.identifier);
+      }
+    }
+  }
+
+  return NextResponse.json({ items });
 }
