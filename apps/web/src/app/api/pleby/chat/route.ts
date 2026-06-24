@@ -47,12 +47,12 @@ export async function POST(req: Request) {
     );
   }
 
-  const { conversation_id, message } = (await req.json()) as {
-    conversation_id: string;
-    message: string;
-  };
+  const body = await req.json();
+  const conversation_id = typeof body.conversation_id === "string" ? body.conversation_id : "";
+  const message = typeof body.message === "string" ? body.message.slice(0, 4000) : "";
 
-  if (!message?.trim()) return new Response("Empty message", { status: 400 });
+  if (!conversation_id) return new Response("Missing conversation_id", { status: 400 });
+  if (!message.trim()) return new Response("Empty message", { status: 400 });
 
   const supabase = createClient();
 
@@ -155,8 +155,9 @@ export async function POST(req: Request) {
 
         send("done", {});
       } catch (err) {
+        console.error("Pleby chat error:", err);
         send("error", {
-          message: err instanceof Error ? err.message : "Pleby crashed",
+          message: "Something went wrong — please try again.",
         });
       } finally {
         controller.close();
