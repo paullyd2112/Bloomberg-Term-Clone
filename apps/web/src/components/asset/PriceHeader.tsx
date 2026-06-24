@@ -31,8 +31,8 @@ function LiveClock() {
   if (!time) return null;
 
   return (
-    <span className="text-xs text-zinc-600 tabular-nums">
-      Updated {time}
+    <span className="text-xs text-zinc-600 font-mono tabular-nums">
+      {time}
     </span>
   );
 }
