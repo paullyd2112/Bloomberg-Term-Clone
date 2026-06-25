@@ -16,15 +16,14 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const { email } = parsed.data;
 
-  // Check if this email already has a Plebs account
-  const { data: authData } = await admin.auth.admin.getUserByEmail(email);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: authData } = await (admin.auth.admin as any).getUserByEmail(email);
   if (authData?.user) {
     return NextResponse.json({ exists: true }, { status: 200 });
   }
 
-  // Check if already subscribed to newsletter
-  const { data: existing } = await admin
-    .from("newsletter_subscribers")
+  const { data: existing } = await (admin
+    .from("newsletter_subscribers") as any)
     .select("email")
     .eq("email", email.toLowerCase())
     .maybeSingle();
@@ -32,8 +31,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ already_subscribed: true }, { status: 200 });
   }
 
-  const { error } = await admin
-    .from("newsletter_subscribers")
+  const { error } = await (admin
+    .from("newsletter_subscribers") as any)
     .insert({ email: email.toLowerCase(), confirmed: true });
 
   if (error) {

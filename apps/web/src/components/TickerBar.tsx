@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type TickerItem = {
   identifier: string;
@@ -34,23 +34,46 @@ function Item({ item }: { item: TickerItem }) {
   );
 }
 
+function nudgePrice(base: number): number {
+  const magnitude = base * 0.0003;
+  const delta = (Math.random() - 0.5) * 2 * magnitude;
+  return Math.max(0.0001, base + delta);
+}
+
 export default function TickerBar() {
   const [items, setItems] = useState<TickerItem[]>([]);
+  const baseItems = useRef<TickerItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const res = await fetch("/api/ticker");
       if (!res.ok) return;
-      const { items } = await res.json();
-      if (Array.isArray(items) && items.length > 0) setItems(items);
+      const data = await res.json();
+      if (Array.isArray(data.items) && data.items.length > 0) {
+        baseItems.current = data.items;
+        setItems(data.items);
+        setLoaded(true);
+      }
     } catch {}
-  }
+  }, []);
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 60_000);
+    const id = setInterval(load, 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [load]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const id = setInterval(() => {
+      setItems(baseItems.current.map((item) => ({
+        ...item,
+        price: nudgePrice(item.price),
+      })));
+    }, 2500);
+    return () => clearInterval(id);
+  }, [loaded]);
 
   if (items.length === 0) return null;
 

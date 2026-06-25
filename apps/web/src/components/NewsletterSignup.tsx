@@ -31,7 +31,7 @@ export default function NewsletterSignup() {
   if (status === "done") {
     return (
       <p className="text-green-400 font-medium text-sm">
-        You&apos;re in. First email hits tomorrow at 7am ET.
+        You&apos;re in. First email drops tomorrow before market open.
       </p>
     );
   }
@@ -39,7 +39,7 @@ export default function NewsletterSignup() {
   if (status === "already_subscribed") {
     return (
       <p className="text-zinc-400 font-medium text-sm">
-        You&apos;re already subscribed — check your inbox tomorrow at 7am ET.
+        You&apos;re already subscribed — check your inbox tomorrow before market open.
       </p>
     );
   }

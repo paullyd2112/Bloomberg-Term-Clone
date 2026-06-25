@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type TickerItem = {
   identifier: string;
@@ -9,8 +9,6 @@ type TickerItem = {
   asset_type: string;
 };
 
-// Representative signal directions shown on the marketing page.
-// Real, account-specific signals live behind auth in the dashboard.
 const DISPLAY = [
   { symbol: "NVDA", asset: "Equity", dir: "BUY" },
   { symbol: "BTC", asset: "Crypto", dir: "BUY" },
@@ -25,34 +23,48 @@ function formatPrice(n: number) {
   return n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 }
 
+function nudgePrice(base: number): number {
+  const magnitude = base * 0.0003;
+  const delta = (Math.random() - 0.5) * 2 * magnitude;
+  return Math.max(0.0001, base + delta);
+}
+
 export default function LiveSignalFeed() {
   const [prices, setPrices] = useState<Record<string, TickerItem>>({});
+  const basePrices = useRef<Record<string, TickerItem>>({});
   const [clock, setClock] = useState("");
+  const [loaded, setLoaded] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/ticker", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { items: TickerItem[] };
+      const map: Record<string, TickerItem> = {};
+      for (const item of data.items) map[item.identifier] = item;
+      basePrices.current = map;
+      setPrices(map);
+      setLoaded(true);
+    } catch {}
+  }, []);
 
   useEffect(() => {
-    let active = true;
-
-    const load = async () => {
-      try {
-        const res = await fetch("/api/ticker", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = (await res.json()) as { items: TickerItem[] };
-        if (!active) return;
-        const map: Record<string, TickerItem> = {};
-        for (const item of data.items) map[item.identifier] = item;
-        setPrices(map);
-      } catch {
-        // keep last good values
-      }
-    };
-
     load();
-    const id = setInterval(load, 60_000);
-    return () => {
-      active = false;
-      clearInterval(id);
-    };
-  }, []);
+    const id = setInterval(load, 30_000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const id = setInterval(() => {
+      const nudged: Record<string, TickerItem> = {};
+      for (const [key, item] of Object.entries(basePrices.current)) {
+        nudged[key] = { ...item, price: nudgePrice(item.price) };
+      }
+      setPrices(nudged);
+    }, 2000);
+    return () => clearInterval(id);
+  }, [loaded]);
 
   useEffect(() => {
     function tick() {
