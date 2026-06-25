@@ -276,7 +276,7 @@ scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressio
 scheduler.add_job(lambda: _run_job("ingest_insider_trades", job_ingest_insider_trades),
                   CronTrigger(hour=8, minute=15), id="ingest_insider_trades")
 
-# Newsletter — generate at 6:30am, send at 7:00am ET weekdays
+# Newsletter — generate at 9:30am, publish via Beehiiv + send personalized briefs at 9:45am ET weekdays
 scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newsletter),
                   CronTrigger(hour=9, minute=30, day_of_week="mon-fri", timezone="America/New_York"), id="generate_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter", job_send_newsletter),
