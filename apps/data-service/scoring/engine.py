@@ -362,7 +362,7 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
             signal: StockSignal = client.chat.completions.create(
                 model=MODEL,
                 max_tokens=MAX_TOKENS,
-                system=stocks_prompt.SYSTEM_PROMPT,
+                system=[{"type": "text", "text": stocks_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": stocks_prompt.build_user_prompt(context)}],
                 response_model=StockSignal,
             )
@@ -382,7 +382,7 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
             signal: CryptoSignal = client.chat.completions.create(
                 model=MODEL,
                 max_tokens=MAX_TOKENS,
-                system=crypto_prompt.SYSTEM_PROMPT,
+                system=[{"type": "text", "text": crypto_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": crypto_prompt.build_user_prompt(context)}],
                 response_model=CryptoSignal,
             )
@@ -400,7 +400,7 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
             signal: PredictionSignal = client.chat.completions.create(
                 model=MODEL,
                 max_tokens=MAX_TOKENS,
-                system=pred_prompt.SYSTEM_PROMPT,
+                system=[{"type": "text", "text": pred_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": pred_prompt.build_user_prompt(context)}],
                 response_model=PredictionSignal,
             )

@@ -94,7 +94,7 @@ def prescreen_stock(ticker: str, meta: dict, price: float | None = None,
         return client.chat.completions.create(
             model=HAIKU_MODEL,
             max_tokens=MAX_TOKENS,
-            system=STOCK_SYSTEM,
+            system=[{"type": "text", "text": STOCK_SYSTEM, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": "\n".join(prompt_lines)}],
             response_model=QuickSignal,
         )
@@ -125,7 +125,7 @@ def prescreen_crypto(symbol: str, meta: dict, price: float | None = None,
         return client.chat.completions.create(
             model=HAIKU_MODEL,
             max_tokens=MAX_TOKENS,
-            system=CRYPTO_SYSTEM,
+            system=[{"type": "text", "text": CRYPTO_SYSTEM, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": "\n".join(prompt_lines)}],
             response_model=QuickSignal,
         )
@@ -156,7 +156,7 @@ def prescreen_prediction(identifier: str, price: float | None = None,
         return client.chat.completions.create(
             model=HAIKU_MODEL,
             max_tokens=MAX_TOKENS,
-            system=PREDICTION_SYSTEM,
+            system=[{"type": "text", "text": PREDICTION_SYSTEM, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": "\n".join(prompt_lines)}],
             response_model=QuickPredictionSignal,
         )

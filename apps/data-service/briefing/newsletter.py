@@ -274,7 +274,7 @@ def generate_newsletter() -> dict | None:
             messages=[
                 {"role": "user", "content": user_prompt},
             ],
-            system=NEWSLETTER_SYSTEM_PROMPT,
+            system=[{"type": "text", "text": NEWSLETTER_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
             response_model=NewsletterContent,
         )
     except Exception as e:
