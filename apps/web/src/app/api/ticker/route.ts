@@ -75,12 +75,13 @@ async function fromRawPrices(): Promise<TickerItem[]> {
 
 // ─── Live fallback: real quotes on demand when raw_prices has no fresh data ────
 
-async function liveStocks(): Promise<TickerItem[]> {
+// FMP batch quote — one call covers all symbols. Primary live source.
+async function liveStocksFmp(symbols: string[]): Promise<TickerItem[]> {
   const key = process.env.FMP_API_KEY;
-  if (!key) return [];
+  if (!key || symbols.length === 0) return [];
   try {
     const res = await fetch(
-      `https://financialmodelingprep.com/api/v3/quote/${TOP_STOCKS.join(",")}?apikey=${key}`,
+      `https://financialmodelingprep.com/api/v3/quote/${symbols.join(",")}?apikey=${key}`,
       { signal: AbortSignal.timeout(8000) },
     );
     if (!res.ok) return [];
@@ -96,6 +97,48 @@ async function liveStocks(): Promise<TickerItem[]> {
   } catch {
     return [];
   }
+}
+
+// Finnhub quote — one symbol per call. Fills gaps FMP didn't cover.
+async function liveStocksFinnhub(symbols: string[]): Promise<TickerItem[]> {
+  const key = process.env.FINNHUB_API_KEY;
+  if (!key || symbols.length === 0) return [];
+  const results = await Promise.all(
+    symbols.map(async (symbol) => {
+      try {
+        const res = await fetch(
+          `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${key}`,
+          { signal: AbortSignal.timeout(6000) },
+        );
+        if (!res.ok) return null;
+        // Finnhub quote: c = current price, dp = percent change, pc = prev close
+        const q = (await res.json()) as { c?: number; dp?: number; pc?: number };
+        if (typeof q.c !== "number" || q.c === 0) return null;
+        return {
+          identifier: symbol,
+          price:      q.c,
+          change_24h: typeof q.dp === "number" ? q.dp : null,
+          asset_type: "stock",
+        } as TickerItem;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return results.filter((r): r is TickerItem => r !== null);
+}
+
+// Multi-source live fallback: FMP batch first, then Finnhub fills any gaps.
+// Never depends on a single provider — if FMP is down/rate-limited, Finnhub covers.
+async function liveStocks(): Promise<TickerItem[]> {
+  const fromFmp = await liveStocksFmp(TOP_STOCKS);
+  const have = new Set(fromFmp.map((i) => i.identifier));
+  const missing = TOP_STOCKS.filter((s) => !have.has(s));
+
+  if (missing.length === 0) return fromFmp;
+
+  const fromFinnhub = await liveStocksFinnhub(missing);
+  return [...fromFmp, ...fromFinnhub];
 }
 
 async function liveCrypto(): Promise<TickerItem[]> {
