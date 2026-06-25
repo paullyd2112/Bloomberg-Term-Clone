@@ -15,7 +15,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="border-b border-zinc-800 px-6 h-12 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <span className="font-bold text-sm">
-            plebs<span className="text-green-400">.io</span>
+            plebs<span className="text-green-400">.finance</span>
             <span className="text-zinc-600 ml-2">/ admin</span>
           </span>
           <nav className="flex gap-1">

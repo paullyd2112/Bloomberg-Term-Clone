@@ -71,8 +71,8 @@ export default function TermsOfService() {
           We offer refunds within 7 days of your first charge if you are unsatisfied with the
           Service. After 7 days, all payments are non-refundable. Lifetime purchases are
           non-refundable after 14 days. To request a refund, contact{' '}
-          <a href="mailto:support@plebs.io" className="text-blue-400 hover:underline">
-            support@plebs.io
+          <a href="mailto:support@plebs.finance" className="text-blue-400 hover:underline">
+            support@plebs.finance
           </a>
           .
         </p>
@@ -136,8 +136,8 @@ export default function TermsOfService() {
         <h2 className="text-xl font-semibold text-white mb-3">11. Contact</h2>
         <p>
           Questions about these Terms? Contact us at{' '}
-          <a href="mailto:support@plebs.io" className="text-blue-400 hover:underline">
-            support@plebs.io
+          <a href="mailto:support@plebs.finance" className="text-blue-400 hover:underline">
+            support@plebs.finance
           </a>
           .
         </p>

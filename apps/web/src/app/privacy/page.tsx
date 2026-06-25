@@ -28,7 +28,7 @@ export default function PrivacyPolicy() {
           <li><strong>Account information:</strong> name, email address, and password when you register.</li>
           <li><strong>Payment information:</strong> billing details processed securely through Stripe. We do not store full card numbers.</li>
           <li><strong>Usage data:</strong> pages visited, features used, signals viewed, watchlist items, portfolio positions, and alerts you create.</li>
-          <li><strong>Communications:</strong> messages you send to our AI assistant (Pleby) and support inquiries sent to support@plebs.io.</li>
+          <li><strong>Communications:</strong> messages you send to our AI assistant (Pleby) and support inquiries sent to support@plebs.finance.</li>
           <li><strong>Device data:</strong> IP address, browser type, and operating system for security and analytics purposes.</li>
         </ul>
       </section>
@@ -90,7 +90,7 @@ export default function PrivacyPolicy() {
           <li>Non-discrimination for exercising your privacy rights.</li>
         </ul>
         <p className="mt-3">
-          To exercise any of these rights, contact us at <strong>support@plebs.io</strong>.
+          To exercise any of these rights, contact us at <strong>support@plebs.finance</strong>.
           We will respond within 45 days.
         </p>
       </section>
@@ -108,8 +108,8 @@ export default function PrivacyPolicy() {
         <h2 className="text-xl font-semibold text-white mb-3">Contact</h2>
         <p>
           Questions about this Privacy Policy? Contact us at{' '}
-          <a href="mailto:support@plebs.io" className="text-blue-400 hover:underline">
-            support@plebs.io
+          <a href="mailto:support@plebs.finance" className="text-blue-400 hover:underline">
+            support@plebs.finance
           </a>
           .
         </p>

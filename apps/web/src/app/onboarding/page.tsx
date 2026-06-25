@@ -78,7 +78,7 @@ export default function OnboardingPage() {
     <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center px-4 py-16">
       {/* Brand */}
       <div className="mb-10 text-2xl font-extrabold text-white tracking-tight">
-        plebs<span className="text-green-400">.io</span>
+        plebs<span className="text-green-400">.finance</span>
       </div>
 
       {/* Progress dots */}
