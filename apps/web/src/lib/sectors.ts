@@ -29,4 +29,4 @@ export const SECTOR_MAP: Record<string, string> = {
   PG: "Staples", KO: "Staples", PEP: "Staples", PM: "Staples", CL: "Staples",
 };
 
-export const SECTORS = [...new Set(Object.values(SECTOR_MAP))];
+export const SECTORS = Array.from(new Set(Object.values(SECTOR_MAP)));

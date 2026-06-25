@@ -23,7 +23,7 @@ type PageProps = {
 async function fetchAssetData(assetType: AssetType, identifier: string, userId: string) {
   const supabase = createClient();
 
-  const [priceRes, historyRes, signalsRes, accuracyRes, newsRes, optionsRes, watchlistRes, shortInterestRes, earningsRes] =
+  const [priceRes, historyRes, signalsRes, accuracyRes, newsRes, optionsRes, watchlistRes, shortInterestRes, earningsRes, sentimentRes] =
     await Promise.all([
       supabase
         .from("raw_prices")
@@ -105,6 +105,18 @@ async function fetchAssetData(assetType: AssetType, identifier: string, userId: 
             .limit(1)
             .single()
         : Promise.resolve({ data: null }),
+
+      // Fear & Greed sentiment (crypto only)
+      assetType === "crypto"
+        ? supabase
+            .from("raw_prices")
+            .select("metadata")
+            .eq("identifier", "MARKET_SENTIMENT")
+            .eq("asset_type", "crypto")
+            .order("captured_at", { ascending: false })
+            .limit(1)
+            .single()
+        : Promise.resolve({ data: null }),
     ]);
 
   // Build chart points: dedupe by timestamp, ascending, drop nulls
@@ -129,6 +141,7 @@ async function fetchAssetData(assetType: AssetType, identifier: string, userId: 
     watchlistId:   watchlistRes.data?.id ?? null,
     shortInterest: shortInterestRes.data,
     earnings:      earningsRes.data,
+    sentiment:     sentimentRes.data,
   };
 }
 
@@ -143,7 +156,7 @@ export default async function AssetPage({ params }: PageProps) {
   const canSeeOptions = canAccessFeature(tier, "real_time");
   const canScoreOnDemand = canAccessFeature(tier, "on_demand_scoring");
 
-  const { price, history, signals, accuracy, news, options, watchlistId, shortInterest, earnings } =
+  const { price, history, signals, accuracy, news, options, watchlistId, shortInterest, earnings, sentiment } =
     await fetchAssetData(type, identifier, user!.id);
 
   if (!price && signals.length === 0) notFound();
@@ -165,6 +178,9 @@ export default async function AssetPage({ params }: PageProps) {
             {type === "stock" && earnings && (
               <EarningsBadge reportDate={earnings.report_date} reportTime={earnings.report_time} />
             )}
+            {type === "crypto" && sentiment?.metadata && (
+              <FearGreedBadge metadata={sentiment.metadata as Record<string, unknown>} />
+            )}
           </div>
         </div>
 
@@ -175,8 +191,8 @@ export default async function AssetPage({ params }: PageProps) {
         />
       </div>
 
-      {/* Key Stats (stocks only) */}
-      {type === "stock" && price && (
+      {/* Key Stats (stocks & crypto) */}
+      {(type === "stock" || type === "crypto") && price && (
         <KeyStatsGrid
           metadata={price.metadata as Record<string, unknown> | null}
           change24h={price.change_24h}
@@ -214,6 +230,16 @@ export default async function AssetPage({ params }: PageProps) {
           {/* Short Interest (stocks only) */}
           {type === "stock" && shortInterest && (
             <ShortInterestCard data={shortInterest} />
+          )}
+
+          {/* Market Stats (crypto only) */}
+          {type === "crypto" && price?.metadata && (
+            <MarketStatsCard metadata={price.metadata as Record<string, unknown>} />
+          )}
+
+          {/* Fundamentals (crypto only) */}
+          {type === "crypto" && price?.metadata && (
+            <FundamentalsCard metadata={price.metadata as Record<string, unknown>} />
           )}
 
           {/* News */}
@@ -428,6 +454,110 @@ function ShortInterestCard({
             value={`${data.vs_previous >= 0 ? "+" : ""}${Number(data.vs_previous).toFixed(2)}%`}
             highlight={data.vs_previous < 0}
           />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Fear & Greed badge (crypto only) ---------- */
+function FearGreedBadge({ metadata }: { metadata: Record<string, unknown> }) {
+  const value = metadata?.value != null ? Number(metadata.value) : null;
+  const classification = metadata?.value_classification as string | undefined;
+
+  if (value == null || !classification) return null;
+
+  const lc = classification.toLowerCase();
+  const isRed = lc.includes("fear");
+  const isGreen = lc.includes("greed");
+  const colorClasses = isRed
+    ? "bg-red-500/15 text-red-400 border-red-500/30"
+    : isGreen
+    ? "bg-green-500/15 text-green-400 border-green-500/30"
+    : "bg-zinc-500/15 text-zinc-400 border-zinc-500/30";
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[11px] font-semibold border px-2 py-0.5 rounded ${colorClasses}`}
+    >
+      Fear &amp; Greed: {value} {classification}
+    </span>
+  );
+}
+
+/* ---------- Market Stats card (crypto only) ---------- */
+function MarketStatsCard({ metadata }: { metadata: Record<string, unknown> }) {
+  const marketCap = metadata?.market_cap != null ? Number(metadata.market_cap) : null;
+  const marketCapRank = metadata?.market_cap_rank != null ? Number(metadata.market_cap_rank) : null;
+  const ath = metadata?.ath != null ? Number(metadata.ath) : null;
+  const athChangePct = metadata?.ath_change_pct != null ? Number(metadata.ath_change_pct) : null;
+
+  if (marketCap == null && marketCapRank == null && ath == null && athChangePct == null) return null;
+
+  function fmtMarketCap(n: number): string {
+    if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
+    return `$${n.toLocaleString()}`;
+  }
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <SectionHeader label="Market stats" />
+      <div className="space-y-2">
+        {marketCapRank != null && (
+          <StatRow label="Rank" value={`#${marketCapRank}`} />
+        )}
+        {marketCap != null && (
+          <StatRow label="Market cap" value={fmtMarketCap(marketCap)} />
+        )}
+        {ath != null && (
+          <StatRow label="All-time high" value={`$${ath.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+        )}
+        {athChangePct != null && (
+          <StatRow
+            label="From ATH"
+            value={`${athChangePct >= 0 ? "+" : ""}${athChangePct.toFixed(1)}%`}
+            highlight={athChangePct >= 0}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Fundamentals card (crypto only) ---------- */
+function FundamentalsCard({ metadata }: { metadata: Record<string, unknown> }) {
+  const roi30d = metadata?.messari_roi_30d != null ? Number(metadata.messari_roi_30d) : null;
+  const roi90d = metadata?.messari_roi_90d != null ? Number(metadata.messari_roi_90d) : null;
+  const devCommits = metadata?.messari_dev_commits_30d != null ? Number(metadata.messari_dev_commits_30d) : null;
+  const liquidSupply = metadata?.messari_liquid_supply_pct != null ? Number(metadata.messari_liquid_supply_pct) : null;
+
+  if (roi30d == null && roi90d == null && devCommits == null && liquidSupply == null) return null;
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <SectionHeader label="Fundamentals" />
+      <div className="space-y-2">
+        {roi30d != null && (
+          <StatRow
+            label="30d ROI"
+            value={`${roi30d >= 0 ? "+" : ""}${roi30d.toFixed(1)}%`}
+            highlight={roi30d > 0}
+          />
+        )}
+        {roi90d != null && (
+          <StatRow
+            label="90d ROI"
+            value={`${roi90d >= 0 ? "+" : ""}${roi90d.toFixed(1)}%`}
+            highlight={roi90d > 0}
+          />
+        )}
+        {devCommits != null && (
+          <StatRow label="Dev commits (30d)" value={devCommits.toLocaleString()} />
+        )}
+        {liquidSupply != null && (
+          <StatRow label="Liquid supply" value={`${liquidSupply.toFixed(1)}%`} />
         )}
       </div>
     </div>
