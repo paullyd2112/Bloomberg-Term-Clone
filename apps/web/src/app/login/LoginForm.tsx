@@ -5,16 +5,20 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+type LoginMode = "password" | "magic-link";
+
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/dashboard";
   const urlError = searchParams.get("error");
 
+  const [mode, setMode] = useState<LoginMode>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(urlError ? "Authentication failed. Please try again." : "");
   const [loading, setLoading] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   const supabase = createClient();
 
@@ -43,6 +47,24 @@ export default function LoginForm() {
     }
   }
 
+  async function handleMagicLinkLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+      },
+    });
+    if (error) {
+      setError(error.message);
+    } else {
+      setMagicLinkSent(true);
+    }
+    setLoading(false);
+  }
+
   async function handleGoogleLogin() {
     setError("");
     await supabase.auth.signInWithOAuth({
@@ -51,6 +73,31 @@ export default function LoginForm() {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
+  }
+
+  function switchMode(newMode: LoginMode) {
+    setMode(newMode);
+    setError("");
+    setMagicLinkSent(false);
+  }
+
+  if (magicLinkSent) {
+    return (
+      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 text-center space-y-4">
+        <div className="text-4xl">&#x2709;&#xFE0F;</div>
+        <h2 className="text-white font-semibold">Check your email for a sign-in link</h2>
+        <p className="text-zinc-400 text-sm">
+          We sent a magic link to <span className="text-white">{email}</span>.
+          Click it to sign in — no password needed.
+        </p>
+        <button
+          onClick={() => setMagicLinkSent(false)}
+          className="text-green-400 text-sm hover:text-green-300"
+        >
+          Back to sign in
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -75,47 +122,105 @@ export default function LoginForm() {
         <div className="flex-1 h-px bg-zinc-800" />
       </div>
 
-      <form onSubmit={handleEmailLogin} className="space-y-3">
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1" htmlFor="email">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors"
-            placeholder="you@example.com"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1" htmlFor="password">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors"
-            placeholder="••••••••"
-          />
-        </div>
-
+      {/* Mode toggle tabs */}
+      <div className="flex rounded bg-zinc-800 p-0.5">
         <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold rounded px-4 py-2.5 text-sm transition-colors"
+          type="button"
+          onClick={() => switchMode("password")}
+          className={`flex-1 text-xs font-medium py-1.5 rounded transition-colors ${
+            mode === "password"
+              ? "bg-zinc-700 text-white"
+              : "text-zinc-400 hover:text-zinc-300"
+          }`}
         >
-          {loading ? "Signing in…" : "Sign in"}
+          Password
         </button>
-      </form>
+        <button
+          type="button"
+          onClick={() => switchMode("magic-link")}
+          className={`flex-1 text-xs font-medium py-1.5 rounded transition-colors ${
+            mode === "magic-link"
+              ? "bg-zinc-700 text-white"
+              : "text-zinc-400 hover:text-zinc-300"
+          }`}
+        >
+          Magic link
+        </button>
+      </div>
+
+      {mode === "password" ? (
+        <form onSubmit={handleEmailLogin} className="space-y-3">
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1" htmlFor="email">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors"
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1" htmlFor="password">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold rounded px-4 py-2.5 text-sm transition-colors"
+          >
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handleMagicLinkLogin} className="space-y-3">
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1" htmlFor="magic-email">
+              Email
+            </label>
+            <input
+              id="magic-email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors"
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold rounded px-4 py-2.5 text-sm transition-colors"
+          >
+            {loading ? "Sending link…" : "Send magic link"}
+          </button>
+
+          <p className="text-xs text-zinc-500">
+            We&apos;ll email you a link that signs you in instantly — no password required.
+          </p>
+        </form>
+      )}
 
       <p className="text-center text-xs text-zinc-500">
         No account?{" "}

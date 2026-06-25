@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserTier } from "@/lib/user";
 import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
 import SubscribeGate from "@/components/ui/SubscribeGate";
+import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
 
 export const revalidate = 60;
 
@@ -207,6 +209,15 @@ export default async function DashboardPage() {
           </div>
         </section>
       )}
+
+      {/* Sector heatmap */}
+      <Suspense
+        fallback={
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 h-40 animate-pulse" />
+        }
+      >
+        <SectorHeatmap />
+      </Suspense>
 
       {/* Signal feed */}
       <section>

@@ -23,7 +23,7 @@ type PageProps = {
 async function fetchAssetData(assetType: AssetType, identifier: string, userId: string) {
   const supabase = createClient();
 
-  const [priceRes, historyRes, signalsRes, accuracyRes, newsRes, optionsRes, watchlistRes] =
+  const [priceRes, historyRes, signalsRes, accuracyRes, newsRes, optionsRes, watchlistRes, shortInterestRes, earningsRes] =
     await Promise.all([
       supabase
         .from("raw_prices")
@@ -82,6 +82,29 @@ async function fetchAssetData(assetType: AssetType, identifier: string, userId: 
         .eq("identifier", identifier)
         .limit(1)
         .single(),
+
+      // Short interest (stocks only)
+      assetType === "stock"
+        ? supabase
+            .from("short_interest")
+            .select("short_float_pct, short_ratio, shares_short, vs_previous, is_high_short")
+            .eq("identifier", identifier)
+            .order("reported_at", { ascending: false })
+            .limit(1)
+            .single()
+        : Promise.resolve({ data: null }),
+
+      // Upcoming earnings (stocks only)
+      assetType === "stock"
+        ? supabase
+            .from("earnings_events")
+            .select("report_date, report_time, consensus_eps")
+            .eq("identifier", identifier)
+            .gte("report_date", new Date().toISOString().slice(0, 10))
+            .order("report_date", { ascending: true })
+            .limit(1)
+            .single()
+        : Promise.resolve({ data: null }),
     ]);
 
   // Build chart points: dedupe by timestamp, ascending, drop nulls
@@ -97,13 +120,15 @@ async function fetchAssetData(assetType: AssetType, identifier: string, userId: 
   history.sort((a, b) => a.time - b.time);
 
   return {
-    price:       priceRes.data,
+    price:         priceRes.data,
     history,
-    signals:     (signalsRes.data ?? []) as Signal[],
-    accuracy:    accuracyRes.data,
-    news:        newsRes.data ?? [],
-    options:     optionsRes.data ?? [],
-    watchlistId: watchlistRes.data?.id ?? null,
+    signals:       (signalsRes.data ?? []) as Signal[],
+    accuracy:      accuracyRes.data,
+    news:          newsRes.data ?? [],
+    options:       optionsRes.data ?? [],
+    watchlistId:   watchlistRes.data?.id ?? null,
+    shortInterest: shortInterestRes.data,
+    earnings:      earningsRes.data,
   };
 }
 
@@ -118,7 +143,7 @@ export default async function AssetPage({ params }: PageProps) {
   const canSeeOptions = canAccessFeature(tier, "real_time");
   const canScoreOnDemand = canAccessFeature(tier, "on_demand_scoring");
 
-  const { price, history, signals, accuracy, news, options, watchlistId } =
+  const { price, history, signals, accuracy, news, options, watchlistId, shortInterest, earnings } =
     await fetchAssetData(type, identifier, user!.id);
 
   if (!price && signals.length === 0) notFound();
@@ -135,7 +160,12 @@ export default async function AssetPage({ params }: PageProps) {
             </span>
             {accuracy && <AccuracyBadge accuracy={accuracy} />}
           </div>
-          {price && <PriceHeader price={price} assetType={type} />}
+          <div className="flex items-center gap-3 flex-wrap">
+            {price && <PriceHeader price={price} assetType={type} />}
+            {type === "stock" && earnings && (
+              <EarningsBadge reportDate={earnings.report_date} reportTime={earnings.report_time} />
+            )}
+          </div>
         </div>
 
         <WatchlistToggle
@@ -144,6 +174,14 @@ export default async function AssetPage({ params }: PageProps) {
           watchlistId={watchlistId}
         />
       </div>
+
+      {/* Key Stats (stocks only) */}
+      {type === "stock" && price && (
+        <KeyStatsGrid
+          metadata={price.metadata as Record<string, unknown> | null}
+          change24h={price.change_24h}
+        />
+      )}
 
       {/* Price chart */}
       {history.length > 1 && (
@@ -173,6 +211,11 @@ export default async function AssetPage({ params }: PageProps) {
 
         {/* Right: sidebar */}
         <div className="space-y-4">
+          {/* Short Interest (stocks only) */}
+          {type === "stock" && shortInterest && (
+            <ShortInterestCard data={shortInterest} />
+          )}
+
           {/* News */}
           {news.length > 0 && (
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
@@ -265,6 +308,128 @@ function StatRow({ label, value, highlight }: { label: string; value: string | n
       <span className={`text-xs font-semibold tabular-nums ${highlight ? "text-green-400" : "text-white"}`}>
         {value}
       </span>
+    </div>
+  );
+}
+
+/* ---------- Earnings badge ---------- */
+function EarningsBadge({ reportDate, reportTime }: { reportDate: string; reportTime: string | null }) {
+  const d = new Date(reportDate + "T00:00:00");
+  const formatted = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const timeLabel =
+    reportTime === "AMC" ? "AMC" : reportTime === "BMO" ? "BMO" : reportTime ?? "";
+
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded">
+      Earnings: {formatted} {timeLabel}
+    </span>
+  );
+}
+
+/* ---------- Key stats grid (stocks only) ---------- */
+function KeyStatsGrid({
+  metadata,
+  change24h,
+}: {
+  metadata: Record<string, unknown> | null;
+  change24h: number | null;
+}) {
+  const rsi = metadata?.rsi_14 != null ? Number(metadata.rsi_14) : null;
+  const volumeRatio = metadata?.volume_ratio != null ? Number(metadata.volume_ratio) : null;
+
+  // Show nothing if there are no stats to display
+  if (rsi == null && volumeRatio == null && change24h == null) return null;
+
+  const rsiColor =
+    rsi == null
+      ? "text-white"
+      : rsi > 70
+      ? "text-red-400"
+      : rsi < 30
+      ? "text-green-400"
+      : "text-white";
+
+  const rsiLabel =
+    rsi == null ? null : rsi > 70 ? "Overbought" : rsi < 30 ? "Oversold" : "Neutral";
+
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      {rsi != null && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+          <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">RSI (14)</p>
+          <p className={`text-lg font-bold font-mono tabular-nums ${rsiColor}`}>
+            {rsi.toFixed(1)}
+          </p>
+          <p className={`text-[10px] mt-0.5 ${rsiColor}`}>{rsiLabel}</p>
+        </div>
+      )}
+      {volumeRatio != null && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+          <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Vol Ratio</p>
+          <p className={`text-lg font-bold font-mono tabular-nums ${volumeRatio > 2 ? "text-yellow-400" : "text-white"}`}>
+            {volumeRatio.toFixed(2)}x
+          </p>
+          <p className="text-[10px] text-zinc-600 mt-0.5">vs avg</p>
+        </div>
+      )}
+      {change24h != null && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+          <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">24h Change</p>
+          <p className={`text-lg font-bold font-mono tabular-nums ${change24h >= 0 ? "text-green-400" : "text-red-400"}`}>
+            {change24h >= 0 ? "+" : ""}{Number(change24h).toFixed(2)}%
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Short Interest card ---------- */
+function ShortInterestCard({
+  data,
+}: {
+  data: {
+    short_float_pct: number | null;
+    short_ratio: number | null;
+    shares_short: number | null;
+    vs_previous: number | null;
+    is_high_short: boolean | null;
+  };
+}) {
+  function fmtShares(n: number): string {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    return n.toLocaleString();
+  }
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <SectionHeader label="Short interest" />
+        {data.is_high_short && (
+          <span className="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded uppercase tracking-wider">
+            High
+          </span>
+        )}
+      </div>
+      <div className="space-y-2">
+        {data.short_float_pct != null && (
+          <StatRow label="Short float" value={`${Number(data.short_float_pct).toFixed(2)}%`} />
+        )}
+        {data.short_ratio != null && (
+          <StatRow label="Short ratio" value={Number(data.short_ratio).toFixed(2)} />
+        )}
+        {data.shares_short != null && (
+          <StatRow label="Shares short" value={fmtShares(data.shares_short)} />
+        )}
+        {data.vs_previous != null && (
+          <StatRow
+            label="vs previous"
+            value={`${data.vs_previous >= 0 ? "+" : ""}${Number(data.vs_previous).toFixed(2)}%`}
+            highlight={data.vs_previous < 0}
+          />
+        )}
+      </div>
     </div>
   );
 }
