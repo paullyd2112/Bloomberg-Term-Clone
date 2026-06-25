@@ -1,7 +1,7 @@
 """
-Newsletter emailer — two delivery channels:
-  1. Beehiiv: publishes the general daily newsletter for all subscribers
-  2. Resend: sends personalized briefs (signals + watchlist) to paid users only
+Newsletter emailer — sends daily newsletter via Resend at 9:45am ET weekdays.
+Free subscribers get editorial + CTA.
+Pro/Elite subscribers get the same editorial + personalized signal data.
 """
 
 import html
@@ -177,21 +177,28 @@ def _options_html(options: list[dict]) -> str:
 
 
 def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
-    """Render the personalized brief HTML for paid users.
-    Includes the editorial + their watchlist-matched signals + options flow.
-    """
     content      = briefing.get("content_json") or {}
     subject_line = html.escape(briefing.get("headline", ""))
     opening      = _md_to_html(content.get("opening_line", ""))
     closing      = _md_to_html(content.get("closing_line", ""))
     stories      = content.get("stories", [])
     today        = date.today().strftime("%A, %B %-d")
+    is_paid      = tier in ("pro", "elite")
 
     stories_html = "".join(_story_html(s) for s in stories)
 
-    top_signals = _get_user_signals(user_id or "", content.get("top_signals", []))
-    options     = content.get("options_flow", [])
-    paid_block  = _signals_html(top_signals) + _options_html(options)
+    paid_block = ""
+    if is_paid:
+        top_signals = _get_user_signals(user_id or "", content.get("top_signals", []))
+        options     = content.get("options_flow", [])
+        paid_block  = _signals_html(top_signals) + _options_html(options)
+
+    free_cta = "" if is_paid else f"""
+    <div style="margin:28px 0;padding:20px;background:#18181b;border:1px solid #27272a;border-radius:10px;text-align:center;">
+      <div style="color:#fff;font-weight:700;font-size:15px;margin-bottom:6px;">Want the full signal feed?</div>
+      <div style="color:#71717a;font-size:13px;margin-bottom:16px;">Real-time AI signals, options flow, congressional trades — 14-day free trial.</div>
+      <a href="{APP_URL}/signup" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:13px;padding:10px 22px;border-radius:8px;text-decoration:none;">Try Plebs free →</a>
+    </div>"""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -201,16 +208,16 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
     <div style="margin-bottom:20px;">
       <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;">
         plebs<span style="color:#22c55e;">.finance</span>
-        <span style="font-size:11px;font-weight:600;color:#22c55e;margin-left:8px;vertical-align:middle;">PRO BRIEF</span>
       </div>
-      <div style="font-size:11px;color:#52525b;margin-top:2px;">{today} · Personalized for your watchlist</div>
+      <div style="font-size:11px;color:#52525b;margin-top:2px;">{today}</div>
     </div>
     <h1 style="color:#fff;font-size:20px;font-weight:700;margin:0 0 16px;line-height:1.3;">{subject_line}</h1>
     <p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:0 0 28px;border-left:3px solid #27272a;padding-left:12px;">{opening}</p>
-    {paid_block}
     <div style="border-top:1px solid #27272a;padding-top:24px;">
       {stories_html}
     </div>
+    {paid_block}
+    {free_cta}
     <p style="color:#71717a;font-size:14px;line-height:1.6;margin:24px 0;font-style:italic;">{closing}</p>
     <div style="border-top:1px solid #27272a;padding-top:16px;text-align:center;font-size:11px;color:#3f3f46;">
       Plebs.finance · Not financial advice ·
@@ -267,28 +274,19 @@ def send_newsletter() -> str:
         logger.warning("newsletter_emailer: no briefing found for today — skipping")
         return "no briefing found"
 
-    # ── Beehiiv: publish general newsletter for all subscribers ──
-    from briefing.beehiiv import publish_to_beehiiv
-
-    beehiiv_result = publish_to_beehiiv(briefing)
-    logger.info("newsletter_emailer: beehiiv — {}", beehiiv_result)
-
-    # ── Resend: personalized briefs for paid users only ──
     subscribers = _get_subscribers()
-    paid_subs = [s for s in subscribers if s.get("tier") in ("pro", "elite")]
+    if not subscribers:
+        logger.info("newsletter_emailer: no subscribers")
+        return "0 sent"
 
-    if not paid_subs:
-        logger.info("newsletter_emailer: no paid subscribers for personalized brief")
-        return f"beehiiv: {beehiiv_result}, resend: 0 sent"
-
-    subject   = f"Your Plebs Brief — {date.today().strftime('%b %-d')}"
+    subject   = briefing.get("headline", f"Plebs — {date.today().strftime('%b %-d')}")
     text_body = _render_text(briefing)
     sent, failed = 0, 0
 
-    for sub in paid_subs:
+    for sub in subscribers:
         email   = sub.get("email")
+        tier    = sub.get("tier", "free")
         user_id = sub.get("user_id")
-        tier    = sub.get("tier", "pro")
 
         if not email:
             continue
@@ -308,6 +306,6 @@ def send_newsletter() -> str:
             sentry_sdk.capture_exception(e)
             failed += 1
 
-    summary = f"beehiiv: {beehiiv_result}, resend: {sent} sent, {failed} failed"
+    summary = f"{sent} sent, {failed} failed"
     logger.info("newsletter_emailer complete — {}", summary)
     return summary
