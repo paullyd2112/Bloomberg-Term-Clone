@@ -39,6 +39,9 @@ resend==2.0.0
 # Web push notifications
 pywebpush==2.0.0
 
+# SMS notifications
+twilio==9.4.1
+
 # Economic data
 fredapi==0.5.2
 

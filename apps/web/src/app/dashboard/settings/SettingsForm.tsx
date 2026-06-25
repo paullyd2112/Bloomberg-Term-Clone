@@ -23,6 +23,7 @@ type Props = {
   initialExperience:  Experience | null;
   initialAssets:      AssetPref[];
   initialEmailAlerts: boolean;
+  initialSmsAlerts:   boolean;
 };
 
 export default function SettingsForm({
@@ -31,12 +32,14 @@ export default function SettingsForm({
   initialExperience,
   initialAssets,
   initialEmailAlerts,
+  initialSmsAlerts,
 }: Props) {
   const [fullName, setFullName]     = useState(initialFullName);
   const [phone, setPhone]           = useState(initialPhone);
   const [experience, setExperience] = useState<Experience | null>(initialExperience);
   const [assets, setAssets]         = useState<Set<AssetPref>>(new Set(initialAssets));
   const [emailAlerts, setEmailAlerts] = useState(initialEmailAlerts);
+  const [smsAlerts, setSmsAlerts]     = useState(initialSmsAlerts);
   const [saving, setSaving]         = useState(false);
   const [status, setStatus]         = useState<"idle" | "saved" | "error">("idle");
 
@@ -62,6 +65,7 @@ export default function SettingsForm({
           trading_experience: experience ?? undefined,
           asset_preferences:  assets.size > 0 ? Array.from(assets) : undefined,
           email_alerts:       emailAlerts,
+          sms_alerts:         smsAlerts,
         }),
       });
       if (!res.ok) throw new Error("Failed");
@@ -166,6 +170,20 @@ export default function SettingsForm({
         </label>
         <p className="text-[11px] text-zinc-600 mt-1.5">
           Get an email the moment a signal, price, or news alert you set is triggered.
+        </p>
+        <label className="inline-flex items-center gap-2.5 cursor-pointer select-none mt-3">
+          <input
+            type="checkbox"
+            checked={smsAlerts}
+            onChange={(e) => { setSmsAlerts(e.target.checked); setStatus("idle"); }}
+            className="accent-green-500 w-4 h-4"
+          />
+          <span className="text-sm text-zinc-300">
+            Text me when my alerts fire
+          </span>
+        </label>
+        <p className="text-[11px] text-zinc-600 mt-1.5">
+          Requires a phone number above. Standard messaging rates may apply.
         </p>
       </div>
 

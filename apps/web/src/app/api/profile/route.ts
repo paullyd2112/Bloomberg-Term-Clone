@@ -9,6 +9,7 @@ const Body = z.object({
   trading_experience: z.enum(["beginner", "intermediate", "advanced"]).optional(),
   asset_preferences:  z.array(z.enum(["stocks", "crypto", "predictions"])).optional(),
   email_alerts:       z.boolean().optional(),
+  sms_alerts:         z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
   if (parsed.data.trading_experience) update.trading_experience = parsed.data.trading_experience;
   if (parsed.data.asset_preferences)  update.asset_preferences  = parsed.data.asset_preferences;
   if (parsed.data.email_alerts !== undefined) update.email_alerts = parsed.data.email_alerts;
+  if (parsed.data.sms_alerts !== undefined) update.sms_alerts = parsed.data.sms_alerts;
 
   const supabase = createClient();
   let { error } = await supabase

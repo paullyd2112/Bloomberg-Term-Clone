@@ -390,6 +390,13 @@ def evaluate_alerts() -> str:
                 except Exception as e:
                     logger.warning("push delivery failed for alert {}: {}", alert.get("id"), e)
 
+                # Deliver SMS notification (no-op if Twilio not configured)
+                try:
+                    from notifications.sms import send_alert_sms
+                    send_alert_sms(alert["user_id"], alert)
+                except Exception as e:
+                    logger.warning("sms delivery failed for alert {}: {}", alert.get("id"), e)
+
         except Exception as e:
             logger.error("alert evaluation error for alert {}: {}", alert.get("id"), e)
             sentry_sdk.capture_exception(e)

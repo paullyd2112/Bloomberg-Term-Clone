@@ -22,16 +22,18 @@ export default async function SettingsPage() {
   // Fetched separately + defensively: the email_alerts column ships in
   // migration 005, which may not be applied yet. Default to opted-in.
   let emailAlerts = true;
+  let smsAlerts = false;
   try {
     const supabase = createClient();
     const { data } = await supabase
       .from("profiles")
-      .select("email_alerts")
+      .select("email_alerts, sms_alerts")
       .eq("id", user.id)
       .single();
     if (data && typeof data.email_alerts === "boolean") emailAlerts = data.email_alerts;
+    if (data && typeof data.sms_alerts === "boolean") smsAlerts = data.sms_alerts;
   } catch {
-    // column not present yet — keep default
+    // columns not present yet — keep defaults
   }
 
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -101,6 +103,7 @@ export default async function SettingsPage() {
         initialExperience={(profile?.trading_experience as Experience) ?? null}
         initialAssets={(profile?.asset_preferences as AssetPref[]) ?? []}
         initialEmailAlerts={emailAlerts}
+        initialSmsAlerts={smsAlerts}
       />
 
       <p className="text-zinc-600 text-xs">
