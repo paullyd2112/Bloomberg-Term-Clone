@@ -63,6 +63,10 @@ DEFAULT_WATCHLIST = [
     # Momentum / meme
     "GME", "AMC", "MSTR",
 
+    # Blue-chip / large-cap (home-page ticker + broad market coverage)
+    "JPM", "V", "UNH", "JNJ", "WMT", "MA", "PG", "HD", "XOM",
+    "COST", "BAC", "LLY", "MRK", "ABBV", "CVX", "PEP", "KO",
+
     # Sector ETFs (give macro context)
     "SPY", "QQQ", "ARKK", "SOXX", "XBI",
 ]

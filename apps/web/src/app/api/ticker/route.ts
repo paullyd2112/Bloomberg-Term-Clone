@@ -11,7 +11,7 @@ type TickerItem = {
 };
 
 const TOP_STOCKS = [
-  "AAPL","MSFT","NVDA","AMZN","GOOG","META","TSLA","JPM","V","UNH",
+  "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","JPM","V","UNH",
   "JNJ","WMT","MA","PG","HD","XOM","COST","AVGO","BAC","LLY",
   "MRK","ABBV","CVX","PEP","KO",
 ];
