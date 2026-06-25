@@ -6,7 +6,7 @@ type PlanInterval = "monthly" | "quarterly";
 
 const INTERVALS: { id: PlanInterval; label: string }[] = [
   { id: "monthly",   label: "Monthly" },
-  { id: "quarterly", label: "Quarterly (save ~10%)" },
+  { id: "quarterly", label: "Quarterly (save 17%)" },
 ];
 
 const PLAN_KEYS: Record<"pro" | "elite", Record<PlanInterval, string>> = {
@@ -65,7 +65,7 @@ export default function UpgradeButtons({ planTier }: { planTier: "pro" | "elite"
         disabled={loading}
         className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold text-sm py-2.5 rounded-lg transition-colors"
       >
-        {loading ? "Redirecting…" : interval === "monthly" ? "Start 14-day free trial →" : "Subscribe now →"}
+        {loading ? "Redirecting…" : "Start 14-day free trial →"}
       </button>
       <p className="text-center text-xs text-zinc-600">Credit card required. Cancel anytime.</p>
     </div>

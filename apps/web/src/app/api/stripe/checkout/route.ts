@@ -54,6 +54,8 @@ export async function POST(req: Request) {
 
   const isLifetime  = plan === "lifetime_pro"   || plan === "lifetime_elite";
   const isMonthly   = plan === "pro_monthly"    || plan === "elite_monthly";
+  const isQuarterly = plan === "pro_quarterly"  || plan === "elite_quarterly";
+  const hasTrial    = isMonthly || isQuarterly;
   const baseMetadata = {
     supabase_user_id: user.id,
     plan,
@@ -71,7 +73,7 @@ export async function POST(req: Request) {
 
   if (!isLifetime) {
     sessionConfig.subscription_data = {
-      ...(isMonthly ? { trial_period_days: 14 } : {}),
+      ...(hasTrial ? { trial_period_days: 14 } : {}),
       metadata: baseMetadata,
     };
   } else {

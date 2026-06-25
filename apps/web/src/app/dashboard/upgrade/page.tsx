@@ -42,8 +42,8 @@ export default async function UpgradePage() {
               <div className="text-xs text-zinc-400 mt-0.5">One-time payment, forever access</div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-white tabular-nums">$399</div>
-              <div className="text-xs text-zinc-500 mt-0.5">Pays for itself in ~10 months</div>
+              <div className="text-3xl font-bold text-white tabular-nums">$299</div>
+              <div className="text-xs text-zinc-500 mt-0.5">Pays for itself in ~8 months</div>
             </div>
             <ul className="space-y-1.5 flex-1">
               {TIER_FEATURES.pro.map((f) => (
@@ -72,8 +72,8 @@ export default async function UpgradePage() {
               <div className="text-xs text-zinc-400 mt-0.5">One-time payment, forever access</div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-white tabular-nums">$649</div>
-              <div className="text-xs text-zinc-500 mt-0.5">Pays for itself in ~8 months</div>
+              <div className="text-3xl font-bold text-white tabular-nums">$399</div>
+              <div className="text-xs text-zinc-500 mt-0.5">Pays for itself in ~5 months</div>
             </div>
             <ul className="space-y-1.5 flex-1">
               {TIER_FEATURES.elite.map((f) => (
@@ -102,7 +102,7 @@ export default async function UpgradePage() {
         <div className="grid gap-4 md:grid-cols-2">
           <PlanCard
             name="Pro"
-            price={{ monthly: 40, quarterly: 108 }}
+            price={{ monthly: 40, quarterly: 100 }}
             description="Serious retail traders"
             features={TIER_FEATURES.pro}
             current={tier === "pro" && profile?.billing_interval !== "lifetime"}
@@ -111,7 +111,7 @@ export default async function UpgradePage() {
           />
           <PlanCard
             name="Elite"
-            price={{ monthly: 80, quarterly: 216 }}
+            price={{ monthly: 80, quarterly: 200 }}
             description="For the obsessed"
             features={TIER_FEATURES.elite}
             current={tier === "elite" && profile?.billing_interval !== "lifetime"}
