@@ -23,6 +23,15 @@ function formatPrice(n: number) {
   return n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 }
 
+function isMarketOpen(): boolean {
+  const now = new Date();
+  const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const day = et.getDay();
+  if (day === 0 || day === 6) return false;
+  const mins = et.getHours() * 60 + et.getMinutes();
+  return mins >= 570 && mins < 960; // 9:30am – 4:00pm ET
+}
+
 function nudgePrice(base: number): number {
   const magnitude = base * 0.0003;
   const delta = (Math.random() - 0.5) * 2 * magnitude;
@@ -57,9 +66,15 @@ export default function LiveSignalFeed() {
   useEffect(() => {
     if (!loaded) return;
     const id = setInterval(() => {
+      const open = isMarketOpen();
       const nudged: Record<string, TickerItem> = {};
       for (const [key, item] of Object.entries(basePrices.current)) {
-        nudged[key] = { ...item, price: nudgePrice(item.price) };
+        nudged[key] = {
+          ...item,
+          price: (item.asset_type === "crypto" || open)
+            ? nudgePrice(item.price)
+            : item.price,
+        };
       }
       setPrices(nudged);
     }, 2000);

@@ -34,6 +34,15 @@ function Item({ item }: { item: TickerItem }) {
   );
 }
 
+function isMarketOpen(): boolean {
+  const now = new Date();
+  const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const day = et.getDay();
+  if (day === 0 || day === 6) return false;
+  const mins = et.getHours() * 60 + et.getMinutes();
+  return mins >= 570 && mins < 960; // 9:30am – 4:00pm ET
+}
+
 function nudgePrice(base: number): number {
   const magnitude = base * 0.0003;
   const delta = (Math.random() - 0.5) * 2 * magnitude;
@@ -67,9 +76,12 @@ export default function TickerBar() {
   useEffect(() => {
     if (!loaded) return;
     const id = setInterval(() => {
+      const open = isMarketOpen();
       setItems(baseItems.current.map((item) => ({
         ...item,
-        price: nudgePrice(item.price),
+        price: (item.asset_type === "crypto" || open)
+          ? nudgePrice(item.price)
+          : item.price,
       })));
     }, 2500);
     return () => clearInterval(id);
