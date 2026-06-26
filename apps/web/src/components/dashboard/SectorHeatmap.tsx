@@ -25,7 +25,6 @@ async function fetchSectorData(): Promise<SectorStats[]> {
     return [];
   }
 
-  // Group by sector
   const sectorBuckets = new Map<
     string,
     { total: number; bullish: number; confidenceSum: number }
@@ -58,7 +57,6 @@ async function fetchSectorData(): Promise<SectorStats[]> {
     }),
   );
 
-  // Sort by bullish % descending
   stats.sort((a, b) => b.bullishPct - a.bullishPct);
 
   return stats;
@@ -66,24 +64,21 @@ async function fetchSectorData(): Promise<SectorStats[]> {
 
 function cardColor(bullishPct: number): string {
   if (bullishPct > 60) {
-    // Green gradient — stronger green the more bullish
     const intensity = Math.min((bullishPct - 60) / 40, 1);
-    if (intensity > 0.5) return "bg-emerald-900/60 border-emerald-700";
-    return "bg-emerald-900/30 border-emerald-800";
+    if (intensity > 0.5) return "bg-emerald-500/10 border-emerald-500/20";
+    return "bg-emerald-500/[0.06] border-emerald-500/15";
   }
   if (bullishPct < 40) {
-    // Red gradient — stronger red the more bearish
     const intensity = Math.min((40 - bullishPct) / 40, 1);
-    if (intensity > 0.5) return "bg-rose-900/60 border-rose-700";
-    return "bg-rose-900/30 border-rose-800";
+    if (intensity > 0.5) return "bg-red-500/10 border-red-500/20";
+    return "bg-red-500/[0.06] border-red-500/15";
   }
-  // Neutral
-  return "bg-zinc-800/60 border-zinc-700";
+  return "bg-white/[0.03] border-white/[0.06]";
 }
 
 function pctColor(bullishPct: number): string {
   if (bullishPct > 60) return "text-emerald-400";
-  if (bullishPct < 40) return "text-rose-400";
+  if (bullishPct < 40) return "text-red-400";
   return "text-zinc-400";
 }
 
@@ -94,19 +89,20 @@ export default async function SectorHeatmap() {
 
   return (
     <section>
-      <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-2">
+      <h2 className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.15em] text-zinc-500 mb-3">
+        <span className="text-emerald-400/60">●</span>
         Sector ratings (7d)
       </h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {sectors.map((s) => (
           <div
             key={s.sector}
-            className={`rounded-lg border px-3 py-2.5 ${cardColor(s.bullishPct)}`}
+            className={`rounded-xl border px-4 py-3 ring-hairline ${cardColor(s.bullishPct)}`}
           >
             <div className="text-sm font-semibold text-white truncate">
               {s.sector}
             </div>
-            <div className="flex items-baseline gap-2 mt-1">
+            <div className="flex items-baseline gap-2 mt-1.5">
               <span
                 className={`text-lg font-bold tabular-nums ${pctColor(s.bullishPct)}`}
               >
@@ -114,7 +110,7 @@ export default async function SectorHeatmap() {
               </span>
               <span className="text-[10px] text-zinc-500">bullish</span>
             </div>
-            <div className="flex items-baseline gap-2 mt-0.5">
+            <div className="flex items-baseline gap-2 mt-1">
               <span className="text-xs text-zinc-400 tabular-nums">
                 {s.totalSignals} signals
               </span>

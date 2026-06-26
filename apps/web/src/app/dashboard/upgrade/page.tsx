@@ -11,10 +11,10 @@ export default async function UpgradePage() {
   const isLifetimeElite = profile?.billing_interval === "lifetime" && tier === "elite";
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-8">
+    <div className="p-5 md:p-8 max-w-4xl mx-auto space-y-10">
       <div>
-        <h1 className="text-xl font-bold text-white">Plans &amp; Billing</h1>
-        <p className="text-sm text-zinc-400 mt-1">
+        <h1 className="text-xl font-bold text-white tracking-tight">Plans & Billing</h1>
+        <p className="text-sm text-zinc-400 mt-1.5">
           {tier === "free"
             ? "Pick a plan to start your 14-day free trial."
             : <>You&apos;re on the <span className="text-white capitalize font-medium">{tier}</span> plan.</>}
@@ -23,38 +23,39 @@ export default async function UpgradePage() {
 
       {/* Lifetime plans */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
-            Lifetime access — one-time payment
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.15em] text-zinc-500">
+            <span className="text-emerald-400/60">●</span>
+            Lifetime access
           </h2>
-          <span className="text-xs font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/30 px-2 py-0.5 rounded-full">
+          <span className="text-[11px] font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2.5 py-1 rounded-lg">
             Limited time offer
           </span>
         </div>
-        <p className="text-xs text-zinc-500 mb-4">
-          Pay once, keep access forever. Lifetime plans won&apos;t be available permanently — grab it while it lasts.
+        <p className="text-xs text-zinc-500 mb-5">
+          Pay once, keep access forever. Lifetime plans won&apos;t be available permanently.
         </p>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-5 md:grid-cols-2">
           {/* Lifetime Pro */}
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 flex flex-col gap-4">
+          <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-2xl p-7 flex flex-col gap-5">
             <div>
               <div className="text-base font-bold text-white">Lifetime Pro</div>
-              <div className="text-xs text-zinc-400 mt-0.5">One-time payment, forever access</div>
+              <div className="text-xs text-zinc-500 mt-1">One-time payment, forever access</div>
             </div>
             <div>
               <div className="text-3xl font-bold text-white tabular-nums">$299</div>
-              <div className="text-xs text-zinc-500 mt-0.5">Pays for itself in ~8 months</div>
+              <div className="text-xs text-zinc-500 mt-1">Pays for itself in ~8 months</div>
             </div>
-            <ul className="space-y-1.5 flex-1">
+            <ul className="space-y-2 flex-1">
               {TIER_FEATURES.pro.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-xs text-zinc-300">
-                  <span className="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+                <li key={f} className="flex items-start gap-2.5 text-xs text-zinc-300">
+                  <span className="text-emerald-400 mt-0.5 flex-shrink-0">✓</span>
                   {f}
                 </li>
               ))}
             </ul>
             {isLifetimePro ? (
-              <div className="text-center text-xs font-semibold text-zinc-500 border border-zinc-700 rounded-lg py-2">
+              <div className="text-center text-xs font-semibold text-zinc-500 border border-white/[0.08] rounded-xl py-2.5">
                 Your plan
               </div>
             ) : (
@@ -63,28 +64,28 @@ export default async function UpgradePage() {
           </div>
 
           {/* Lifetime Elite */}
-          <div className="relative bg-gradient-to-br from-green-900/30 to-zinc-900 border border-green-700 rounded-xl p-6 flex flex-col gap-4">
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-black text-xs font-bold px-3 py-0.5 rounded-full">
+          <div className="relative bg-gradient-to-br from-emerald-900/20 to-transparent border border-emerald-500/30 rounded-2xl p-7 flex flex-col gap-5 glow-green">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-black text-[11px] font-bold px-3.5 py-1 rounded-lg">
               Best value
             </div>
             <div>
               <div className="text-base font-bold text-white">Lifetime Elite</div>
-              <div className="text-xs text-zinc-400 mt-0.5">One-time payment, forever access</div>
+              <div className="text-xs text-zinc-500 mt-1">One-time payment, forever access</div>
             </div>
             <div>
               <div className="text-3xl font-bold text-white tabular-nums">$399</div>
-              <div className="text-xs text-zinc-500 mt-0.5">Pays for itself in ~5 months</div>
+              <div className="text-xs text-zinc-500 mt-1">Pays for itself in ~5 months</div>
             </div>
-            <ul className="space-y-1.5 flex-1">
+            <ul className="space-y-2 flex-1">
               {TIER_FEATURES.elite.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-xs text-zinc-300">
-                  <span className="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+                <li key={f} className="flex items-start gap-2.5 text-xs text-zinc-300">
+                  <span className="text-emerald-400 mt-0.5 flex-shrink-0">✓</span>
                   {f}
                 </li>
               ))}
             </ul>
             {isLifetimeElite ? (
-              <div className="text-center text-xs font-semibold text-zinc-500 border border-zinc-700 rounded-lg py-2">
+              <div className="text-center text-xs font-semibold text-zinc-500 border border-white/[0.08] rounded-xl py-2.5">
                 Your plan
               </div>
             ) : (
@@ -94,12 +95,13 @@ export default async function UpgradePage() {
         </div>
       </div>
 
-      {/* Monthly / Annual plans */}
+      {/* Subscription plans */}
       <div>
-        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-3">
+        <h2 className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.15em] text-zinc-500 mb-4">
+          <span className="text-emerald-400/60">●</span>
           Subscription plans
         </h2>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-5 md:grid-cols-2">
           <PlanCard
             name="Pro"
             price={{ monthly: 40, quarterly: 100 }}
@@ -120,12 +122,12 @@ export default async function UpgradePage() {
         </div>
       </div>
 
-      {/* Billing portal for paying users */}
+      {/* Billing portal */}
       {tier !== "free" && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex items-center justify-between gap-4">
+        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5 flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm font-medium text-white">Billing &amp; invoices</div>
-            <div className="text-xs text-zinc-400 mt-0.5">
+            <div className="text-sm font-medium text-white">Billing & invoices</div>
+            <div className="text-xs text-zinc-500 mt-1">
               Manage your subscription, update payment method, or download invoices.
             </div>
           </div>
@@ -157,44 +159,44 @@ function PlanCard({
 
   return (
     <div
-      className={`relative bg-zinc-900 rounded-xl border p-5 flex flex-col gap-4 ${
+      className={`relative rounded-2xl border p-7 flex flex-col gap-5 ${
         highlighted
-          ? "border-green-600 shadow-[0_0_24px_rgba(34,197,94,0.15)]"
-          : "border-zinc-800"
+          ? "bg-gradient-to-br from-emerald-900/15 to-transparent border-emerald-500/30 glow-green"
+          : "bg-white/[0.03] border-white/[0.06] ring-hairline"
       }`}
     >
       {highlighted && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-black text-xs font-bold px-3 py-0.5 rounded-full">
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-black text-[11px] font-bold px-3.5 py-1 rounded-lg">
           Most popular
         </div>
       )}
 
       <div>
         <div className="text-base font-bold text-white">{name}</div>
-        <div className="text-xs text-zinc-400 mt-0.5">{description}</div>
+        <div className="text-xs text-zinc-500 mt-1">{description}</div>
       </div>
 
       <div>
         <div className="text-2xl font-bold text-white tabular-nums">
           ${price.monthly}
-          <span className="text-sm font-normal text-zinc-400">/mo</span>
+          <span className="text-sm font-normal text-zinc-500">/mo</span>
         </div>
-        <div className="text-xs text-zinc-500 mt-0.5">
+        <div className="text-xs text-zinc-500 mt-1">
           ${price.quarterly}/quarter — save ${savingsPerQuarter}
         </div>
       </div>
 
-      <ul className="space-y-1.5 flex-1">
+      <ul className="space-y-2 flex-1">
         {features.map((f) => (
-          <li key={f} className="flex items-start gap-2 text-xs text-zinc-300">
-            <span className="text-green-400 mt-0.5 flex-shrink-0">✓</span>
+          <li key={f} className="flex items-start gap-2.5 text-xs text-zinc-300">
+            <span className="text-emerald-400 mt-0.5 flex-shrink-0">✓</span>
             {f}
           </li>
         ))}
       </ul>
 
       {current ? (
-        <div className="text-center text-xs font-semibold text-zinc-500 border border-zinc-700 rounded-lg py-2">
+        <div className="text-center text-xs font-semibold text-zinc-500 border border-white/[0.08] rounded-xl py-2.5">
           Current plan
         </div>
       ) : (

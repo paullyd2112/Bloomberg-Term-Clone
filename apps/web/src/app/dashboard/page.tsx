@@ -44,7 +44,6 @@ async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
   const totalResolved = totalWins + totalLosses;
   const overallWinRate = totalResolved > 0 ? totalWins / totalResolved : 0;
 
-  // Group by asset_type
   const grouped = new Map<string, { wins: number; losses: number }>();
   for (const r of rows) {
     const key = r.asset_type ?? "unknown";
@@ -90,7 +89,6 @@ async function fetchTopMovers() {
 
   if (!data) return [];
 
-  // Deduplicate by identifier, keep latest, sort by abs change
   const seen = new Map<string, typeof data[0]>();
   for (const row of data) {
     if (!seen.has(row.identifier)) seen.set(row.identifier, row);
@@ -120,9 +118,9 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-5 md:p-8 space-y-8 max-w-7xl mx-auto">
       {/* Stats row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard label="Total signals" value={signals.length} />
         <StatCard label="Pending" value={pending} />
         <StatCard label="Wins" value={winCount} color="green" />
@@ -132,15 +130,13 @@ export default async function DashboardPage() {
       {/* Platform accuracy */}
       {accuracy && (
         <section>
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-2">
-            Platform accuracy
-          </h2>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 flex flex-wrap gap-x-6 gap-y-2 items-baseline">
+          <SectionHeader>Platform accuracy</SectionHeader>
+          <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4 flex flex-wrap gap-x-6 gap-y-3 items-baseline">
             <div>
               <span
                 className={`text-2xl font-bold tabular-nums ${
                   accuracy.overallWinRate * 100 >= 60
-                    ? "text-green-400"
+                    ? "text-emerald-400"
                     : accuracy.overallWinRate * 100 >= 45
                     ? "text-amber-400"
                     : "text-red-400"
@@ -156,7 +152,7 @@ export default async function DashboardPage() {
               </span>
               <span className="text-xs text-zinc-500 ml-1.5">resolved</span>
             </div>
-            <span className="text-zinc-700">|</span>
+            <span className="text-white/10">|</span>
             {accuracy.byAssetClass.map((a) => (
               <div key={a.asset_type} className="flex items-baseline gap-1.5">
                 <span className="text-xs text-zinc-400 capitalize">
@@ -165,7 +161,7 @@ export default async function DashboardPage() {
                 <span
                   className={`text-sm font-semibold tabular-nums ${
                     a.winRate * 100 >= 60
-                      ? "text-green-400"
+                      ? "text-emerald-400"
                       : a.winRate * 100 >= 45
                       ? "text-amber-400"
                       : "text-red-400"
@@ -185,21 +181,19 @@ export default async function DashboardPage() {
       {/* Top movers */}
       {movers.length > 0 && (
         <section>
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-2">
-            Top movers (24h)
-          </h2>
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <SectionHeader>Top movers (24h)</SectionHeader>
+          <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
             {movers.map((m) => (
               <div
                 key={`${m.asset_type}:${m.identifier}`}
-                className="flex-shrink-0 bg-zinc-900 border border-zinc-800 rounded px-3 py-2 flex flex-col gap-0.5 min-w-[90px]"
+                className="flex-shrink-0 bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-4 py-3 flex flex-col gap-1 min-w-[100px]"
               >
                 <span className="font-mono text-xs font-semibold text-white truncate">
                   {m.identifier}
                 </span>
                 <span
                   className={
-                    (m.change_24h ?? 0) >= 0 ? "text-green-400 text-xs" : "text-red-400 text-xs"
+                    (m.change_24h ?? 0) >= 0 ? "text-emerald-400 text-xs tabular-nums" : "text-red-400 text-xs tabular-nums"
                   }
                 >
                   {(m.change_24h ?? 0) >= 0 ? "+" : ""}
@@ -214,7 +208,7 @@ export default async function DashboardPage() {
       {/* Sector heatmap */}
       <Suspense
         fallback={
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 h-40 animate-pulse" />
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-6 h-40 animate-pulse" />
         }
       >
         <SectorHeatmap />
@@ -222,12 +216,19 @@ export default async function DashboardPage() {
 
       {/* Signal feed */}
       <section>
-        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-3">
-          Latest signals
-        </h2>
+        <SectionHeader>Latest signals</SectionHeader>
         <SignalFeed signals={signals} />
       </section>
     </div>
+  );
+}
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.15em] text-zinc-500 mb-3">
+      <span className="text-emerald-400/60">●</span>
+      {children}
+    </h2>
   );
 }
 
@@ -241,11 +242,11 @@ function StatCard({
   color?: "green" | "red";
 }) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3">
+    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4">
       <div
         className={
           color === "green"
-            ? "text-2xl font-bold text-green-400 tabular-nums"
+            ? "text-2xl font-bold text-emerald-400 tabular-nums"
             : color === "red"
             ? "text-2xl font-bold text-red-400 tabular-nums"
             : "text-2xl font-bold text-white tabular-nums"
@@ -253,7 +254,7 @@ function StatCard({
       >
         {value}
       </div>
-      <div className="text-xs text-zinc-500 mt-0.5">{label}</div>
+      <div className="text-xs text-zinc-500 mt-1">{label}</div>
     </div>
   );
 }

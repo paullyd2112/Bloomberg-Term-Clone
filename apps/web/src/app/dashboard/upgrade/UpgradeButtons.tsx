@@ -44,22 +44,22 @@ export default function UpgradeButtons({ planTier }: { planTier: "pro" | "elite"
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {error && (
-        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800 rounded px-2 py-1.5">
+        <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
           {error}
         </div>
       )}
       {/* Interval toggle */}
-      <div className="flex flex-col gap-0.5 rounded-lg border border-zinc-700 p-0.5">
+      <div className="flex flex-col gap-0.5 rounded-xl border border-white/[0.08] p-1">
         {INTERVALS.map(({ id, label }) => (
           <button
             key={id}
             onClick={() => setInterval(id)}
-            className={`w-full text-xs py-1.5 rounded-md transition-colors font-medium text-left px-2 ${
+            className={`w-full text-xs py-2 rounded-lg transition-all font-medium text-left px-3 ${
               interval === id
-                ? "bg-zinc-700 text-white"
-                : "text-zinc-400 hover:text-white"
+                ? "bg-white/[0.08] text-white ring-hairline"
+                : "text-zinc-500 hover:text-white"
             }`}
           >
             {label}
@@ -70,11 +70,11 @@ export default function UpgradeButtons({ planTier }: { planTier: "pro" | "elite"
       <button
         onClick={handleCheckout}
         disabled={loading}
-        className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold text-sm py-2.5 rounded-lg transition-colors"
+        className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold text-sm py-3 rounded-xl transition-colors"
       >
         {loading ? "Redirecting…" : "Start 14-day free trial →"}
       </button>
-      <p className="text-center text-xs text-zinc-600">Credit card required. Cancel anytime.</p>
+      <p className="text-center text-[11px] text-zinc-600">Credit card required. Cancel anytime.</p>
     </div>
   );
 }
