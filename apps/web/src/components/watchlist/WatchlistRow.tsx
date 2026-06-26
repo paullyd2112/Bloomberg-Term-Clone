@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { X, Loader2 } from "lucide-react";
 
 type WatchlistItem = {
   id: number;
@@ -21,8 +22,8 @@ type WatchlistItem = {
 };
 
 const DIR_COLOR: Record<string, string> = {
-  BUY:  "text-green-400",
-  YES:  "text-green-400",
+  BUY:  "text-emerald-400",
+  YES:  "text-emerald-400",
   SELL: "text-red-400",
   NO:   "text-red-400",
   HOLD: "text-zinc-400",
@@ -41,13 +42,13 @@ export default function WatchlistRow({ item }: { item: WatchlistItem }) {
   const change = item.latest_price?.change_24h;
 
   return (
-    <div className="flex items-center gap-3 px-3 sm:px-4 py-3 border-b border-zinc-800 hover:bg-zinc-800/30 transition-colors group min-w-[320px]">
+    <div className="flex items-center gap-3 px-3 sm:px-4 py-3 border-b border-white/[0.06] last:border-b-0 hover:bg-white/[0.04] transition-colors group min-w-[320px]">
       {/* Asset info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <Link
             href={`/dashboard/asset/${item.asset_type}/${encodeURIComponent(item.identifier)}`}
-            className="font-mono font-semibold text-white text-sm hover:text-green-400 transition-colors truncate"
+            className="font-mono font-semibold text-white text-sm hover:text-emerald-400 transition-colors truncate"
           >
             {item.identifier}
           </Link>
@@ -65,7 +66,7 @@ export default function WatchlistRow({ item }: { item: WatchlistItem }) {
                 : `$${Number(item.latest_price.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
             </div>
             {change != null && (
-              <div className={`text-xs tabular-nums ${change >= 0 ? "text-green-400" : "text-red-400"}`}>
+              <div className={`text-xs tabular-nums ${change >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                 {change >= 0 ? "+" : ""}{Number(change).toFixed(2)}%
               </div>
             )}
@@ -95,10 +96,14 @@ export default function WatchlistRow({ item }: { item: WatchlistItem }) {
       <button
         onClick={handleRemove}
         disabled={removing}
-        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-all text-sm px-1"
+        className="flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-all px-1"
         title="Remove from watchlist"
       >
-        {removing ? "…" : "✕"}
+        {removing ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <X className="h-3.5 w-3.5" />
+        )}
       </button>
     </div>
   );

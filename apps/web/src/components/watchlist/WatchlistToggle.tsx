@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Star } from "lucide-react";
 
 export default function WatchlistToggle({
   assetType,
@@ -54,11 +55,11 @@ export default function WatchlistToggle({
         disabled={loading}
         className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border transition-colors ${
           wid
-            ? "bg-zinc-800 border-zinc-600 text-white hover:border-red-500 hover:text-red-400"
-            : "bg-zinc-900 border-zinc-700 text-zinc-400 hover:border-green-500 hover:text-green-400"
+            ? "bg-emerald-500/10 border-emerald-700/30 text-emerald-400 hover:border-red-500/40 hover:text-red-400"
+            : "bg-white/[0.03] border-white/[0.1] text-zinc-400 hover:border-emerald-500/40 hover:text-emerald-400"
         } disabled:opacity-50`}
       >
-        <span>{wid ? "★" : "☆"}</span>
+        <Star className="h-4 w-4" fill={wid ? "currentColor" : "none"} />
         <span>{loading ? "…" : wid ? "Watching" : "Watch"}</span>
       </button>
       {error && (

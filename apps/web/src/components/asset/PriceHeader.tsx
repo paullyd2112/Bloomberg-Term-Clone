@@ -64,7 +64,7 @@ export default function PriceHeader({
       {change != null && (
         <span
           className={`text-sm font-semibold tabular-nums ${
-            change >= 0 ? "text-green-400" : "text-red-400"
+            change >= 0 ? "text-emerald-400" : "text-red-400"
           }`}
         >
           {change >= 0 ? "+" : ""}{Number(change).toFixed(2)}%

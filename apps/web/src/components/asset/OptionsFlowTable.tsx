@@ -1,3 +1,5 @@
+import { Zap } from "lucide-react";
+
 type OptionsRow = {
   contract_type: string;
   strike: number | null;
@@ -20,7 +22,7 @@ export default function OptionsFlowTable({ rows }: { rows: OptionsRow[] }) {
           >
             <span
               className={`font-bold w-8 flex-shrink-0 ${
-                isCall ? "text-green-400" : "text-red-400"
+                isCall ? "text-emerald-400" : "text-red-400"
               }`}
             >
               {isCall ? "CALL" : "PUT"}
@@ -39,7 +41,7 @@ export default function OptionsFlowTable({ rows }: { rows: OptionsRow[] }) {
                 : "—"}
             </span>
             {row.is_unusual && (
-              <span className="text-amber-400 font-bold">⚡</span>
+              <Zap className="h-3 w-3 text-amber-400" fill="currentColor" />
             )}
           </div>
         );

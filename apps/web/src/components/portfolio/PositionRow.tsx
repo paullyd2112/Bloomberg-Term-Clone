@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { X, Loader2 } from "lucide-react";
 
 type Position = {
   id: number;
@@ -19,8 +20,8 @@ type Position = {
 };
 
 const DIR_COLOR: Record<string, string> = {
-  LONG:  "text-green-400",
-  YES:   "text-green-400",
+  LONG:  "text-emerald-400",
+  YES:   "text-emerald-400",
   SHORT: "text-red-400",
   NO:    "text-red-400",
 };
@@ -70,13 +71,13 @@ export default function PositionRow({ pos }: { pos: Position }) {
   }
 
   return (
-    <div className="px-4 py-3 border-b border-zinc-800 last:border-0 hover:bg-zinc-800/20 transition-colors group">
+    <div className="px-4 py-3 border-b border-white/[0.06] last:border-0 hover:bg-white/[0.04] transition-colors group">
       <div className="flex items-center gap-3 flex-wrap">
         {/* Ticker + direction */}
         <div className="flex items-center gap-2 min-w-[110px] sm:min-w-[140px]">
           <Link
             href={`/dashboard/asset/${pos.asset_type}/${encodeURIComponent(pos.identifier)}`}
-            className="font-mono font-bold text-white hover:text-green-400 transition-colors text-sm"
+            className="font-mono font-bold text-white hover:text-emerald-400 transition-colors text-sm"
           >
             {pos.identifier}
           </Link>
@@ -113,7 +114,7 @@ export default function PositionRow({ pos }: { pos: Position }) {
 
         {/* P&L */}
         {pnlValue != null && (
-          <div className={`ml-auto text-sm font-bold tabular-nums ${pnlPositive ? "text-green-400" : "text-red-400"}`}>
+          <div className={`ml-auto text-sm font-bold tabular-nums ${pnlPositive ? "text-emerald-400" : "text-red-400"}`}>
             {pnlPositive ? "+" : ""}${Math.abs(pnlValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             {isOpen && <span className="text-xs font-normal text-zinc-600 ml-1">unrealized</span>}
           </div>
@@ -124,16 +125,20 @@ export default function PositionRow({ pos }: { pos: Position }) {
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={() => setClosing(true)}
-              className="text-xs text-zinc-400 hover:text-white border border-zinc-700 hover:border-zinc-500 px-2 py-1 rounded transition-colors"
+              className="text-xs text-zinc-300 hover:text-white border border-white/[0.1] hover:border-white/20 bg-white/[0.03] px-2 py-1 rounded-md transition-colors"
             >
               Close
             </button>
             <button
               onClick={handleDelete}
               disabled={removing}
-              className="text-xs text-zinc-600 hover:text-red-400 px-1 py-1 transition-colors"
+              className="flex items-center justify-center text-zinc-600 hover:text-red-400 px-1 py-1 transition-colors"
             >
-              {removing ? "…" : "✕"}
+              {removing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <X className="h-3.5 w-3.5" />
+              )}
             </button>
           </div>
         )}
@@ -151,12 +156,12 @@ export default function PositionRow({ pos }: { pos: Position }) {
             value={exitInput}
             onChange={(e) => setExitInput(e.target.value)}
             placeholder="Exit price"
-            className="bg-zinc-800 border border-zinc-700 text-white text-xs rounded px-3 py-1.5 w-32 focus:outline-none focus:border-green-500 placeholder-zinc-500"
+            className="bg-white/[0.04] border border-white/[0.1] text-white text-xs rounded-lg px-3 py-1.5 w-32 focus:outline-none focus:border-emerald-500/50 placeholder-zinc-500"
           />
           <button
             type="submit"
             disabled={loading}
-            className="text-xs bg-green-500 hover:bg-green-400 disabled:opacity-50 text-black font-semibold px-3 py-1.5 rounded transition-colors"
+            className="text-xs bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-semibold px-3 py-1.5 rounded-lg transition-colors"
           >
             {loading ? "…" : "Confirm"}
           </button>

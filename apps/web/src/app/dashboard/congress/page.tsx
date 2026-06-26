@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { Landmark, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 type CongressTrade = {
@@ -21,11 +22,11 @@ type Filter = {
 };
 
 const PARTY_LABEL: Record<string, { label: string; cls: string }> = {
-  D:          { label: "D", cls: "bg-blue-500/15 text-blue-400 border-blue-700" },
-  Democrat:   { label: "D", cls: "bg-blue-500/15 text-blue-400 border-blue-700" },
-  R:          { label: "R", cls: "bg-red-500/15 text-red-400 border-red-700" },
-  Republican: { label: "R", cls: "bg-red-500/15 text-red-400 border-red-700" },
-  I:          { label: "I", cls: "bg-zinc-600/40 text-zinc-400 border-zinc-500" },
+  D:          { label: "D", cls: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
+  Democrat:   { label: "D", cls: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
+  R:          { label: "R", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
+  Republican: { label: "R", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
+  I:          { label: "I", cls: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30" },
 };
 
 function partyBadge(party: string): { label: string; cls: string } {
@@ -76,12 +77,17 @@ export default function CongressPage() {
   const sells = filtered.filter((t) => t.transaction === "sell").length;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-5 md:p-8 max-w-5xl mx-auto space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-white">Congress Tracker</h1>
-        <p className="text-zinc-500 text-sm mt-1">
-          STOCK Act disclosures — House &amp; Senate trades
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2.5">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
+            <Landmark className="h-4 w-4" />
+          </span>
+          <h1 className="text-xl font-semibold tracking-tight text-white">Congress Tracker</h1>
+        </div>
+        <p className="text-zinc-500 text-sm">
+          STOCK Act disclosures — House &amp; Senate trades.
         </p>
       </div>
 
@@ -89,11 +95,11 @@ export default function CongressPage() {
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: "Total trades", value: filtered.length, cls: "text-white" },
-          { label: "Buys",         value: buys,            cls: "text-green-400" },
+          { label: "Buys",         value: buys,            cls: "text-emerald-400" },
           { label: "Sells",        value: sells,           cls: "text-red-400" },
         ].map(({ label, value, cls }) => (
-          <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-            <div className={`text-2xl font-bold ${cls}`}>{value}</div>
+          <div key={label} className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all">
+            <div className={`text-2xl font-bold tabular-nums ${cls}`}>{value}</div>
             <div className="text-zinc-500 text-xs mt-1">{label}</div>
           </div>
         ))}
@@ -102,26 +108,29 @@ export default function CongressPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         {/* Search */}
-        <input
-          type="text"
-          placeholder="Search ticker or name…"
-          value={filter.search}
-          onChange={(e) =>
-            startTransition(() => setFilter((f) => ({ ...f, search: e.target.value })))
-          }
-          className="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 w-full sm:w-52"
-        />
+        <div className="relative w-full sm:w-52">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
+          <input
+            type="text"
+            placeholder="Search ticker or name…"
+            value={filter.search}
+            onChange={(e) =>
+              startTransition(() => setFilter((f) => ({ ...f, search: e.target.value })))
+            }
+            className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg pl-8 pr-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/40 focus:bg-white/[0.05] transition-colors"
+          />
+        </div>
 
         {/* Transaction filter */}
-        <div className="flex rounded-md overflow-hidden border border-zinc-700">
+        <div className="flex rounded-lg overflow-hidden border border-white/[0.08]">
           {(["all", "buy", "sell"] as const).map((tx) => (
             <button
               key={tx}
               onClick={() => setFilter((f) => ({ ...f, transaction: tx }))}
               className={`px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
                 filter.transaction === tx
-                  ? "bg-zinc-700 text-white"
-                  : "bg-zinc-900 text-zinc-500 hover:text-zinc-300"
+                  ? "bg-white/[0.1] text-white"
+                  : "bg-transparent text-zinc-500 hover:text-zinc-300"
               }`}
             >
               {tx === "all" ? "All" : tx}
@@ -131,7 +140,7 @@ export default function CongressPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+      <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-zinc-500 text-sm">Loading trades…</div>
         ) : filtered.length === 0 ? (
@@ -142,7 +151,7 @@ export default function CongressPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-800">
+                <tr className="border-b border-white/[0.08]">
                   {["Politician", "Ticker", "Type", "Amount", "Trade Date", "Report Date", "Delay"].map(
                     (h) => (
                       <th
@@ -164,7 +173,7 @@ export default function CongressPage() {
                   return (
                     <tr
                       key={t.id}
-                      className="border-b border-zinc-800/60 hover:bg-zinc-800/40 transition-colors"
+                      className="border-b border-white/[0.06] last:border-0 hover:bg-white/[0.04] transition-colors"
                     >
                       {/* Politician */}
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -186,7 +195,7 @@ export default function CongressPage() {
                       <td className="px-4 py-3">
                         <a
                           href={`/dashboard/asset/stock/${encodeURIComponent(t.ticker)}`}
-                          className="font-mono font-bold text-white hover:text-green-400 transition-colors"
+                          className="font-mono font-bold text-white hover:text-emerald-400 transition-colors"
                         >
                           {t.ticker}
                         </a>
@@ -197,8 +206,8 @@ export default function CongressPage() {
                         <span
                           className={`inline-flex items-center border rounded px-2 py-0.5 text-xs font-bold ${
                             t.transaction === "buy"
-                              ? "bg-green-500/10 text-green-400 border-green-700"
-                              : "bg-red-500/10 text-red-400 border-red-700"
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-700/30"
+                              : "bg-red-500/10 text-red-400 border-red-700/30"
                           }`}
                         >
                           {t.transaction === "buy" ? "BUY" : "SELL"}

@@ -58,7 +58,7 @@ export default function AddPositionForm({ onClose }: { onClose: () => void }) {
               setAssetType(e.target.value as AssetType);
               setDirection(e.target.value === "prediction" ? "YES" : "LONG");
             }}
-            className="w-full bg-zinc-800 border border-zinc-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:border-green-500"
+            className="w-full bg-white/[0.04] border border-white/[0.1] text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500/50"
           >
             <option value="stock">Stock</option>
             <option value="crypto">Crypto</option>
@@ -74,7 +74,7 @@ export default function AddPositionForm({ onClose }: { onClose: () => void }) {
             onChange={(e) => setIdentifier(e.target.value.toUpperCase())}
             placeholder="e.g. AAPL"
             maxLength={60}
-            className="w-full bg-zinc-800 border border-zinc-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:border-green-500 placeholder-zinc-500 uppercase"
+            className="w-full bg-white/[0.04] border border-white/[0.1] text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500/50 placeholder-zinc-500 uppercase"
           />
         </div>
 
@@ -83,7 +83,7 @@ export default function AddPositionForm({ onClose }: { onClose: () => void }) {
           <select
             value={direction}
             onChange={(e) => setDirection(e.target.value as Direction)}
-            className="w-full bg-zinc-800 border border-zinc-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:border-green-500"
+            className="w-full bg-white/[0.04] border border-white/[0.1] text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500/50"
           >
             {dirOptions.map((d) => (
               <option key={d} value={d}>{d}</option>
@@ -103,7 +103,7 @@ export default function AddPositionForm({ onClose }: { onClose: () => void }) {
             value={entryPrice}
             onChange={(e) => setEntryPrice(e.target.value)}
             placeholder="0.00"
-            className="w-full bg-zinc-800 border border-zinc-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:border-green-500 placeholder-zinc-500"
+            className="w-full bg-white/[0.04] border border-white/[0.1] text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500/50 placeholder-zinc-500"
           />
         </div>
 
@@ -119,7 +119,7 @@ export default function AddPositionForm({ onClose }: { onClose: () => void }) {
             value={size}
             onChange={(e) => setSize(e.target.value)}
             placeholder="1"
-            className="w-full bg-zinc-800 border border-zinc-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:border-green-500 placeholder-zinc-500"
+            className="w-full bg-white/[0.04] border border-white/[0.1] text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500/50 placeholder-zinc-500"
           />
         </div>
       </div>
@@ -139,7 +139,7 @@ export default function AddPositionForm({ onClose }: { onClose: () => void }) {
         <button
           type="submit"
           disabled={loading}
-          className="bg-green-500 hover:bg-green-400 disabled:opacity-50 text-black font-semibold text-sm px-5 py-2 rounded-lg transition-colors"
+          className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-semibold text-sm px-5 py-2 rounded-lg transition-colors"
         >
           {loading ? "Adding…" : "Add position"}
         </button>

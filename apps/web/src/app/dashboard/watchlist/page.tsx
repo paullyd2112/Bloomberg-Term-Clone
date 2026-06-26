@@ -1,3 +1,4 @@
+import { Star } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserTier } from "@/lib/user";
 import { WATCHLIST_LIMIT } from "@/lib/tier";
@@ -80,14 +81,23 @@ export default async function WatchlistPage() {
   const limitReached = count >= limit;
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-5">
+    <div className="p-5 md:p-8 max-w-3xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-lg font-bold text-white">Watchlist</h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            {count}
-            {limit === Infinity ? "" : ` / ${limit}`} assets
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
+              <Star className="h-4 w-4" />
+            </span>
+            <h1 className="text-xl font-semibold tracking-tight text-white">Watchlist</h1>
+          </div>
+          <p className="text-sm text-zinc-500">
+            Tracking{" "}
+            <span className="tabular-nums text-zinc-300">
+              {count}
+              {limit === Infinity ? "" : ` / ${limit}`}
+            </span>{" "}
+            assets for live signals.
           </p>
         </div>
         <AddToWatchlist limitReached={limitReached} />
@@ -95,16 +105,18 @@ export default async function WatchlistPage() {
 
       {/* Table */}
       {items.length === 0 ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl py-16 text-center">
-          <div className="text-3xl mb-3">★</div>
-          <p className="text-zinc-400 text-sm font-medium">Your watchlist is empty</p>
-          <p className="text-zinc-600 text-xs mt-1">
+        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl py-16 text-center flex flex-col items-center gap-3">
+          <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
+            <Star className="h-6 w-6" />
+          </span>
+          <p className="text-zinc-300 text-sm font-medium">Your watchlist is empty</p>
+          <p className="text-zinc-500 text-xs max-w-xs leading-relaxed">
             Add stocks, crypto, or prediction markets to track signals for them.
           </p>
         </div>
       ) : (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-x-auto">
-          <div className="flex items-center gap-3 px-3 sm:px-4 py-2 border-b border-zinc-800 text-xs font-semibold text-zinc-500 uppercase tracking-widest min-w-[320px]">
+        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-x-auto">
+          <div className="flex items-center gap-3 px-3 sm:px-4 py-2.5 border-b border-white/[0.08] text-[11px] font-semibold text-zinc-500 uppercase tracking-widest min-w-[320px]">
             <div className="flex-1">Asset</div>
             <div className="min-w-[56px] sm:min-w-[80px] text-right">Price</div>
             <div className="min-w-[48px] sm:min-w-[64px] text-right">Signal</div>
