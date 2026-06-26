@@ -98,19 +98,19 @@ export default function ScreenerClient() {
     Number(filters.search !== "");
 
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
+    <div className="p-5 md:p-8 max-w-5xl mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-lg font-bold text-white">Screener</h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-semibold tracking-tight text-white">Screener</h1>
+          <p className="text-sm text-zinc-500">
             {loading ? "Loading signals…" : `${filtered.length} of ${signals.length} signals`}
           </p>
         </div>
         {activeCount > 0 && (
           <button
             onClick={() => setFilters(DEFAULT_FILTERS)}
-            className="text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-md px-3 py-1.5 transition-colors"
+            className="text-xs text-zinc-300 hover:text-white border border-white/[0.1] hover:border-white/20 bg-white/[0.03] rounded-lg px-3 py-1.5 transition-colors"
           >
             Clear filters ({activeCount})
           </button>
@@ -118,14 +118,14 @@ export default function ScreenerClient() {
       </div>
 
       {/* Filter bar */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-4">
+      <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-4">
         {/* Search */}
         <input
           type="text"
           placeholder="Search ticker…"
           value={filters.search}
           onChange={(e) => set("search", e.target.value)}
-          className="w-full sm:w-64 bg-zinc-950 border border-zinc-700 rounded-md px-3 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+          className="w-full sm:w-64 bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500/50"
         />
 
         <div className="flex flex-wrap gap-x-6 gap-y-3">
@@ -176,7 +176,7 @@ export default function ScreenerClient() {
             type="checkbox"
             checked={filters.insiderBuy}
             onChange={(e) => set("insiderBuy", e.target.checked)}
-            className="accent-green-500 w-4 h-4"
+            className="accent-emerald-500 w-4 h-4"
           />
           <span className="text-sm text-zinc-300">
             Only tickers with recent insider buying
@@ -222,15 +222,15 @@ function Segmented({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex rounded-md overflow-hidden border border-zinc-700 w-fit">
+    <div className="flex rounded-lg overflow-hidden border border-white/[0.1] w-fit">
       {options.map(([val, label]) => (
         <button
           key={val}
           onClick={() => onChange(val)}
           className={`px-3 py-1.5 text-xs font-medium transition-colors ${
             value === val
-              ? "bg-zinc-700 text-white"
-              : "bg-zinc-950 text-zinc-500 hover:text-zinc-300"
+              ? "bg-white/[0.1] text-white"
+              : "bg-transparent text-zinc-500 hover:text-zinc-300"
           }`}
         >
           {label}

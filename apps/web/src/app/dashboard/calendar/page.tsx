@@ -33,19 +33,19 @@ type DayGroup = {
 };
 
 const IMPORTANCE_STYLES: Record<string, string> = {
-  high:   "bg-red-500/15 text-red-400 border-red-700/50",
-  medium: "bg-amber-500/15 text-amber-400 border-amber-700/50",
-  low:    "bg-zinc-700/40 text-zinc-400 border-zinc-600/50",
+  high:   "bg-red-500/15 text-red-400 border-red-700/40",
+  medium: "bg-amber-500/15 text-amber-400 border-amber-700/40",
+  low:    "bg-white/[0.06] text-zinc-400 border-white/[0.1]",
 };
 
 const CATEGORY_STYLES: Record<string, string> = {
-  fed:        "bg-purple-500/15 text-purple-400 border-purple-700/50",
-  inflation:  "bg-orange-500/15 text-orange-400 border-orange-700/50",
-  employment: "bg-blue-500/15 text-blue-400 border-blue-700/50",
-  gdp:        "bg-green-500/15 text-green-400 border-green-700/50",
-  consumer:   "bg-cyan-500/15 text-cyan-400 border-cyan-700/50",
-  earnings:   "bg-zinc-600/40 text-zinc-300 border-zinc-600/50",
-  other:      "bg-zinc-700/40 text-zinc-400 border-zinc-600/50",
+  fed:        "bg-amber-500/15 text-amber-400 border-amber-700/40",
+  inflation:  "bg-orange-500/15 text-orange-400 border-orange-700/40",
+  employment: "bg-blue-500/15 text-blue-400 border-blue-700/40",
+  gdp:        "bg-emerald-500/15 text-emerald-400 border-emerald-700/40",
+  consumer:   "bg-cyan-500/15 text-cyan-400 border-cyan-700/40",
+  earnings:   "bg-white/[0.06] text-zinc-300 border-white/[0.1]",
+  other:      "bg-white/[0.06] text-zinc-400 border-white/[0.1]",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -143,11 +143,11 @@ export default function CalendarPage() {
   const groups = groupByDate(filteredMacro, filteredEarnings);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
+    <div className="max-w-3xl mx-auto px-4 py-8 md:py-10">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Economic Calendar</h1>
-        <p className="text-zinc-500 text-sm mt-1">Next 30 days — macro events and earnings</p>
+      <div className="mb-6 flex flex-col gap-1">
+        <h1 className="text-xl font-semibold tracking-tight text-white">Economic Calendar</h1>
+        <p className="text-zinc-500 text-sm">Next 30 days — macro events and earnings.</p>
       </div>
 
       {/* Filter tabs */}
@@ -158,8 +158,8 @@ export default function CalendarPage() {
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               filter === f
-                ? "bg-green-500 text-black"
-                : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white"
+                ? "bg-emerald-500 text-black"
+                : "bg-white/[0.03] border border-white/[0.1] text-zinc-400 hover:text-white hover:bg-white/[0.06]"
             }`}
           >
             {f === "all" ? "All events" : f === "high" ? "High impact" : f === "fed" ? "Fed" : "Earnings"}
@@ -170,7 +170,7 @@ export default function CalendarPage() {
       {loading ? (
         <div className="space-y-4">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-20 bg-zinc-900 rounded-xl animate-pulse" />
+            <div key={i} className="h-20 bg-white/[0.03] border border-white/[0.06] rounded-xl animate-pulse" />
           ))}
         </div>
       ) : groups.length === 0 ? (
@@ -185,12 +185,12 @@ export default function CalendarPage() {
                 <div className="flex items-center gap-3 mb-3">
                   <span
                     className={`text-sm font-bold ${
-                      isToday ? "text-green-400" : isTomorrow ? "text-white" : "text-zinc-500"
+                      isToday ? "text-emerald-400" : isTomorrow ? "text-white" : "text-zinc-500"
                     }`}
                   >
                     {group.label}
                   </span>
-                  <div className="flex-1 h-px bg-zinc-800" />
+                  <div className="flex-1 h-px bg-white/[0.08]" />
                 </div>
 
                 <div className="space-y-2">
@@ -198,11 +198,11 @@ export default function CalendarPage() {
                   {group.macro.map((event) => (
                     <div
                       key={event.id}
-                      className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-start justify-between gap-4"
+                      className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 flex items-start justify-between gap-4 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all"
                     >
                       <div className="flex items-start gap-3 min-w-0">
                         <span
-                          className={`mt-0.5 flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded border ${
+                          className={`mt-0.5 flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded-md border ${
                             CATEGORY_STYLES[event.category] ?? CATEGORY_STYLES.other
                           }`}
                         >
@@ -220,14 +220,14 @@ export default function CalendarPage() {
                             </div>
                           )}
                           {event.actual && (
-                            <div className="mt-1.5 text-xs font-semibold text-green-400">
+                            <div className="mt-1.5 text-xs font-semibold text-emerald-400">
                               Actual: {event.actual}
                             </div>
                           )}
                         </div>
                       </div>
                       <span
-                        className={`flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded border ${
+                        className={`flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded-md border ${
                           IMPORTANCE_STYLES[event.importance] ?? IMPORTANCE_STYLES.medium
                         }`}
                       >
@@ -240,10 +240,10 @@ export default function CalendarPage() {
                   {group.earnings.map((e) => (
                     <div
                       key={e.id}
-                      className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-start justify-between gap-4"
+                      className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 flex items-start justify-between gap-4 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all"
                     >
                       <div className="flex items-start gap-3">
-                        <span className="mt-0.5 flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded border bg-zinc-700/40 text-zinc-300 border-zinc-600/50">
+                        <span className="mt-0.5 flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded-md border bg-white/[0.06] text-zinc-300 border-white/[0.1]">
                           Earnings
                         </span>
                         <div>
@@ -263,7 +263,7 @@ export default function CalendarPage() {
                           )}
                         </div>
                       </div>
-                      <span className="flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded border bg-zinc-700/40 text-zinc-400 border-zinc-600/50">
+                      <span className="flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded-md border bg-amber-500/15 text-amber-400 border-amber-700/40">
                         MEDIUM
                       </span>
                     </div>

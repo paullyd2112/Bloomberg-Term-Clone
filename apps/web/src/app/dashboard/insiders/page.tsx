@@ -190,8 +190,8 @@ export default function InsidersPage() {
                       <span
                         className={`inline-flex items-center border rounded px-2 py-0.5 text-xs font-bold ${
                           t.transaction === "buy"
-                            ? "bg-green-500/10 text-green-400 border-green-700"
-                            : "bg-red-500/10 text-red-400 border-red-700"
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-700/30"
+                            : "bg-red-500/10 text-red-400 border-red-700/30"
                         }`}
                       >
                         {t.transaction === "buy" ? "BUY" : "SELL"}
