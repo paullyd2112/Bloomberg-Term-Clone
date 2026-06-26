@@ -82,7 +82,17 @@ export async function POST(req: Request) {
     sessionConfig.payment_intent_data = { metadata: baseMetadata };
   }
 
-  const session = await stripe.checkout.sessions.create(sessionConfig);
+  if (!priceId) {
+    console.error("Missing price ID for plan:", plan);
+    return NextResponse.json({ error: `Price not configured for ${plan}` }, { status: 500 });
+  }
 
-  return NextResponse.json({ url: session.url });
+  try {
+    const session = await stripe.checkout.sessions.create(sessionConfig);
+    return NextResponse.json({ url: session.url });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Stripe error";
+    console.error("Stripe checkout error:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }

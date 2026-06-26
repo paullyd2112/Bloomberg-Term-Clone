@@ -17,11 +17,13 @@ const PLAN_KEYS: Record<"pro" | "elite", Record<PlanInterval, string>> = {
 export default function UpgradeButtons({ planTier }: { planTier: "pro" | "elite" }) {
   const [interval, setInterval] = useState<PlanInterval>("monthly");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const planKey = PLAN_KEYS[planTier][interval];
 
   async function handleCheckout() {
     setLoading(true);
+    setError("");
     try {
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
@@ -32,17 +34,22 @@ export default function UpgradeButtons({ planTier }: { planTier: "pro" | "elite"
       if (data.url) {
         window.location.href = data.url;
       } else {
-        console.error("Checkout error:", data.error);
+        setError(data.error || "Checkout failed — please try again.");
         setLoading(false);
       }
     } catch (err) {
-      console.error(err);
+      setError("Network error — please try again.");
       setLoading(false);
     }
   }
 
   return (
     <div className="space-y-2">
+      {error && (
+        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800 rounded px-2 py-1.5">
+          {error}
+        </div>
+      )}
       {/* Interval toggle */}
       <div className="flex flex-col gap-0.5 rounded-lg border border-zinc-700 p-0.5">
         {INTERVALS.map(({ id, label }) => (
