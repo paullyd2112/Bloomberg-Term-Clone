@@ -280,15 +280,15 @@ scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressio
 scheduler.add_job(lambda: _run_job("ingest_insider_trades", job_ingest_insider_trades),
                   CronTrigger(hour=8, minute=15), id="ingest_insider_trades")
 
-# Market news — ingest at 9:15am ET weekdays, before newsletter generation
+# Market news — ingest at 6:45am ET weekdays, before newsletter generation
 scheduler.add_job(lambda: _run_job("ingest_news", job_ingest_news),
-                  CronTrigger(hour=9, minute=15, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_news")
+                  CronTrigger(hour=6, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_news")
 
-# Newsletter — generate at 9:30am, send via Resend at 9:45am ET weekdays
+# Newsletter — generate at 7:00am, send via Resend at 7:15am ET weekdays
 scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newsletter),
-                  CronTrigger(hour=9, minute=30, day_of_week="mon-fri", timezone="America/New_York"), id="generate_newsletter")
+                  CronTrigger(hour=7, minute=0, day_of_week="mon-fri", timezone="America/New_York"), id="generate_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter", job_send_newsletter),
-                  CronTrigger(hour=9, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
+                  CronTrigger(hour=7, minute=15, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
 scheduler.add_job(lambda: _run_job("send_welcome_sequence", job_send_welcome_sequence),
                   CronTrigger(hour=9, minute=0, timezone="America/New_York"), id="send_welcome_sequence")
 

@@ -1,5 +1,5 @@
 """
-Daily newsletter generator — runs weekdays at 6:30am ET (sends at 7am).
+Daily newsletter generator — runs weekdays at 7:00am ET (sends at 7:15am).
 Produces two versions of the same email:
   - Free: Jake's editorial + market recap + CTA
   - Paid (Pro/Elite): same editorial + personalized signal data layered on top
