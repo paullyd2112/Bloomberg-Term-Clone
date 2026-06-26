@@ -8,17 +8,6 @@ import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
 
 export const revalidate = 60;
 
-type AssetAccuracy = {
-  asset_type: string;
-  identifier: string;
-  total_signals: number;
-  win_rate: number | null;
-  wins: number;
-  losses: number;
-  neutrals: number;
-  avg_confidence: number | null;
-};
-
 type PlatformAccuracy = {
   overallWinRate: number;
   totalResolved: number;
@@ -29,29 +18,34 @@ type PlatformAccuracy = {
 
 async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
   const supabase = createClient();
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
   const { data, error } = await supabase
-    .from("asset_accuracy")
-    .select("asset_type, total_signals, win_rate, wins, losses, neutrals");
+    .from("signals")
+    .select("asset_type, outcome")
+    .in("outcome", ["WIN", "LOSS"])
+    .gte("created_at", thirtyDaysAgo.toISOString());
 
   if (error || !data || data.length === 0) {
-    console.error("asset_accuracy fetch error:", error?.message);
     return null;
   }
 
-  const rows = data as AssetAccuracy[];
-  const totalWins = rows.reduce((s, r) => s + (r.wins ?? 0), 0);
-  const totalLosses = rows.reduce((s, r) => s + (r.losses ?? 0), 0);
-  const totalResolved = totalWins + totalLosses;
-  const overallWinRate = totalResolved > 0 ? totalWins / totalResolved : 0;
-
+  let totalWins = 0;
+  let totalLosses = 0;
   const grouped = new Map<string, { wins: number; losses: number }>();
-  for (const r of rows) {
-    const key = r.asset_type ?? "unknown";
+
+  for (const row of data) {
+    const key = row.asset_type ?? "unknown";
     const g = grouped.get(key) ?? { wins: 0, losses: 0 };
-    g.wins += r.wins ?? 0;
-    g.losses += r.losses ?? 0;
+    if (row.outcome === "WIN") { totalWins++; g.wins++; }
+    else { totalLosses++; g.losses++; }
     grouped.set(key, g);
   }
+
+  const totalResolved = totalWins + totalLosses;
+  if (totalResolved < 5) return null;
+  const overallWinRate = totalWins / totalResolved;
 
   const byAssetClass = Array.from(grouped.entries()).map(([asset_type, g]) => {
     const resolved = g.wins + g.losses;
@@ -138,10 +132,10 @@ export default async function DashboardPage() {
         <StatCard label="Losses" value={lossCount} color="red" />
       </div>
 
-      {/* Platform accuracy — only show when win rate is credible */}
-      {accuracy && accuracy.overallWinRate >= 0.5 && (
+      {/* Platform accuracy (last 30 days) */}
+      {accuracy && (
         <section>
-          <SectionHeader>Platform accuracy</SectionHeader>
+          <SectionHeader>Platform accuracy (30d)</SectionHeader>
           <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4 flex flex-wrap gap-x-6 gap-y-3 items-baseline">
             <div>
               <span

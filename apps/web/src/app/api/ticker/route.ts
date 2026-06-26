@@ -172,10 +172,21 @@ async function liveCrypto(): Promise<TickerItem[]> {
   }
 }
 
+function isMarketOpen(): boolean {
+  const now = new Date();
+  const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const day = et.getDay();
+  if (day === 0 || day === 6) return false;
+  const mins = et.getHours() * 60 + et.getMinutes();
+  return mins >= 570 && mins < 960;
+}
+
 export async function GET() {
+  const marketOpen = isMarketOpen();
+
   const [rawItems, liveStockItems, liveCryptoItems] = await Promise.all([
     fromRawPrices().catch(() => [] as TickerItem[]),
-    liveStocks().catch(() => [] as TickerItem[]),
+    marketOpen ? liveStocks().catch(() => [] as TickerItem[]) : Promise.resolve([]),
     liveCrypto().catch(() => [] as TickerItem[]),
   ]);
 
