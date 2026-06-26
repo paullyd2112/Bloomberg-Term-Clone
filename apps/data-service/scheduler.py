@@ -26,6 +26,7 @@ from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
 from briefing.newsletter import generate_newsletter
 from briefing.newsletter_emailer import send_newsletter
+from briefing.elite_briefing import send_elite_briefings
 from briefing.welcome_emails import send_welcome_sequence
 
 load_dotenv()
@@ -116,6 +117,9 @@ def job_generate_newsletter():
 
 def job_send_newsletter():
     return send_newsletter()
+
+def job_send_elite_briefings():
+    return send_elite_briefings()
 
 def job_send_welcome_sequence():
     return send_welcome_sequence()
@@ -289,6 +293,9 @@ scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newslette
                   CronTrigger(hour=7, minute=0, day_of_week="mon-fri", timezone="America/New_York"), id="generate_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter", job_send_newsletter),
                   CronTrigger(hour=7, minute=15, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
+# Personalized Elite briefing — runs after main newsletter, one AI call per Elite user
+scheduler.add_job(lambda: _run_job("send_elite_briefings", job_send_elite_briefings),
+                  CronTrigger(hour=7, minute=20, day_of_week="mon-fri", timezone="America/New_York"), id="send_elite_briefings")
 scheduler.add_job(lambda: _run_job("send_welcome_sequence", job_send_welcome_sequence),
                   CronTrigger(hour=9, minute=0, timezone="America/New_York"), id="send_welcome_sequence")
 
