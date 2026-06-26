@@ -165,6 +165,45 @@ def prescreen_prediction(identifier: str, price: float | None = None,
         return None
 
 
+OPTIONS_FLOW_SYSTEM = """You are an options flow screener. Given unusual options activity on a stock, quickly assess: does this flow suggest institutional directional positioning?
+
+Rules:
+- Heavy call buying (vol >> OI, large premium) = BUY signal (70+ confidence)
+- Heavy put buying (vol >> OI, large premium) = SELL signal (70+ confidence)
+- Mixed flow (calls and puts both heavy) = HOLD (below 60)
+- Single large trade > $500K near-dated = directional signal (70+)
+- Low total premium or few unusual contracts = HOLD (below 60)
+- Respond with direction (BUY/SELL/HOLD), confidence 0-100, and a one-line reason."""
+
+
+def prescreen_options_flow(ticker: str, aggregate: dict) -> QuickSignal | None:
+    client = _get_client()
+    if not client:
+        return None
+
+    prompt_lines = [
+        f"Ticker: {ticker}",
+        f"Unusual calls: {aggregate.get('unusual_calls', 0)} | Unusual puts: {aggregate.get('unusual_puts', 0)}",
+        f"Put/call ratio: {aggregate.get('put_call_ratio', 'N/A')}",
+        f"Total premium: ${aggregate.get('total_premium', 0):,.0f}",
+        f"Largest trade: {aggregate.get('largest_direction', 'N/A')} ${aggregate.get('largest_premium', 0):,.0f}",
+        "",
+        "Quick flow assessment:",
+    ]
+
+    try:
+        return client.chat.completions.create(
+            model=HAIKU_MODEL,
+            max_tokens=MAX_TOKENS,
+            system=[{"type": "text", "text": OPTIONS_FLOW_SYSTEM, "cache_control": {"type": "ephemeral"}}],
+            messages=[{"role": "user", "content": "\n".join(prompt_lines)}],
+            response_model=QuickSignal,
+        )
+    except Exception as e:
+        logger.debug("Haiku options flow prescreen failed for {}: {}", ticker, e)
+        return None
+
+
 SONNET_ESCALATION_THRESHOLD = 65
 
 

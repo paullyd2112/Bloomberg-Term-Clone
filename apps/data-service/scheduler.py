@@ -21,7 +21,7 @@ from ingestion.earnings import ingest_earnings
 from ingestion.macro_events import seed_macro_events
 from ingestion.fred import enrich_macro_events
 from ingestion.news import ingest_news
-from scoring.engine import score_stocks, score_stocks_event_only, score_crypto, score_prediction_markets
+from scoring.engine import score_stocks, score_stocks_event_only, score_crypto, score_prediction_markets, score_options_flow
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
 from briefing.newsletter import generate_newsletter
@@ -108,6 +108,9 @@ def job_ingest_congressional():
 
 def job_ingest_insider_trades():
     return ingest_insider_trades()
+
+def job_score_options_flow():
+    return score_options_flow()
 
 def job_ingest_news():
     return ingest_news()
@@ -264,6 +267,10 @@ scheduler.add_job(lambda: _run_job("ingest_crypto", job_ingest_crypto),
                   IntervalTrigger(hours=1), id="ingest_crypto")
 scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
                   CronTrigger(minute=20, hour="*"), id="score_crypto")
+
+# Options flow scoring — runs after flow ingestion, backtest-only until validated
+scheduler.add_job(lambda: _run_stock_job("score_options_flow", job_score_options_flow),
+                  CronTrigger(minute=30, hour="10,15", day_of_week="mon-fri"), id="score_options_flow")
 
 # Enrichment — weekdays, skip holidays
 scheduler.add_job(lambda: _run_stock_job("ingest_options_flow", job_ingest_options_flow),

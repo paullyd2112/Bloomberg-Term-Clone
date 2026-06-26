@@ -18,6 +18,7 @@ from supabase_client import supabase
 from prompts import stocks as stocks_prompt
 from prompts import crypto as crypto_prompt
 from prompts import prediction_markets as pred_prompt
+from prompts import options_flow as options_prompt
 
 load_dotenv()
 
@@ -57,6 +58,15 @@ class PredictionSignal(BaseModel):
     edge_detected:    bool
     edge_explanation: str
     news_context:     list[str] = Field(default_factory=list, max_length=3)
+
+
+class OptionsFlowSignal(BaseModel):
+    direction:    Literal["BUY", "SELL", "HOLD"]
+    confidence:   int    = Field(..., ge=0, le=100)
+    reasoning:    str    = Field(..., min_length=20)
+    time_horizon: Literal["intraday", "swing", "longterm"]
+    key_risk:     str
+    news_context: list[str] = Field(default_factory=list, max_length=3)
 
 
 # ─── Supabase helpers ─────────────────────────────────────────────────────────
@@ -716,3 +726,174 @@ def score_prediction_markets() -> str:
 
     return (f"{success} scored, {skipped} skipped, {failed} failed — "
             f"{haiku_calls} Haiku, {sonnet_calls} Sonnet")
+
+
+# ─── Options flow scoring ───────────────────────────────────────────────────
+
+OPTIONS_FLOW_COOLDOWN_H = 6
+MIN_UNUSUAL_CONTRACTS   = 3
+MIN_TOTAL_PREMIUM       = 200_000
+
+
+def _get_unusual_flow_grouped() -> dict[str, list[dict]]:
+    """Fetch recent unusual options flow, grouped by ticker."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+    try:
+        result = (
+            supabase.table("options_flow")
+            .select("ticker, contract_type, strike, expiry, volume, open_interest, "
+                    "volume_oi_ratio, premium_usd, captured_at")
+            .eq("is_unusual", True)
+            .gte("captured_at", cutoff)
+            .order("premium_usd", desc=True)
+            .limit(200)
+            .execute()
+        )
+        rows = result.data or []
+    except Exception as e:
+        logger.error("options scoring: flow fetch failed — {}", e)
+        return {}
+
+    grouped: dict[str, list[dict]] = {}
+    for r in rows:
+        grouped.setdefault(r["ticker"], []).append(r)
+    return grouped
+
+
+def _build_flow_aggregate(flows: list[dict]) -> dict:
+    calls = [f for f in flows if f.get("contract_type") == "call"]
+    puts  = [f for f in flows if f.get("contract_type") == "put"]
+    total_premium = sum(f.get("premium_usd") or 0 for f in flows)
+
+    largest = max(flows, key=lambda f: f.get("premium_usd") or 0) if flows else {}
+
+    return {
+        "total_unusual":    len(flows),
+        "unusual_calls":    len(calls),
+        "unusual_puts":     len(puts),
+        "put_call_ratio":   round(len(puts) / len(calls), 2) if calls else None,
+        "total_premium":    total_premium,
+        "largest_direction": largest.get("contract_type"),
+        "largest_premium":   largest.get("premium_usd") or 0,
+    }
+
+
+def _options_signal_exists_recently(ticker: str) -> bool:
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=OPTIONS_FLOW_COOLDOWN_H)).isoformat()
+    try:
+        result = (
+            supabase.table("signals")
+            .select("id")
+            .eq("asset_type", "stock")
+            .eq("identifier", ticker)
+            .eq("is_backtest", True)
+            .gte("created_at", cutoff)
+            .limit(1)
+            .execute()
+        )
+        return bool(result.data)
+    except Exception:
+        return False
+
+
+def _write_options_signal(ticker: str, price: float | None, signal: OptionsFlowSignal) -> dict:
+    record = {
+        "asset_type":      "stock",
+        "identifier":      ticker,
+        "direction":       signal.direction,
+        "confidence":      signal.confidence,
+        "reasoning":       f"[Options flow] {signal.reasoning}",
+        "time_horizon":    signal.time_horizon,
+        "price_at_signal": price,
+        "news_context":    signal.news_context,
+        "is_backtest":     True,
+        "outcome":         "PENDING",
+    }
+    result = supabase.table("signals").insert(record).execute()
+    return result.data[0] if result.data else record
+
+
+def score_options_flow() -> str:
+    """Score unusual options flow — generates directional signals on underlying stocks."""
+    from scoring.haiku_prescreen import prescreen_options_flow, should_escalate_to_sonnet
+
+    grouped = _get_unusual_flow_grouped()
+    if not grouped:
+        return "no unusual flow found"
+
+    benchmarks = _get_market_benchmark()
+    haiku_calls, sonnet_calls = 0, 0
+    success, skipped, failed = 0, 0, 0
+
+    for ticker, flows in grouped.items():
+        agg = _build_flow_aggregate(flows)
+
+        if agg["total_unusual"] < MIN_UNUSUAL_CONTRACTS:
+            skipped += 1
+            continue
+        if agg["total_premium"] < MIN_TOTAL_PREMIUM:
+            skipped += 1
+            continue
+
+        if _options_signal_exists_recently(ticker):
+            skipped += 1
+            continue
+
+        quick = prescreen_options_flow(ticker, agg)
+        haiku_calls += 1
+
+        if not should_escalate_to_sonnet(quick):
+            skipped += 1
+            continue
+
+        price_row = _get_latest_price("stock", ticker)
+        current_price = float(price_row["price"]) if price_row and price_row.get("price") else None
+        change_24h = price_row.get("change_24h") if price_row else None
+        news = _get_recent_news("stock", ticker)
+
+        context = {
+            "ticker":            ticker,
+            "current_price":     current_price,
+            "change_24h":        change_24h,
+            "flow":              flows[:15],
+            "aggregate":         agg,
+            "news_headlines":    news,
+            "market_benchmarks": benchmarks,
+        }
+
+        try:
+            signal: OptionsFlowSignal = client.chat.completions.create(
+                model=MODEL,
+                max_tokens=MAX_TOKENS,
+                system=[{"type": "text", "text": options_prompt.SYSTEM_PROMPT,
+                         "cache_control": {"type": "ephemeral"}}],
+                messages=[{"role": "user", "content": options_prompt.build_user_prompt(context)}],
+                response_model=OptionsFlowSignal,
+            )
+            sonnet_calls += 1
+        except Exception as e:
+            logger.error("options scoring: Claude call failed for {} — {}", ticker, e)
+            sentry_sdk.capture_exception(e)
+            failed += 1
+            continue
+
+        if signal.direction == "HOLD":
+            skipped += 1
+            continue
+
+        try:
+            _write_options_signal(ticker, current_price, signal)
+            logger.info(
+                "options_flow/{}: {} {}% — {}",
+                ticker, signal.direction, signal.confidence,
+                signal.reasoning[:80],
+            )
+            success += 1
+        except Exception as e:
+            logger.error("options scoring: write failed for {} — {}", ticker, e)
+            sentry_sdk.capture_exception(e)
+            failed += 1
+
+    return (f"{success} scored, {skipped} skipped, {failed} failed — "
+            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet, "
+            f"{len(grouped)} tickers with unusual flow")
