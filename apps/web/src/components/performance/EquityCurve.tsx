@@ -38,14 +38,14 @@ export default function EquityCurve({ data }: { data: EquityPoint[] }) {
 
   const ending = values[values.length - 1];
   const up = ending >= 0;
-  const stroke = up ? "#22c55e" : "#ef4444";
-  const fill = up ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)";
+  const stroke = up ? "#10b981" : "#ef4444";
+  const fill = up ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)";
   const zeroY = y(0);
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none" style={{ height: 160 }}>
       {/* $0 baseline */}
-      <line x1={PAD} x2={W - PAD} y1={zeroY} y2={zeroY} stroke="#3f3f46" strokeWidth={1} strokeDasharray="3 3" />
+      <line x1={PAD} x2={W - PAD} y1={zeroY} y2={zeroY} stroke="rgba(255,255,255,0.12)" strokeWidth={1} strokeDasharray="3 3" />
       <path d={areaPath} fill={fill} />
       <path d={linePath} fill="none" stroke={stroke} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
     </svg>

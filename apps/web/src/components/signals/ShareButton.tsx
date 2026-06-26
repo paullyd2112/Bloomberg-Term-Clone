@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Share2, Check } from "lucide-react";
 
 export default function ShareButton({ signalId }: { signalId: number }) {
   const [copied, setCopied] = useState(false);
@@ -34,24 +35,13 @@ export default function ShareButton({ signalId }: { signalId: number }) {
       className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1"
     >
       {copied ? (
-        <span className="text-green-400">Copied!</span>
+        <span className="flex items-center gap-1 text-emerald-400">
+          <Check className="h-3 w-3" />
+          Copied!
+        </span>
       ) : (
         <>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-            <polyline points="16 6 12 2 8 6" />
-            <line x1="12" y1="2" x2="12" y2="15" />
-          </svg>
+          <Share2 className="h-3 w-3" />
           <span>Share</span>
         </>
       )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Sparkles } from "lucide-react";
 
 type Props = {
   assetType: string;
@@ -44,13 +45,13 @@ export default function OnDemandScore({ assetType, identifier }: Props) {
     const s = result.signal!;
     const color =
       s.direction === "BUY" || s.direction === "YES"
-        ? "text-green-400"
+        ? "text-emerald-400"
         : s.direction === "SELL" || s.direction === "NO"
           ? "text-red-400"
           : "text-zinc-400";
 
     return (
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
+      <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-2">
         <div className="flex items-center justify-between">
           <span className={`text-sm font-bold ${color}`}>{s.direction}</span>
           <span className="text-xs text-zinc-400">{s.confidence}% confidence</span>
@@ -69,8 +70,9 @@ export default function OnDemandScore({ assetType, identifier }: Props) {
       <button
         onClick={handleScore}
         disabled={loading}
-        className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-xs font-semibold rounded-lg transition-colors"
+        className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-zinc-700 disabled:text-zinc-500 text-black text-xs font-semibold rounded-lg transition-colors"
       >
+        <Sparkles className="h-3.5 w-3.5" />
         {loading ? "Analyzing..." : "Generate AI Signal"}
       </button>
       {result?.status === "error" && (

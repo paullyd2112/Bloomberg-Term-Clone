@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PieChart } from "lucide-react";
 
 type Allocation = {
   ticker:         string;
@@ -98,18 +99,21 @@ export default function AllocatorPage() {
   const predPct = result?.allocations.filter(a => a.asset_type === "prediction").reduce((s, a) => s + a.allocation_pct, 0) ?? 0;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
+    <div className="max-w-3xl mx-auto px-4 py-8 md:py-10">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-1">
-          <h1 className="text-2xl font-bold text-white">Portfolio Allocator</h1>
-          <span className="text-xs font-bold px-2 py-0.5 rounded border bg-purple-500/15 text-purple-400 border-purple-700/50">ELITE</span>
+      <div className="mb-6 flex flex-col gap-1">
+        <div className="flex items-center gap-2.5 mb-0.5">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
+            <PieChart className="h-4 w-4" />
+          </span>
+          <h1 className="text-xl font-semibold tracking-tight text-white">Portfolio Allocator</h1>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-amber-500/15 text-amber-400 border-amber-700/40 tracking-wider">ELITE</span>
         </div>
         <p className="text-zinc-500 text-sm">Data-driven allocation opinions based on current signals. Not financial advice.</p>
       </div>
 
       {/* Input form */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-6">
+      <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5 mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           {/* Goal */}
           <div>
@@ -121,8 +125,8 @@ export default function AllocatorPage() {
                   onClick={() => setGoal(g)}
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors border ${
                     goal === g
-                      ? "border-green-500 bg-green-500/10 text-white"
-                      : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-white"
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-white"
+                      : "border-white/[0.1] bg-white/[0.03] text-zinc-400 hover:text-white"
                   }`}
                 >
                   {GOAL_LABELS[g]}
@@ -141,8 +145,8 @@ export default function AllocatorPage() {
                   onClick={() => setRisk(r)}
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors border ${
                     risk === r
-                      ? "border-green-500 bg-green-500/10 text-white"
-                      : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-white"
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-white"
+                      : "border-white/[0.1] bg-white/[0.03] text-zinc-400 hover:text-white"
                   }`}
                 >
                   {RISK_LABELS[r]}
@@ -161,7 +165,7 @@ export default function AllocatorPage() {
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 placeholder="10,000"
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-7 pr-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-green-500 transition-colors"
+                className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg pl-7 pr-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500/50 transition-colors"
               />
             </div>
             <p className="text-zinc-600 text-xs mt-1.5">For percentage reference only</p>
@@ -173,7 +177,7 @@ export default function AllocatorPage() {
         <button
           onClick={generate}
           disabled={generating}
-          className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold py-2.5 rounded-lg transition-colors text-sm"
+          className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold py-2.5 rounded-lg transition-colors text-sm"
         >
           {generating ? "Analyzing signals..." : result ? "Regenerate allocation" : "Generate allocation"}
         </button>
@@ -183,7 +187,7 @@ export default function AllocatorPage() {
       {loading ? (
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-16 bg-zinc-900 rounded-xl animate-pulse" />
+            <div key={i} className="h-16 bg-white/[0.03] border border-white/[0.06] rounded-xl animate-pulse" />
           ))}
         </div>
       ) : result ? (
@@ -201,14 +205,20 @@ export default function AllocatorPage() {
           )}
 
           {/* Overall reasoning */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Strategy Overview</div>
+          <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4">
+            <div className="flex items-center gap-2.5 font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em] mb-2">
+              <span className="text-emerald-400 text-[10px] leading-none">●</span>
+              Strategy Overview
+            </div>
             <p className="text-zinc-300 text-sm leading-relaxed">{result.overall_reasoning}</p>
           </div>
 
           {/* Asset class breakdown bar */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Asset Mix</div>
+          <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4">
+            <div className="flex items-center gap-2.5 font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em] mb-3">
+              <span className="text-emerald-400 text-[10px] leading-none">●</span>
+              Asset Mix
+            </div>
             <div className="flex rounded-full overflow-hidden h-3 mb-3">
               {stockPct > 0  && <div className="bg-blue-500"   style={{ width: `${stockPct}%` }} />}
               {cryptoPct > 0 && <div className="bg-amber-500"  style={{ width: `${cryptoPct}%` }} />}
@@ -226,7 +236,7 @@ export default function AllocatorPage() {
             {result.allocations
               .sort((a, b) => b.allocation_pct - a.allocation_pct)
               .map(a => (
-                <div key={a.ticker} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-start gap-4">
+                <div key={a.ticker} className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 flex items-start gap-4 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all">
                   {/* Bar */}
                   <div className="flex-shrink-0 w-1 self-stretch rounded-full" style={{ background: a.asset_type === "stock" ? "#3b82f6" : a.asset_type === "crypto" ? "#f59e0b" : "#a855f7" }} />
 
@@ -242,7 +252,7 @@ export default function AllocatorPage() {
 
                   {/* Percentage */}
                   <div className="flex-shrink-0 text-right">
-                    <div className="text-xl font-bold text-white">{a.allocation_pct}%</div>
+                    <div className="text-xl font-bold text-white tabular-nums">{a.allocation_pct}%</div>
                     {result.investment_amount && (
                       <div className="text-xs text-zinc-600">
                         ${Math.round(result.investment_amount * a.allocation_pct / 100).toLocaleString()}
@@ -259,9 +269,11 @@ export default function AllocatorPage() {
           </p>
         </div>
       ) : (
-        <div className="text-center py-16 text-zinc-600">
-          <div className="text-4xl mb-4">◈</div>
-          <p className="text-sm">Set your goal and risk tolerance above to generate your first allocation.</p>
+        <div className="text-center py-16 text-zinc-500 flex flex-col items-center gap-4">
+          <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
+            <PieChart className="h-6 w-6" />
+          </span>
+          <p className="text-sm max-w-xs leading-relaxed">Set your goal and risk tolerance above to generate your first allocation.</p>
         </div>
       )}
     </div>

@@ -13,7 +13,7 @@ export default function DashboardLoading() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-zinc-800 pb-0">
+      <div className="flex gap-1 border-b border-white/[0.08] pb-0">
         {["All", "Stocks", "Crypto", "Predictions"].map((t) => (
           <Skeleton key={t} className="h-9 w-20" />
         ))}

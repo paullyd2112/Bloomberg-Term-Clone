@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserTier } from "@/lib/user";
 import { canAccessFeature } from "@/lib/tier";
@@ -167,8 +168,8 @@ export default async function AssetPage({ params }: PageProps) {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="space-y-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold font-mono text-white">{identifier}</h1>
-            <span className="text-xs text-zinc-500 capitalize bg-zinc-800 px-2 py-0.5 rounded">
+            <h1 className="text-2xl font-bold font-mono text-white tracking-tight">{identifier}</h1>
+            <span className="text-xs text-zinc-400 capitalize bg-white/[0.05] border border-white/[0.08] px-2 py-0.5 rounded-md">
               {type}
             </span>
             {accuracy && <AccuracyBadge accuracy={accuracy} />}
@@ -201,7 +202,7 @@ export default async function AssetPage({ params }: PageProps) {
 
       {/* Price chart */}
       {history.length > 1 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4">
           <PriceChart data={history} assetType={type} />
         </div>
       )}
@@ -244,7 +245,7 @@ export default async function AssetPage({ params }: PageProps) {
 
           {/* News */}
           {news.length > 0 && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+            <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
               <SectionHeader label="News" />
               <div className="space-y-2">
                 {news.map((item) => (
@@ -271,7 +272,7 @@ export default async function AssetPage({ params }: PageProps) {
 
           {/* Options flow (stocks only, pro/elite) */}
           {type === "stock" && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+            <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
               <SectionHeader label="Options flow" />
               {canSeeOptions ? (
                 options.length > 0 ? (
@@ -284,9 +285,10 @@ export default async function AssetPage({ params }: PageProps) {
                   <p className="text-xs text-zinc-500">Options flow is a Pro feature.</p>
                   <a
                     href="/dashboard/upgrade"
-                    className="text-xs text-green-400 hover:text-green-300"
+                    className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300"
                   >
-                    Upgrade →
+                    Upgrade
+                    <ArrowRight className="h-3 w-3" />
                   </a>
                 </div>
               )}
@@ -295,7 +297,7 @@ export default async function AssetPage({ params }: PageProps) {
 
           {/* Accuracy stats */}
           {accuracy && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+            <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
               <SectionHeader label="AI accuracy" />
               <div className="space-y-2">
                 <StatRow label="Total signals" value={accuracy.total_signals} />
@@ -318,10 +320,11 @@ export default async function AssetPage({ params }: PageProps) {
 
 function SectionHeader({ label, count }: { label: string; count?: number }) {
   return (
-    <div className="flex items-center gap-2">
-      <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">{label}</h2>
+    <div className="flex items-center gap-2.5">
+      <span className="text-emerald-400 text-[10px] leading-none">●</span>
+      <h2 className="font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em]">{label}</h2>
       {count !== undefined && (
-        <span className="text-xs text-zinc-700 tabular-nums">{count}</span>
+        <span className="text-[11px] text-zinc-600 tabular-nums">{count}</span>
       )}
     </div>
   );
@@ -331,7 +334,7 @@ function StatRow({ label, value, highlight }: { label: string; value: string | n
   return (
     <div className="flex items-center justify-between">
       <span className="text-xs text-zinc-500">{label}</span>
-      <span className={`text-xs font-semibold tabular-nums ${highlight ? "text-green-400" : "text-white"}`}>
+      <span className={`text-xs font-semibold tabular-nums ${highlight ? "text-emerald-400" : "text-white"}`}>
         {value}
       </span>
     </div>
@@ -372,7 +375,7 @@ function KeyStatsGrid({
       : rsi > 70
       ? "text-red-400"
       : rsi < 30
-      ? "text-green-400"
+      ? "text-emerald-400"
       : "text-white";
 
   const rsiLabel =
@@ -381,7 +384,7 @@ function KeyStatsGrid({
   return (
     <div className="grid grid-cols-3 gap-3">
       {rsi != null && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-3 text-center">
           <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">RSI (14)</p>
           <p className={`text-lg font-bold font-mono tabular-nums ${rsiColor}`}>
             {rsi.toFixed(1)}
@@ -390,7 +393,7 @@ function KeyStatsGrid({
         </div>
       )}
       {volumeRatio != null && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-3 text-center">
           <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Vol Ratio</p>
           <p className={`text-lg font-bold font-mono tabular-nums ${volumeRatio > 2 ? "text-yellow-400" : "text-white"}`}>
             {volumeRatio.toFixed(2)}x
@@ -399,9 +402,9 @@ function KeyStatsGrid({
         </div>
       )}
       {change24h != null && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-3 text-center">
           <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">24h Change</p>
-          <p className={`text-lg font-bold font-mono tabular-nums ${change24h >= 0 ? "text-green-400" : "text-red-400"}`}>
+          <p className={`text-lg font-bold font-mono tabular-nums ${change24h >= 0 ? "text-emerald-400" : "text-red-400"}`}>
             {change24h >= 0 ? "+" : ""}{Number(change24h).toFixed(2)}%
           </p>
         </div>
@@ -429,7 +432,7 @@ function ShortInterestCard({
   }
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2">
         <SectionHeader label="Short interest" />
         {data.is_high_short && (
@@ -473,7 +476,7 @@ function FearGreedBadge({ metadata }: { metadata: Record<string, unknown> }) {
   const colorClasses = isRed
     ? "bg-red-500/15 text-red-400 border-red-500/30"
     : isGreen
-    ? "bg-green-500/15 text-green-400 border-green-500/30"
+    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
     : "bg-zinc-500/15 text-zinc-400 border-zinc-500/30";
 
   return (
@@ -502,7 +505,7 @@ function MarketStatsCard({ metadata }: { metadata: Record<string, unknown> }) {
   }
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
       <SectionHeader label="Market stats" />
       <div className="space-y-2">
         {marketCapRank != null && (
@@ -536,7 +539,7 @@ function FundamentalsCard({ metadata }: { metadata: Record<string, unknown> }) {
   if (roi30d == null && roi90d == null && devCommits == null && liquidSupply == null) return null;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
       <SectionHeader label="Fundamentals" />
       <div className="space-y-2">
         {roi30d != null && (

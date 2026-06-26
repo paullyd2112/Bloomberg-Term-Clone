@@ -31,8 +31,8 @@ async function getData(userId: string) {
 
 const STATUS_STYLE: Record<string, string> = {
   pending:   "text-zinc-500",
-  converted: "text-green-400",
-  rewarded:  "text-purple-400",
+  converted: "text-emerald-400",
+  rewarded:  "text-amber-400",
 };
 
 export default async function ReferralsPage() {
@@ -46,20 +46,20 @@ export default async function ReferralsPage() {
   const pending   = referrals.filter((r) => r.status === "pending").length;
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-xl font-bold text-white">Referrals</h1>
-        <p className="text-zinc-500 text-sm mt-1">
+    <div className="p-5 md:p-8 space-y-6 max-w-2xl">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-xl font-semibold tracking-tight text-white">Referrals</h1>
+        <p className="text-zinc-500 text-sm">
           Invite friends — earn rewards when they upgrade.
         </p>
       </div>
 
       {/* Invite link card */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-3">
+      <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5 space-y-3">
         <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Your invite link</p>
         {inviteUrl ? (
           <div className="flex items-center gap-3">
-            <code className="flex-1 text-sm text-green-400 bg-zinc-800 rounded px-3 py-2 truncate font-mono">
+            <code className="flex-1 text-sm text-emerald-400 bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2 truncate font-mono">
               {inviteUrl}
             </code>
             <CopyButton text={inviteUrl} />
@@ -76,11 +76,11 @@ export default async function ReferralsPage() {
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: "Total referrals", value: referrals.length, color: "text-white" },
-          { label: "Converted",       value: converted,         color: "text-green-400" },
+          { label: "Converted",       value: converted,         color: "text-emerald-400" },
           { label: "Pending",         value: pending,           color: "text-zinc-400" },
         ].map(({ label, value, color }) => (
-          <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-            <div className={`text-2xl font-bold ${color}`}>{value}</div>
+          <div key={label} className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all">
+            <div className={`text-2xl font-bold tabular-nums ${color}`}>{value}</div>
             <div className="text-zinc-500 text-xs mt-1">{label}</div>
           </div>
         ))}
@@ -88,10 +88,10 @@ export default async function ReferralsPage() {
 
       {/* Referral list */}
       {referrals.length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-800">
+              <tr className="border-b border-white/[0.08]">
                 {["Referred", "Status", "Reward"].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
                     {h}
@@ -101,7 +101,7 @@ export default async function ReferralsPage() {
             </thead>
             <tbody>
               {referrals.map((r) => (
-                <tr key={r.id} className="border-b border-zinc-800/60">
+                <tr key={r.id} className="border-b border-white/[0.06] hover:bg-white/[0.03] transition-colors">
                   <td className="px-4 py-3 text-zinc-400 text-xs">
                     {new Date(r.created_at).toLocaleDateString()}
                   </td>
@@ -112,7 +112,7 @@ export default async function ReferralsPage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-zinc-500">
                     {r.reward_granted_at
-                      ? <span className="text-green-400">Granted {new Date(r.reward_granted_at).toLocaleDateString()}</span>
+                      ? <span className="text-emerald-400">Granted {new Date(r.reward_granted_at).toLocaleDateString()}</span>
                       : "—"}
                   </td>
                 </tr>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { History, ClipboardList, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserTier } from "@/lib/user";
 import SubscribeGate from "@/components/ui/SubscribeGate";
@@ -107,20 +108,26 @@ export default async function HistoryPage({
       : 0;
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-5 md:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-lg font-bold text-white">Trade History</h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Resolved AI signals — real-time track record (excludes backtests)
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
+              <History className="h-4 w-4" />
+            </span>
+            <h1 className="text-xl font-semibold tracking-tight text-white">Trade History</h1>
+          </div>
+          <p className="text-sm text-zinc-500">
+            Resolved AI signals — real-time track record (excludes backtests).
           </p>
         </div>
         <Link
           href="/dashboard/performance"
-          className="text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-md px-3 py-1.5 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white border border-white/[0.1] hover:border-white/20 bg-white/[0.03] rounded-lg px-3 py-1.5 transition-colors"
         >
-          Performance analytics →
+          Performance analytics
+          <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
 
@@ -147,10 +154,12 @@ export default async function HistoryPage({
 
       {/* Table */}
       {signals.length === 0 ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl py-16 text-center">
-          <div className="text-3xl mb-3">📋</div>
-          <p className="text-zinc-400 text-sm font-medium">No resolved signals found</p>
-          <p className="text-zinc-600 text-xs mt-1">
+        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl py-16 text-center flex flex-col items-center gap-3">
+          <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
+            <ClipboardList className="h-6 w-6" />
+          </span>
+          <p className="text-zinc-300 text-sm font-medium">No resolved signals found</p>
+          <p className="text-zinc-500 text-xs max-w-xs leading-relaxed">
             Adjust filters or wait for signals to resolve.
           </p>
         </div>
@@ -158,7 +167,7 @@ export default async function HistoryPage({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-800 text-zinc-500 text-xs uppercase tracking-wider">
+              <tr className="border-b border-white/[0.08] text-zinc-500 text-xs uppercase tracking-wider">
                 <th className="text-left py-2 px-3 font-medium">Date</th>
                 <th className="text-left py-2 px-3 font-medium">Asset</th>
                 <th className="text-left py-2 px-3 font-medium">Type</th>
@@ -171,13 +180,13 @@ export default async function HistoryPage({
                 <th className="text-left py-2 px-3 font-medium">Horizon</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/50">
+            <tbody className="divide-y divide-white/[0.06]">
               {signals.map((sig) => {
                 const ret = computeReturn(sig);
                 return (
                   <tr
                     key={sig.id}
-                    className="hover:bg-zinc-800/30 transition-colors"
+                    className="hover:bg-white/[0.04] transition-colors"
                   >
                     <td className="py-2.5 px-3 text-zinc-400 text-xs whitespace-nowrap">
                       {formatDate(sig.created_at)}
@@ -185,7 +194,7 @@ export default async function HistoryPage({
                     <td className="py-2.5 px-3">
                       <Link
                         href={`/dashboard/asset/${sig.asset_type}/${encodeURIComponent(sig.identifier)}`}
-                        className="font-mono font-semibold text-white hover:text-green-400 transition-colors"
+                        className="font-mono font-semibold text-white hover:text-emerald-400 transition-colors"
                       >
                         {sig.identifier}
                       </Link>
@@ -197,7 +206,7 @@ export default async function HistoryPage({
                       <span
                         className={
                           sig.direction === "BUY" || sig.direction === "YES"
-                            ? "text-green-400 text-xs font-semibold"
+                            ? "text-emerald-400 text-xs font-semibold"
                             : sig.direction === "SELL" || sig.direction === "NO"
                             ? "text-red-400 text-xs font-semibold"
                             : "text-zinc-400 text-xs font-semibold"
@@ -220,7 +229,7 @@ export default async function HistoryPage({
                         <span
                           className={
                             ret > 0
-                              ? "text-green-400"
+                              ? "text-emerald-400"
                               : ret < 0
                               ? "text-red-400"
                               : "text-zinc-400"
@@ -237,7 +246,7 @@ export default async function HistoryPage({
                       <span
                         className={
                           sig.outcome === "WIN"
-                            ? "text-xs font-semibold text-green-400"
+                            ? "text-xs font-semibold text-emerald-400"
                             : sig.outcome === "LOSS"
                             ? "text-xs font-semibold text-red-400"
                             : "text-xs font-semibold text-zinc-400"
@@ -275,11 +284,11 @@ function StatCard({
   color?: "green" | "red";
 }) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3">
+    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-4 py-3 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all">
       <div
         className={
           color === "green"
-            ? "text-2xl font-bold text-green-400 tabular-nums"
+            ? "text-2xl font-bold text-emerald-400 tabular-nums"
             : color === "red"
             ? "text-2xl font-bold text-red-400 tabular-nums"
             : "text-2xl font-bold text-white tabular-nums"

@@ -60,7 +60,7 @@ export default function AddAlertForm({ onClose }: { onClose: () => void }) {
           <select
             value={assetType}
             onChange={(e) => setAssetType(e.target.value as AssetType)}
-            className="w-full bg-zinc-800 border border-zinc-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:border-green-500"
+            className="w-full bg-white/[0.04] border border-white/[0.1] text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500/50"
           >
             <option value="stock">Stock</option>
             <option value="crypto">Crypto</option>
@@ -76,7 +76,7 @@ export default function AddAlertForm({ onClose }: { onClose: () => void }) {
             onChange={(e) => setIdentifier(e.target.value.toUpperCase())}
             placeholder="e.g. AAPL"
             maxLength={60}
-            className="w-full bg-zinc-800 border border-zinc-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:border-green-500 placeholder-zinc-500"
+            className="w-full bg-white/[0.04] border border-white/[0.1] text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500/50 placeholder-zinc-500"
           />
         </div>
       </div>
@@ -90,8 +90,8 @@ export default function AddAlertForm({ onClose }: { onClose: () => void }) {
               key={type}
               className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                 triggerType === type
-                  ? "border-green-600 bg-green-950/20"
-                  : "border-zinc-800 hover:border-zinc-600"
+                  ? "border-emerald-500/40 bg-emerald-500/10"
+                  : "border-white/[0.08] hover:border-white/20"
               }`}
             >
               <input
@@ -100,7 +100,7 @@ export default function AddAlertForm({ onClose }: { onClose: () => void }) {
                 value={type}
                 checked={triggerType === type}
                 onChange={() => setTriggerType(type)}
-                className="mt-0.5 accent-green-500"
+                className="mt-0.5 accent-emerald-500"
               />
               <div>
                 <div className="text-sm font-medium text-white">{TRIGGER_LABELS[type]}</div>
@@ -125,7 +125,7 @@ export default function AddAlertForm({ onClose }: { onClose: () => void }) {
             value={threshold}
             onChange={(e) => setThreshold(e.target.value)}
             placeholder="0.00"
-            className="w-full bg-zinc-800 border border-zinc-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:border-green-500 placeholder-zinc-500"
+            className="w-full bg-white/[0.04] border border-white/[0.1] text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500/50 placeholder-zinc-500"
           />
         </div>
       )}
@@ -143,7 +143,7 @@ export default function AddAlertForm({ onClose }: { onClose: () => void }) {
         <button
           type="submit"
           disabled={loading}
-          className="bg-green-500 hover:bg-green-400 disabled:opacity-50 text-black font-semibold text-sm px-5 py-2 rounded-lg transition-colors"
+          className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-semibold text-sm px-5 py-2 rounded-lg transition-colors"
         >
           {loading ? "Creating…" : "Create alert"}
         </button>

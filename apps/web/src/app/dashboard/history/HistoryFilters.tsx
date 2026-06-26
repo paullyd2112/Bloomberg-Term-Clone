@@ -87,8 +87,8 @@ function FilterGroup<T extends string>({
           className={clsx(
             "text-xs px-2.5 py-1 rounded-md transition-colors",
             active === opt
-              ? "bg-zinc-700 text-white"
-              : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800",
+              ? "bg-white/[0.1] text-white ring-hairline"
+              : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]",
           )}
         >
           {displayFn(opt)}

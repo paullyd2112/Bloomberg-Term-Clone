@@ -8,9 +8,9 @@ export default function AccuracyBadge({ accuracy }: { accuracy: Accuracy }) {
 
   const pct  = accuracy.win_rate * 100;
   const color =
-    pct >= 60 ? "text-green-400 border-green-700 bg-green-500/10"
-    : pct >= 45 ? "text-amber-400 border-amber-700 bg-amber-500/10"
-    : "text-red-400 border-red-700 bg-red-500/10";
+    pct >= 60 ? "text-emerald-400 border-emerald-700/30 bg-emerald-500/10"
+    : pct >= 45 ? "text-amber-400 border-amber-700/30 bg-amber-500/10"
+    : "text-red-400 border-red-700/30 bg-red-500/10";
 
   return (
     <span className={`text-xs font-bold px-2 py-0.5 rounded border ${color}`}>

@@ -4,7 +4,7 @@ export default function AssetLoading() {
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
       {/* Price header */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-3">
+      <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-6 space-y-3">
         <div className="flex items-start justify-between">
           <div className="space-y-2">
             <Skeleton className="h-7 w-24" />

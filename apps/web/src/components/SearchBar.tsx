@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Search } from "lucide-react";
 
 type SearchResult = {
   identifier: string;
@@ -126,15 +127,7 @@ export default function SearchBar() {
   return (
     <div ref={ref} className="relative w-full max-w-xs z-50">
       <div className="relative">
-        <svg
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" strokeWidth={2} />
         <input
           ref={inputRef}
           type="text"
@@ -143,15 +136,15 @@ export default function SearchBar() {
           onFocus={() => results.length > 0 && setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder="Search any ticker..."
-          className="w-full bg-zinc-800/60 border border-zinc-700/50 rounded-md pl-8 pr-14 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-green-500/50 transition-colors"
+          className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg pl-8 pr-14 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/40 focus:bg-white/[0.05] transition-colors"
         />
-        <kbd className="absolute right-2 top-1/2 -translate-y-1/2 hidden sm:inline-flex text-[10px] text-zinc-600 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5">
+        <kbd className="absolute right-2 top-1/2 -translate-y-1/2 hidden sm:inline-flex font-mono text-[10px] text-zinc-500 bg-white/[0.04] border border-white/[0.08] rounded px-1.5 py-0.5">
           {"⌘"}K
         </kbd>
       </div>
 
       {open && (
-        <div className="absolute top-full mt-1 left-0 w-full bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-50 overflow-hidden">
+        <div className="absolute top-full mt-2 left-0 w-full bg-zinc-950/95 backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-2xl ring-hairline z-50 overflow-hidden">
           {loading && results.length === 0 && (
             <div className="px-3 py-2 text-xs text-zinc-500">Searching...</div>
           )}
@@ -165,16 +158,16 @@ export default function SearchBar() {
               onMouseEnter={() => setSelectedIdx(i)}
               disabled={ingesting === r.identifier}
               className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
-                i === selectedIdx ? "bg-zinc-800" : "hover:bg-zinc-800/50"
+                i === selectedIdx ? "bg-white/[0.06]" : "hover:bg-white/[0.04]"
               } ${ingesting === r.identifier ? "opacity-60 cursor-wait" : ""}`}
             >
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-white font-mono">{r.identifier}</span>
-                <span className="text-[10px] text-zinc-500 capitalize bg-zinc-800 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] text-zinc-400 capitalize bg-white/[0.05] border border-white/[0.06] px-1.5 py-0.5 rounded">
                   {r.asset_type}
                 </span>
                 {r.tracked === false && (
-                  <span className="text-[10px] text-amber-400 bg-amber-950/40 px-1.5 py-0.5 rounded">
+                  <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
                     {ingesting === r.identifier ? "Loading..." : "Click to add"}
                   </span>
                 )}

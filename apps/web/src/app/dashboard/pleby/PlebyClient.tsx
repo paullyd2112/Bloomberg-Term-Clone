@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Plus, X, Check, ArrowUp } from "lucide-react";
 
 type Conversation = {
   id: string;
@@ -194,21 +195,21 @@ export default function PlebyClient() {
   return (
     <div className="flex h-full">
       {/* Sidebar — conversations */}
-      <aside className="hidden md:flex w-60 flex-shrink-0 bg-zinc-950 border-r border-zinc-800 flex-col">
+      <aside className="hidden md:flex w-60 flex-shrink-0 bg-zinc-950 border-r border-white/[0.06] flex-col">
         <button
           onClick={newConversation}
-          className="m-3 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium px-3 py-2 rounded-md transition-colors"
+          className="m-3 flex items-center justify-center gap-1.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors"
         >
-          + New chat
+          <Plus className="h-4 w-4" /> New chat
         </button>
         <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
           {conversations.map((c) => (
             <div
               key={c.id}
-              className={`group flex items-center gap-1 px-2 py-1.5 rounded text-xs cursor-pointer ${
+              className={`group flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
                 activeId === c.id
-                  ? "bg-zinc-800 text-white"
-                  : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"
+                  ? "bg-white/[0.08] text-white"
+                  : "text-zinc-400 hover:bg-white/[0.04] hover:text-white"
               }`}
               onClick={() => loadConversation(c.id)}
             >
@@ -218,9 +219,10 @@ export default function PlebyClient() {
                   e.stopPropagation();
                   void deleteConversation(c.id);
                 }}
-                className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400"
+                className="flex items-center justify-center opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-colors"
+                aria-label="Delete conversation"
               >
-                ×
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}
@@ -235,8 +237,8 @@ export default function PlebyClient() {
               <div className="text-center py-12 space-y-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/pleby-mascot.png" alt="Pleby" className="h-36 w-auto mx-auto" />
-                <h2 className="text-white font-semibold text-lg">Ask Pleby</h2>
-                <p className="text-zinc-500 text-sm max-w-md mx-auto">
+                <h2 className="text-white font-semibold text-lg tracking-tight">Ask Pleby</h2>
+                <p className="text-zinc-500 text-sm max-w-md mx-auto leading-relaxed">
                   Your AI trading analyst. Ask about any stock, crypto, or prediction market — Pleby pulls live signals, options flow, earnings, and news to give you a synthesized take.
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center pt-2">
@@ -248,7 +250,7 @@ export default function PlebyClient() {
                     <button
                       key={q}
                       onClick={() => setInput(q)}
-                      className="text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:text-white px-3 py-1.5 rounded-md transition-colors"
+                      className="text-xs text-zinc-400 bg-white/[0.03] border border-white/[0.08] hover:border-white/20 hover:text-white px-3 py-1.5 rounded-lg transition-colors"
                     >
                       {q}
                     </button>
@@ -265,7 +267,7 @@ export default function PlebyClient() {
               <div className="space-y-1.5">
                 {streamingTools.map((t, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs text-zinc-500">
-                    <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                    <span className="inline-block w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
                     {TOOL_LABELS[t] ?? t}…
                   </div>
                 ))}
@@ -278,13 +280,13 @@ export default function PlebyClient() {
 
             {streaming && !streamingText && !streamingTools.length && (
               <div className="flex items-center gap-2 text-xs text-zinc-500">
-                <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                <span className="inline-block w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
                 Thinking…
               </div>
             )}
 
             {error && (
-              <div className="text-sm text-red-400 bg-red-950/30 border border-red-900 rounded p-3">
+              <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded-lg p-3">
                 {error}
               </div>
             )}
@@ -292,7 +294,7 @@ export default function PlebyClient() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-zinc-800 bg-zinc-950 p-4">
+        <div className="border-t border-white/[0.06] bg-zinc-950 p-4">
           <div className="max-w-3xl mx-auto flex gap-2">
             <input
               type="text"
@@ -306,14 +308,15 @@ export default function PlebyClient() {
               }}
               disabled={streaming}
               placeholder="Ask Pleby about any asset…"
-              className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 disabled:opacity-60"
+              className="flex-1 bg-white/[0.04] border border-white/[0.1] rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50 disabled:opacity-60 transition-colors"
             />
             <button
               onClick={() => void send()}
               disabled={streaming || !input.trim()}
-              className="bg-green-500 hover:bg-green-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold px-5 py-2.5 rounded-lg text-sm transition-colors"
+              className="flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold w-11 rounded-lg transition-colors"
+              aria-label="Send message"
             >
-              Send
+              <ArrowUp className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -329,16 +332,19 @@ function MessageBubble({ role, content }: { role: "user" | "assistant"; content:
   return (
     <div className={`flex ${role === "user" ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-xl px-4 py-2.5 ${
+        className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
           role === "user"
-            ? "bg-zinc-800 text-white"
-            : "bg-zinc-900 border border-zinc-800 text-zinc-100"
+            ? "bg-white/[0.08] text-white"
+            : "bg-white/[0.03] border border-white/[0.06] ring-hairline text-zinc-100"
         }`}
       >
         {role === "assistant" && toolCalls.length > 0 && (
-          <div className="mb-2 space-y-1 text-[11px] text-zinc-500 border-l-2 border-zinc-700 pl-2">
+          <div className="mb-2 space-y-1 text-[11px] text-zinc-500 border-l-2 border-white/[0.1] pl-2">
             {toolCalls.map((t, i) => (
-              <div key={i}>✓ {TOOL_LABELS[t] ?? t}</div>
+              <div key={i} className="flex items-center gap-1.5">
+                <Check className="h-3 w-3 text-emerald-400 flex-shrink-0" />
+                {TOOL_LABELS[t] ?? t}
+              </div>
             ))}
           </div>
         )}

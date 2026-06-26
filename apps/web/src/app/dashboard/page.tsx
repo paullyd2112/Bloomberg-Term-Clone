@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { Activity, Clock, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserTier } from "@/lib/user";
 import SignalFeed from "@/components/signals/SignalFeed";
@@ -158,12 +159,26 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-5 md:p-8 space-y-8 max-w-7xl mx-auto">
+      {/* Page header */}
+      <header className="flex flex-col gap-1">
+        <div className="flex items-center gap-2.5">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+          </span>
+          <h1 className="text-xl font-semibold tracking-tight text-white">Signals</h1>
+        </div>
+        <p className="text-sm text-zinc-500">
+          Live AI signals across stocks, crypto, and prediction markets — updating in real time.
+        </p>
+      </header>
+
       {/* Stats row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Total signals" value={signals.length} />
-        <StatCard label="Pending" value={pending} />
-        <StatCard label="Wins" value={winCount} color="green" />
-        <StatCard label="Losses" value={lossCount} color="red" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard label="Total signals" value={signals.length} icon={Activity} />
+        <StatCard label="Pending" value={pending} icon={Clock} />
+        <StatCard label="Wins" value={winCount} color="green" icon={TrendingUp} />
+        <StatCard label="Losses" value={lossCount} color="red" icon={TrendingDown} />
       </div>
 
       {/* Platform accuracy */}
@@ -245,24 +260,32 @@ export default async function DashboardPage() {
         <section>
           <SectionHeader>Top movers (24h)</SectionHeader>
           <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-            {movers.map((m) => (
-              <div
-                key={`${m.asset_type}:${m.identifier}`}
-                className="flex-shrink-0 bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-4 py-3 flex flex-col gap-1 min-w-[100px]"
-              >
-                <span className="font-mono text-xs font-semibold text-white truncate">
-                  {m.identifier}
-                </span>
-                <span
-                  className={
-                    (m.change_24h ?? 0) >= 0 ? "text-emerald-400 text-xs tabular-nums" : "text-red-400 text-xs tabular-nums"
-                  }
+            {movers.map((m) => {
+              const up = (m.change_24h ?? 0) >= 0;
+              return (
+                <div
+                  key={`${m.asset_type}:${m.identifier}`}
+                  className="group flex-shrink-0 bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-4 py-3 flex flex-col gap-1.5 min-w-[120px] hover:bg-white/[0.05] hover:border-white/[0.1] transition-all"
                 >
-                  {(m.change_24h ?? 0) >= 0 ? "+" : ""}
-                  {Number(m.change_24h).toFixed(2)}%
-                </span>
-              </div>
-            ))}
+                  <span className="font-mono text-xs font-semibold text-white truncate">
+                    {m.identifier}
+                  </span>
+                  <span
+                    className={`flex items-center gap-1 text-sm font-semibold tabular-nums ${
+                      up ? "text-emerald-400" : "text-red-400"
+                    }`}
+                  >
+                    {up ? (
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    ) : (
+                      <ArrowDownRight className="h-3.5 w-3.5" />
+                    )}
+                    {up ? "+" : ""}
+                    {Number(m.change_24h).toFixed(2)}%
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
@@ -293,9 +316,10 @@ function rateColor(rate: number): string {
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.15em] text-zinc-500 mb-3">
-      <span className="text-emerald-400/60">●</span>
-      {children}
+    <h2 className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.2em] text-zinc-500 mb-4">
+      <span className="text-emerald-400">●</span>
+      <span className="h-px w-8 bg-white/15" />
+      <span>{children}</span>
     </h2>
   );
 }
@@ -304,24 +328,35 @@ function StatCard({
   label,
   value,
   color,
+  icon: Icon,
 }: {
   label: string;
   value: number;
   color?: "green" | "red";
+  icon: React.ComponentType<{ className?: string }>;
 }) {
+  const valueColor =
+    color === "green"
+      ? "text-emerald-400"
+      : color === "red"
+      ? "text-red-400"
+      : "text-white";
+
+  const badge =
+    color === "green"
+      ? "border-emerald-700/30 bg-emerald-500/10 text-emerald-400"
+      : color === "red"
+      ? "border-red-700/30 bg-red-500/10 text-red-400"
+      : "border-white/10 bg-white/[0.04] text-zinc-400";
+
   return (
-    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4">
-      <div
-        className={
-          color === "green"
-            ? "text-2xl font-bold text-emerald-400 tabular-nums"
-            : color === "red"
-            ? "text-2xl font-bold text-red-400 tabular-nums"
-            : "text-2xl font-bold text-white tabular-nums"
-        }
-      >
-        {value}
+    <div className="group bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all">
+      <div className="flex items-center justify-between mb-3">
+        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${badge}`}>
+          <Icon className="h-4 w-4" />
+        </span>
       </div>
+      <div className={`text-2xl font-bold tabular-nums ${valueColor}`}>{value}</div>
       <div className="text-xs text-zinc-500 mt-1">{label}</div>
     </div>
   );

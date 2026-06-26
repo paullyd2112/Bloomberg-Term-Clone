@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Check } from "lucide-react";
 
 type Experience = "beginner" | "intermediate" | "advanced";
 type AssetPref  = "stocks" | "crypto" | "predictions";
@@ -78,8 +79,11 @@ export default function SettingsForm({
   }
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-5">
-      <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-widest">Profile</h2>
+    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5 space-y-5">
+      <h2 className="flex items-center gap-2.5 font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em]">
+        <span className="text-emerald-400 text-[10px] leading-none">●</span>
+        Profile
+      </h2>
 
       {/* Name */}
       <div>
@@ -91,7 +95,7 @@ export default function SettingsForm({
           type="text"
           value={fullName}
           onChange={(e) => { setFullName(e.target.value); setStatus("idle"); }}
-          className="w-full max-w-md bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors"
+          className="w-full max-w-md bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-colors"
           placeholder="Your name"
         />
       </div>
@@ -106,7 +110,7 @@ export default function SettingsForm({
           type="tel"
           value={phone}
           onChange={(e) => { setPhone(e.target.value); setStatus("idle"); }}
-          className="w-full max-w-md bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors"
+          className="w-full max-w-md bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50 transition-colors"
           placeholder="+1 (555) 123-4567"
         />
       </div>
@@ -121,8 +125,8 @@ export default function SettingsForm({
               onClick={() => { setExperience(opt.value); setStatus("idle"); }}
               className={`px-3 py-1.5 rounded-md border text-sm transition-colors ${
                 experience === opt.value
-                  ? "border-green-500 bg-green-500/10 text-white"
-                  : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-white"
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-white"
+                  : "border-white/[0.1] bg-white/[0.03] text-zinc-400 hover:text-white"
               }`}
             >
               {opt.label}
@@ -143,8 +147,8 @@ export default function SettingsForm({
                 onClick={() => { toggleAsset(opt.value); setStatus("idle"); }}
                 className={`px-3 py-1.5 rounded-md border text-sm transition-colors ${
                   selected
-                    ? "border-green-500 bg-green-500/10 text-white"
-                    : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-white"
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-white"
+                    : "border-white/[0.1] bg-white/[0.03] text-zinc-400 hover:text-white"
                 }`}
               >
                 {opt.label}
@@ -162,7 +166,7 @@ export default function SettingsForm({
             type="checkbox"
             checked={emailAlerts}
             onChange={(e) => { setEmailAlerts(e.target.checked); setStatus("idle"); }}
-            className="accent-green-500 w-4 h-4"
+            className="accent-emerald-500 w-4 h-4"
           />
           <span className="text-sm text-zinc-300">
             Email me when my alerts fire
@@ -176,7 +180,7 @@ export default function SettingsForm({
             type="checkbox"
             checked={smsAlerts}
             onChange={(e) => { setSmsAlerts(e.target.checked); setStatus("idle"); }}
-            className="accent-green-500 w-4 h-4"
+            className="accent-emerald-500 w-4 h-4"
           />
           <span className="text-sm text-zinc-300">
             Text me when my alerts fire
@@ -192,11 +196,16 @@ export default function SettingsForm({
         <button
           onClick={handleSave}
           disabled={saving || !fullName.trim()}
-          className="bg-green-500 hover:bg-green-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold px-5 py-2.5 rounded-lg transition-colors text-sm"
+          className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold px-5 py-2.5 rounded-lg transition-colors text-sm"
         >
           {saving ? "Saving…" : "Save changes"}
         </button>
-        {status === "saved" && <span className="text-sm text-green-400">✓ Saved</span>}
+        {status === "saved" && (
+          <span className="flex items-center gap-1 text-sm text-emerald-400">
+            <Check className="h-3.5 w-3.5" />
+            Saved
+          </span>
+        )}
         {status === "error" && <span className="text-sm text-red-400">Something went wrong</span>}
       </div>
     </div>

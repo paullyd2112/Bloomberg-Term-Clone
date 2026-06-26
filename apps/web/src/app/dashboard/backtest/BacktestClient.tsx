@@ -37,7 +37,7 @@ function EquityCurve({ points }: { points: EquityPoint[] }) {
 
   const zeroY = toY(0).toFixed(1);
   const lastPnl = pnls[pnls.length - 1];
-  const color   = lastPnl >= 0 ? "#22c55e" : "#ef4444";
+  const color   = lastPnl >= 0 ? "#10b981" : "#ef4444";
 
   return (
     <svg
@@ -46,7 +46,7 @@ function EquityCurve({ points }: { points: EquityPoint[] }) {
       preserveAspectRatio="none"
     >
       {/* Zero line */}
-      <line x1={PAD} y1={zeroY} x2={W - PAD} y2={zeroY} stroke="#3f3f46" strokeWidth="0.5" />
+      <line x1={PAD} y1={zeroY} x2={W - PAD} y2={zeroY} stroke="rgba(255,255,255,0.12)" strokeWidth="0.5" />
       {/* Equity curve */}
       <path d={pathD} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
     </svg>
@@ -57,12 +57,12 @@ function MetricCard({
   label, value, sub, color,
 }: { label: string; value: string; sub?: string; color?: "green" | "red" | "amber" }) {
   const valueClass =
-    color === "green" ? "text-green-400" :
+    color === "green" ? "text-emerald-400" :
     color === "red"   ? "text-red-400"   :
     color === "amber" ? "text-amber-400" :
     "text-white";
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3">
+    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-4 py-3 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all">
       <div className={`text-xl font-bold tabular-nums ${valueClass}`}>{value}</div>
       <div className="text-xs text-zinc-500 mt-0.5">{label}</div>
       {sub && <div className="text-[11px] text-zinc-600 mt-0.5">{sub}</div>}
@@ -105,8 +105,8 @@ export default function BacktestClient() {
   return (
     <div className="space-y-6">
       {/* Config panel */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-white">Configure backtest</h2>
+      <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5 space-y-4">
+        <h2 className="text-sm font-semibold text-white tracking-tight">Configure backtest</h2>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {/* Asset type */}
@@ -115,7 +115,7 @@ export default function BacktestClient() {
             <select
               value={params.asset_type}
               onChange={(e) => set("asset_type", e.target.value as BacktestParams["asset_type"])}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-500"
+              className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
             >
               <option value="all">All</option>
               <option value="stock">Stocks</option>
@@ -130,7 +130,7 @@ export default function BacktestClient() {
             <select
               value={params.direction}
               onChange={(e) => set("direction", e.target.value as BacktestParams["direction"])}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-500"
+              className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
             >
               <option value="all">All</option>
               <option value="BUY">BUY</option>
@@ -146,7 +146,7 @@ export default function BacktestClient() {
             <select
               value={params.horizon}
               onChange={(e) => set("horizon", e.target.value as BacktestParams["horizon"])}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-500"
+              className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
             >
               <option value="all">All</option>
               <option value="intraday">Intraday</option>
@@ -162,7 +162,7 @@ export default function BacktestClient() {
               type="date"
               value={params.start_date}
               onChange={(e) => set("start_date", e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-500"
+              className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
             />
           </div>
 
@@ -173,7 +173,7 @@ export default function BacktestClient() {
               type="date"
               value={params.end_date}
               onChange={(e) => set("end_date", e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-500"
+              className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
             />
           </div>
 
@@ -187,7 +187,7 @@ export default function BacktestClient() {
               step={100}
               value={params.trade_size}
               onChange={(e) => set("trade_size", Number(e.target.value))}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-500"
+              className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
             />
           </div>
         </div>
@@ -204,7 +204,7 @@ export default function BacktestClient() {
             step={5}
             value={params.min_confidence}
             onChange={(e) => set("min_confidence", Number(e.target.value))}
-            className="w-full accent-green-500"
+            className="w-full accent-emerald-500"
           />
           <div className="flex justify-between text-[10px] text-zinc-600">
             <span>0%</span><span>50%</span><span>95%</span>
@@ -216,7 +216,7 @@ export default function BacktestClient() {
         <button
           onClick={run}
           disabled={loading}
-          className="bg-green-500 hover:bg-green-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold px-6 py-2.5 rounded-lg text-sm transition-colors"
+          className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold px-6 py-2.5 rounded-lg text-sm transition-colors"
         >
           {loading ? "Running…" : "Run backtest →"}
         </button>
@@ -226,7 +226,7 @@ export default function BacktestClient() {
       {results && (
         <div className="space-y-4">
           {results.total_trades === 0 ? (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center text-zinc-500 text-sm">
+            <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-6 text-center text-zinc-500 text-sm">
               No resolved signals found matching these filters.
               <br />
               <span className="text-xs text-zinc-600 mt-1 block">Try widening the date range or lowering the confidence threshold.</span>
@@ -266,12 +266,13 @@ export default function BacktestClient() {
               </div>
 
               {/* Equity curve */}
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
+                  <span className="flex items-center gap-2.5 font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em]">
+                    <span className="text-emerald-400 text-[10px] leading-none">●</span>
                     Equity curve
                   </span>
-                  <span className={`text-xs font-semibold ${results.total_pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+                  <span className={`text-xs font-semibold tabular-nums ${results.total_pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                     {results.total_pnl >= 0 ? "+" : ""}${results.total_pnl.toLocaleString()} total
                   </span>
                 </div>
