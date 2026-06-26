@@ -25,14 +25,39 @@ async function updateUserTier(
   billingInterval: string | null,
 ) {
   const supabase = createAdminClient();
-  await (supabase as any)
+  const { data, error, status, statusText } = await (supabase as any)
     .from("profiles")
     .update({
       tier,
       stripe_subscription_id: subscriptionId,
       billing_interval:       billingInterval,
     })
-    .eq("id", supabaseUserId);
+    .eq("id", supabaseUserId)
+    .select();
+
+  if (error) {
+    console.error("updateUserTier FAILED:", {
+      supabaseUserId,
+      tier,
+      subscriptionId,
+      billingInterval,
+      error,
+      status,
+      statusText,
+    });
+    throw new Error(`Supabase update failed: ${error.message}`);
+  }
+
+  console.log("updateUserTier SUCCESS:", {
+    supabaseUserId,
+    tier,
+    matchedRows: data?.length ?? 0,
+    data,
+  });
+
+  if (!data || data.length === 0) {
+    console.warn("updateUserTier WARNING: no rows matched for user", supabaseUserId);
+  }
 }
 
 // Credit amount in cents ($50 = one free Pro month)
