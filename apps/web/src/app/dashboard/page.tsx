@@ -8,7 +8,7 @@ import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
 
 export const revalidate = 60;
 
-const ENGINE_CUTOFF = "2026-06-19T00:00:00Z";
+const ENGINE_CUTOFF = "2026-06-22T00:00:00Z";
 
 type MonthBucket = { month: string; wins: number; losses: number; winRate: number };
 
