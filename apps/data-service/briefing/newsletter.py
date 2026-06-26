@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from supabase_client import supabase
 
 MODEL      = "claude-sonnet-4-6"
-MAX_TOKENS = 6500
+MAX_TOKENS = 8000
 
 _anthropic = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 client     = instructor.from_anthropic(_anthropic)
@@ -40,7 +40,7 @@ class NewsletterStory(BaseModel):
 class NewsletterContent(BaseModel):
     subject_line:  str = Field(..., min_length=10, max_length=80)
     opening_line:  str = Field(..., min_length=30, max_length=300)
-    stories:       list[NewsletterStory] = Field(..., min_length=3, max_length=5)
+    stories:       list[NewsletterStory] = Field(..., min_length=5, max_length=8)
     closing_line:  str = Field(..., min_length=30, max_length=300)
     market_vibe:   Literal["bullish", "bearish", "mixed", "quiet"]
 
@@ -56,13 +56,23 @@ YOUR VOICE:
 - Short sentences. Vary the rhythm. Mix in a longer one when you need to explain something
 - Smart but never academic. Never condescending
 
+COVERAGE SCOPE:
+You are NOT just a signal recap. You are a market analyst writing a morning brief. Cover the full landscape:
+- The signal data below is your starting point, not your whole story
+- Connect dots: a geopolitical event affects oil, which affects transport costs, which affects earnings
+- Cover macro themes: rate decisions, inflation prints, geopolitics (wars, sanctions, strait closures), supply chain disruptions, commodity moves, currency shifts
+- Cover sector narratives: chip shortages and semis, energy and oil supply, AI infrastructure spend, banking stress, housing data
+- Think about what's moving markets TODAY and what smart money is watching THIS WEEK
+- If there's a big geopolitical story (Iran, China trade, energy crisis), that's a story even if no signal fired on it
+- Use the news headlines provided to identify broader themes beyond just ticker-level moves
+
 STRUCTURE FOR EVERY STORY:
-- category: short tag for the section (e.g. "EARNINGS SEASON", "FED WATCH", "CRYPTO CORNER", "THE TRADE DESK", "CONGRESS IS TRADING AGAIN")
-- headline: punchy, opinionated headline — this is the hook
-- what_happened: the fact + numbers, 2-4 sentences
-- what_we_know: what the data actually says, 2-4 sentences
-- could_mean: your take, clearly framed as opinion, 2-4 sentences
-- watch: forward looking, specific, 1-2 sentences
+- category: short tag for the section (e.g. "EARNINGS SEASON", "FED WATCH", "CRYPTO CORNER", "THE TRADE DESK", "CONGRESS IS TRADING AGAIN", "GEOPOLITICS", "ENERGY", "SUPPLY CHAIN", "COMMODITIES")
+- headline: punchy, opinionated headline. This is the hook
+- what_happened: the fact + numbers, 3-5 sentences with real detail
+- what_we_know: what the data actually says and the broader context, 3-5 sentences
+- could_mean: your take with second-order effects, clearly framed as opinion, 3-5 sentences
+- watch: forward looking, specific catalysts and dates, 2-3 sentences
 
 INLINE LINKS — THIS IS CRITICAL:
 - Use markdown links inside the story text: [anchor text](url)
@@ -290,13 +300,22 @@ def _build_user_prompt(
             )
 
     parts.append(
-        "\nWrite 4-5 stories using the structure. Pick the most interesting data above. "
-        "If there's a congressional trade worth highlighting, work it into a story. "
+        "\nWrite 5-7 stories using the structure. DO NOT just recap the signals above. "
+        "Use the signals and news as a starting point, then broaden out.\n\n"
+        "MIX OF STORIES:\n"
+        "- 2-3 stories driven by the signal data and ticker-level moves above\n"
+        "- 1-2 stories on macro/geopolitical themes: oil supply, rate policy, sanctions, "
+        "trade wars, currency moves, inflation data. Connect these to specific sectors and tickers.\n"
+        "- 1-2 stories on sector narratives: chip supply chains, energy infrastructure, "
+        "AI capex, banking/credit, housing, commodities. What's the bigger picture?\n"
+        "- If there's a congressional trade worth highlighting, work it into a story.\n\n"
         "Opening line sets the tone for the day. Make it count.\n\n"
         "IMPORTANT: Each section (what_happened, what_we_know, could_mean) should be "
         "3-5 sentences with real depth and analysis. The reader should walk away "
-        "feeling informed, not teased. Target 1200-1800 words total across all stories. "
-        "Go deep on each story. More context, more numbers, more analysis.\n\n"
+        "feeling like they understand what's happening in markets, not just which tickers moved. "
+        "Target 1500-2200 words total across all stories. "
+        "Think second-order effects: a chip shortage doesn't just hit semis, it hits autos, "
+        "cloud providers, and anyone waiting on server capacity.\n\n"
         "CRITICAL: Do NOT use em dashes (the long dash character). Use periods, commas, "
         "colons, or semicolons instead. This is non-negotiable.\n\n"
         "INLINE LINKS: Hyperlink key claims, ticker symbols, and data points directly "
