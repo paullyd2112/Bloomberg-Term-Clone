@@ -147,7 +147,10 @@ Generate a portfolio allocation for this user.`.trim();
 
   let parsed_result: { overall_reasoning: string; allocations: unknown[] };
   try {
-    parsed_result = JSON.parse(raw);
+    let cleaned = raw.trim();
+    const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) cleaned = fenceMatch[1].trim();
+    parsed_result = JSON.parse(cleaned);
   } catch {
     console.error("allocator: JSON parse failed", raw);
     return NextResponse.json({ error: "Invalid response from model" }, { status: 500 });

@@ -79,18 +79,29 @@ async function fetchSignals(): Promise<Signal[]> {
 
 async function fetchTopMovers() {
   const supabase = createClient();
-  const { data } = await supabase
-    .from("raw_prices")
-    .select("identifier, asset_type, price, change_24h")
-    .not("change_24h", "is", null)
-    .neq("identifier", "MARKET_SENTIMENT")
-    .order("captured_at", { ascending: false })
-    .limit(80);
 
-  if (!data) return [];
+  const [stockRes, cryptoRes] = await Promise.all([
+    supabase
+      .from("raw_prices")
+      .select("identifier, asset_type, price, change_24h")
+      .eq("asset_type", "stock")
+      .not("change_24h", "is", null)
+      .neq("identifier", "MARKET_SENTIMENT")
+      .order("captured_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("raw_prices")
+      .select("identifier, asset_type, price, change_24h")
+      .eq("asset_type", "crypto")
+      .not("change_24h", "is", null)
+      .order("captured_at", { ascending: false })
+      .limit(50),
+  ]);
 
-  const seen = new Map<string, typeof data[0]>();
-  for (const row of data) {
+  const allData = [...(stockRes.data ?? []), ...(cryptoRes.data ?? [])];
+
+  const seen = new Map<string, typeof allData[0]>();
+  for (const row of allData) {
     if (!seen.has(row.identifier)) seen.set(row.identifier, row);
   }
 
@@ -127,8 +138,8 @@ export default async function DashboardPage() {
         <StatCard label="Losses" value={lossCount} color="red" />
       </div>
 
-      {/* Platform accuracy */}
-      {accuracy && (
+      {/* Platform accuracy — only show when win rate is credible */}
+      {accuracy && accuracy.overallWinRate >= 0.5 && (
         <section>
           <SectionHeader>Platform accuracy</SectionHeader>
           <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4 flex flex-wrap gap-x-6 gap-y-3 items-baseline">
