@@ -20,6 +20,7 @@ from ingestion.short_interest import ingest_short_interest
 from ingestion.earnings import ingest_earnings
 from ingestion.macro_events import seed_macro_events
 from ingestion.fred import enrich_macro_events
+from ingestion.news import ingest_news
 from scoring.engine import score_stocks, score_stocks_event_only, score_crypto, score_prediction_markets
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
@@ -106,6 +107,9 @@ def job_ingest_congressional():
 
 def job_ingest_insider_trades():
     return ingest_insider_trades()
+
+def job_ingest_news():
+    return ingest_news()
 
 def job_generate_newsletter():
     return generate_newsletter()
@@ -275,6 +279,10 @@ scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressio
 # Insider trades (SEC Form 4) — daily at 8:15am ET (FMP)
 scheduler.add_job(lambda: _run_job("ingest_insider_trades", job_ingest_insider_trades),
                   CronTrigger(hour=8, minute=15), id="ingest_insider_trades")
+
+# Market news — ingest at 9:15am ET weekdays, before newsletter generation
+scheduler.add_job(lambda: _run_job("ingest_news", job_ingest_news),
+                  CronTrigger(hour=9, minute=15, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_news")
 
 # Newsletter — generate at 9:30am, send via Resend at 9:45am ET weekdays
 scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newsletter),

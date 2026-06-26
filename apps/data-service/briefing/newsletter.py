@@ -168,7 +168,7 @@ def _fetch_macro_events_today() -> list[dict]:
         return []
 
 
-def _fetch_recent_news(limit: int = 15) -> list[dict]:
+def _fetch_recent_news(limit: int = 25) -> list[dict]:
     since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
     try:
         result = (
