@@ -630,6 +630,43 @@ def resolve_now():
         "signal_counts": diag,
     })
 
+@app.route("/send-newsletter-now", methods=["GET", "POST"])
+def send_newsletter_now():
+    """Manually trigger today's newsletter send. Optionally send to a single email."""
+    from flask import request as flask_request
+    body = flask_request.get_json(silent=True) or {}
+    single_email = body.get("email") or flask_request.args.get("email")
+
+    if single_email:
+        from briefing.newsletter_emailer import _get_todays_newsletter, _render_html, _render_text
+        import resend as _resend
+        _resend.api_key = os.environ.get("RESEND_API_KEY", "") or os.environ.get("RESEND_API_KEY_", "")
+
+        briefing = _get_todays_newsletter()
+        if not briefing:
+            return jsonify({"error": "No briefing found for today"}), 404
+
+        from datetime import date as _date
+        subject = briefing.get("headline", f"Plebs — {_date.today().strftime('%b %-d')}")
+        html_body = _render_html(briefing, "free", None)
+        text_body = _render_text(briefing)
+
+        try:
+            _resend.Emails.send({
+                "from": "Pleby from Plebs <daily@plebs.finance>",
+                "to": [single_email],
+                "subject": subject,
+                "html": html_body,
+                "text": text_body,
+            })
+            return jsonify({"status": "ok", "sent_to": single_email, "subject": subject})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    result = send_newsletter()
+    return jsonify({"status": "ok", "result": result})
+
+
 @app.route("/health")
 def health():
     from supabase_client import supabase
