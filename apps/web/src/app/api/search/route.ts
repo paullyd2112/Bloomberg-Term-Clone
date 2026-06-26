@@ -4,6 +4,8 @@ import { getUser } from "@/lib/user";
 
 export const dynamic = "force-dynamic";
 
+const DATA_SERVICE_URL = process.env.DATA_SERVICE_URL ?? "";
+
 export async function GET(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -30,7 +32,7 @@ export async function GET(req: Request) {
       .limit(50),
   ]);
 
-  const seen = new Map<string, { identifier: string; asset_type: string; price: number | null; change_24h: number | null }>();
+  const seen = new Map<string, { identifier: string; asset_type: string; price: number | null; change_24h: number | null; tracked: boolean }>();
 
   for (const row of pricesRes.data ?? []) {
     const key = `${row.asset_type}:${row.identifier}`;
@@ -40,6 +42,7 @@ export async function GET(req: Request) {
         asset_type: row.asset_type,
         price: row.price,
         change_24h: row.change_24h,
+        tracked: true,
       });
     }
   }
@@ -52,10 +55,40 @@ export async function GET(req: Request) {
         asset_type: row.asset_type,
         price: null,
         change_24h: null,
+        tracked: true,
       });
     }
   }
 
-  const results = Array.from(seen.values()).slice(0, 10);
+  let results = Array.from(seen.values()).slice(0, 10);
+
+  // If no DB results and query looks like a ticker (1-6 alphanumeric chars),
+  // try to validate it via the data service
+  if (results.length === 0 && /^[A-Z0-9]{1,6}$/.test(q) && DATA_SERVICE_URL) {
+    try {
+      const resp = await fetch(`${DATA_SERVICE_URL}/validate-ticker`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.results) {
+          results = data.results.map((r: { identifier: string; asset_type: string; name: string; price: number | null }) => ({
+            identifier: r.identifier,
+            asset_type: r.asset_type,
+            price: r.price,
+            change_24h: null,
+            tracked: false,
+            name: r.name,
+          }));
+        }
+      }
+    } catch {
+      // Validation service unavailable, just return empty
+    }
+  }
+
   return NextResponse.json({ results });
 }

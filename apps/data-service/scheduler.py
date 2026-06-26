@@ -317,11 +317,102 @@ def add_cors(response):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
+@app.route("/validate-ticker", methods=["POST"])
+def validate_ticker_endpoint():
+    """
+    Quick validation: checks if a ticker symbol is real via yfinance/CoinGecko.
+    Returns basic info without ingesting. Used by search to show untracked tickers.
+    """
+    from flask import request as flask_request
+    import yfinance as yf
+
+    body = flask_request.get_json(silent=True) or {}
+    query = body.get("query", "").upper().strip()
+
+    if not query or len(query) > 10:
+        return jsonify({"results": []})
+
+    results = []
+
+    # Try as stock ticker via yfinance
+    try:
+        ticker = yf.Ticker(query)
+        info = ticker.info or {}
+        market_price = info.get("regularMarketPrice") or info.get("currentPrice")
+        short_name = info.get("shortName") or info.get("longName")
+        if market_price and short_name:
+            results.append({
+                "identifier": query,
+                "asset_type": "stock",
+                "name": short_name,
+                "price": float(market_price),
+            })
+    except Exception:
+        pass
+
+    # Try as crypto via CoinGecko simple price
+    if not results:
+        try:
+            import httpx
+            cg_resp = httpx.get(
+                "https://api.coingecko.com/api/v3/simple/price",
+                params={"ids": query.lower(), "vs_currencies": "usd"},
+                timeout=5.0,
+            )
+            if cg_resp.status_code == 200:
+                data = cg_resp.json()
+                if query.lower() in data:
+                    results.append({
+                        "identifier": query,
+                        "asset_type": "crypto",
+                        "name": query,
+                        "price": data[query.lower()].get("usd"),
+                    })
+        except Exception:
+            pass
+
+    return jsonify({"results": results})
+
+
+@app.route("/ingest-asset", methods=["POST"])
+def ingest_asset_endpoint():
+    """
+    On-demand ingestion for a single ticker not already in the pipeline.
+    Fetches price data, indicators, and news, writes to raw_prices.
+    """
+    from flask import request as flask_request
+
+    body = flask_request.get_json(silent=True) or {}
+    asset_type = body.get("asset_type")
+    identifier = body.get("identifier", "").upper()
+
+    if asset_type not in ("stock", "crypto"):
+        return jsonify({"error": "Invalid asset_type"}), 400
+    if not identifier:
+        return jsonify({"error": "Missing identifier"}), 400
+
+    try:
+        if asset_type == "stock":
+            from ingestion.stocks import _ingest_ticker
+            ok = _ingest_ticker(identifier)
+        else:
+            from ingestion.crypto import _ingest_coin_ohlcv_only
+            ok = _ingest_coin_ohlcv_only(identifier)
+
+        if ok:
+            return jsonify({"status": "ok", "identifier": identifier})
+        return jsonify({"status": "failed", "reason": "Could not fetch data for this ticker"}), 404
+    except Exception as e:
+        logger.error("On-demand ingest failed for {}/{}: {}", asset_type, identifier, e)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/score-asset", methods=["POST"])
 def score_asset_endpoint():
     """
     On-demand scoring for a single asset. Called by the web app
     when an Elite user views a ticker with no recent signal.
+    Auto-ingests if no price data exists yet.
     """
     from flask import request as flask_request
     from scoring.engine import score_asset
@@ -334,6 +425,27 @@ def score_asset_endpoint():
         return jsonify({"error": "Invalid asset_type"}), 400
     if not identifier:
         return jsonify({"error": "Missing identifier"}), 400
+
+    # Auto-ingest if no price data exists
+    from supabase_client import supabase
+    price_check = supabase.table("raw_prices") \
+        .select("id") \
+        .eq("asset_type", asset_type) \
+        .eq("identifier", identifier) \
+        .limit(1) \
+        .execute()
+
+    if not price_check.data and asset_type in ("stock", "crypto"):
+        logger.info("No price data for {}/{}, auto-ingesting first", asset_type, identifier)
+        try:
+            if asset_type == "stock":
+                from ingestion.stocks import _ingest_ticker
+                _ingest_ticker(identifier)
+            else:
+                from ingestion.crypto import _ingest_coin_ohlcv_only
+                _ingest_coin_ohlcv_only(identifier)
+        except Exception as e:
+            logger.warning("Auto-ingest failed for {}/{}: {}", asset_type, identifier, e)
 
     try:
         result = score_asset(asset_type, identifier)

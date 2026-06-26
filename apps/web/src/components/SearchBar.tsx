@@ -8,6 +8,8 @@ type SearchResult = {
   asset_type: string;
   price: number | null;
   change_24h: number | null;
+  tracked?: boolean;
+  name?: string;
 };
 
 export default function SearchBar() {
@@ -15,6 +17,7 @@ export default function SearchBar() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [ingesting, setIngesting] = useState<string | null>(null);
   const [selectedIdx, setSelectedIdx] = useState(-1);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -69,7 +72,28 @@ export default function SearchBar() {
     }, 200);
   }
 
-  function navigateTo(result: SearchResult) {
+  async function handleSelect(result: SearchResult) {
+    if (result.tracked === false) {
+      setIngesting(result.identifier);
+      try {
+        const res = await fetch("/api/ingest-on-demand", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            asset_type: result.asset_type,
+            identifier: result.identifier,
+          }),
+        });
+        if (!res.ok) {
+          setIngesting(null);
+          return;
+        }
+      } catch {
+        setIngesting(null);
+        return;
+      }
+      setIngesting(null);
+    }
     setOpen(false);
     setQuery("");
     setResults([]);
@@ -86,7 +110,7 @@ export default function SearchBar() {
       setSelectedIdx((prev) => Math.max(prev - 1, 0));
     } else if (e.key === "Enter" && selectedIdx >= 0) {
       e.preventDefault();
-      navigateTo(results[selectedIdx]);
+      handleSelect(results[selectedIdx]);
     } else if (e.key === "Escape") {
       setOpen(false);
       inputRef.current?.blur();
@@ -118,7 +142,7 @@ export default function SearchBar() {
           onChange={(e) => handleChange(e.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
           onKeyDown={handleKeyDown}
-          placeholder="Search ticker..."
+          placeholder="Search any ticker..."
           className="w-full bg-zinc-800/60 border border-zinc-700/50 rounded-md pl-8 pr-14 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-green-500/50 transition-colors"
         />
         <kbd className="absolute right-2 top-1/2 -translate-y-1/2 hidden sm:inline-flex text-[10px] text-zinc-600 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5">
@@ -137,17 +161,26 @@ export default function SearchBar() {
           {results.map((r, i) => (
             <button
               key={`${r.asset_type}:${r.identifier}`}
-              onClick={() => navigateTo(r)}
+              onClick={() => handleSelect(r)}
               onMouseEnter={() => setSelectedIdx(i)}
+              disabled={ingesting === r.identifier}
               className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
                 i === selectedIdx ? "bg-zinc-800" : "hover:bg-zinc-800/50"
-              }`}
+              } ${ingesting === r.identifier ? "opacity-60 cursor-wait" : ""}`}
             >
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-white font-mono">{r.identifier}</span>
                 <span className="text-[10px] text-zinc-500 capitalize bg-zinc-800 px-1.5 py-0.5 rounded">
                   {r.asset_type}
                 </span>
+                {r.tracked === false && (
+                  <span className="text-[10px] text-amber-400 bg-amber-950/40 px-1.5 py-0.5 rounded">
+                    {ingesting === r.identifier ? "Loading..." : "Click to add"}
+                  </span>
+                )}
+                {r.name && (
+                  <span className="text-[10px] text-zinc-500 truncate max-w-[100px]">{r.name}</span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {r.price !== null && (
