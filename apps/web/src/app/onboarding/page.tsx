@@ -28,6 +28,7 @@ export default function OnboardingPage() {
   const [phone, setPhone]       = useState("");
   const [experience, setExp]    = useState<Experience | null>(null);
   const [assets, setAssets]     = useState<Set<AssetPref>>(new Set());
+  const [newsletter, setNews]    = useState(true);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
 
@@ -64,6 +65,7 @@ export default function OnboardingPage() {
           phone_number:       phone.trim() || null,
           trading_experience: experience,
           asset_preferences:  Array.from(assets),
+          subscribe_newsletter: newsletter,
         }),
       });
       if (!res.ok) throw new Error("Failed to save");
@@ -230,6 +232,21 @@ export default function OnboardingPage() {
               })}
             </div>
 
+            <label className="flex items-start gap-3 p-4 rounded-lg border border-zinc-800 bg-zinc-900 cursor-pointer hover:border-zinc-600 transition-colors">
+              <input
+                type="checkbox"
+                checked={newsletter}
+                onChange={(e) => setNews(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-green-500 focus:ring-green-500 focus:ring-offset-0 accent-green-500"
+              />
+              <div>
+                <div className="font-semibold text-white text-sm">Daily morning briefing</div>
+                <div className="text-xs text-zinc-400 mt-0.5">
+                  Market recap, AI signals, and trade ideas — delivered before market open (7am ET weekdays)
+                </div>
+              </div>
+            </label>
+
             {error && (
               <p className="text-sm text-red-400">{error}</p>
             )}
@@ -271,7 +288,7 @@ export default function OnboardingPage() {
                 "AI signals — stocks, crypto & predictions",
                 "Unlimited watchlist",
                 "Unusual options flow",
-                "Morning briefing email (8:45am ET)",
+                "Morning briefing email (7am ET)",
                 "Per-asset AI accuracy tracking",
               ].map((f) => (
                 <div key={f} className="flex items-center gap-2 text-sm text-zinc-300">

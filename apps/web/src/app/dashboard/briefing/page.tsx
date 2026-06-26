@@ -71,7 +71,7 @@ export default async function BriefingPage() {
           </span>
           <h2 className="text-white font-semibold text-lg tracking-tight">Morning Briefing</h2>
           <p className="text-zinc-400 text-sm leading-relaxed max-w-md">
-            A daily AI-generated market brief lands in your inbox at 8:45am ET — covering top signals, macro context, and prediction market edge. Pro and Elite only.
+            A daily AI-generated market brief lands in your inbox at 7am ET — covering top signals, macro context, and trade ideas. Pro and Elite only.
           </p>
           <Link
             href="/dashboard/upgrade"

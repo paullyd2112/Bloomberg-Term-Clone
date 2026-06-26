@@ -55,7 +55,7 @@ def _email_day0(name: str) -> tuple[str, str, str]:
       </div>
     </div>
     <p style="color:#71717a;font-size:13px;line-height:1.6;margin:0 0 24px;">
-      Your morning briefing starts arriving at 8:45am ET on weekdays — it covers top signals, macro context, and what to watch for the day.
+      Your morning briefing starts arriving at 7am ET on weekdays — it covers top signals, macro context, and what to watch for the day.
     </p>
     <a href="{APP_URL}/dashboard" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:14px;padding:12px 24px;border-radius:8px;text-decoration:none;">
       Open dashboard →
@@ -73,7 +73,7 @@ Start here:
 → Add tickers to your watchlist and set alerts
 → Check congressional trades: {APP_URL}/dashboard/congress
 
-Your morning briefing starts arriving at 8:45am ET on weekdays.
+Your morning briefing starts arriving at 7am ET on weekdays.
 
 Not financial advice. Unsubscribe: {APP_URL}/unsubscribe"""
     return subject, html, text
@@ -155,7 +155,7 @@ def _email_day4(name: str) -> tuple[str, str, str]:
     <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:20px;margin-bottom:24px;">
       <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">☀️ Morning briefing</div>
       <div style="color:#a1a1aa;font-size:14px;line-height:1.6;margin-bottom:12px;">
-        Hits your inbox at 8:45am ET every weekday. Top signals, macro context, what to watch, and a risk note — written by AI, reviewed for accuracy. Five minutes and you're caught up.
+        Hits your inbox at 7am ET every weekday. Top signals, macro context, what to watch, and a risk note — written by AI, reviewed for accuracy. Five minutes and you're caught up.
       </div>
       <a href="{APP_URL}/dashboard/briefing" style="color:#22c55e;font-size:13px;font-weight:600;text-decoration:none;">Read today's briefing →</a>
     </div>
@@ -175,7 +175,7 @@ Every STOCK Act disclosure in one feed.
 {APP_URL}/dashboard/congress
 
 Morning briefing:
-Hits your inbox at 8:45am ET weekdays. Top signals, macro context, risk note.
+Hits your inbox at 7am ET weekdays. Top signals, macro context, risk note.
 {APP_URL}/dashboard/briefing
 
 Not financial advice. Unsubscribe: {APP_URL}/unsubscribe"""
