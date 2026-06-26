@@ -96,11 +96,15 @@ async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
 
 async function fetchSignals(): Promise<Signal[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.rpc("get_dashboard_signals", {
-    p_limit: 60,
-  });
+  const { data, error } = await supabase
+    .from("signals")
+    .select("*")
+    .eq("is_backtest", false)
+    .gte("created_at", ENGINE_CUTOFF)
+    .order("created_at", { ascending: false })
+    .limit(60);
   if (error) {
-    console.error("get_dashboard_signals error:", error.message);
+    console.error("fetchSignals error:", error.message);
     return [];
   }
   return (data as Signal[]) ?? [];
