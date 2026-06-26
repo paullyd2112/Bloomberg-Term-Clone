@@ -6,6 +6,45 @@ export const dynamic = "force-dynamic";
 
 const DATA_SERVICE_URL = process.env.DATA_SERVICE_URL ?? "";
 
+type ResultItem = {
+  identifier: string;
+  asset_type: string;
+  price: number | null;
+  change_24h: number | null;
+  tracked: boolean;
+  name?: string;
+};
+
+async function searchYahooFinance(q: string): Promise<ResultItem[]> {
+  try {
+    const resp = await fetch(
+      `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5&newsCount=0&listsCount=0`,
+      { signal: AbortSignal.timeout(4000) },
+    );
+    if (!resp.ok) return [];
+
+    const data = await resp.json();
+    const quotes = data.quotes ?? [];
+
+    return quotes
+      .filter((qt: Record<string, string>) => {
+        const type = qt.quoteType;
+        return type === "EQUITY" || type === "ETF" || type === "CRYPTOCURRENCY";
+      })
+      .slice(0, 5)
+      .map((qt: Record<string, string>) => ({
+        identifier: qt.symbol,
+        asset_type: qt.quoteType === "CRYPTOCURRENCY" ? "crypto" : "stock",
+        price: null,
+        change_24h: null,
+        tracked: false,
+        name: qt.shortname || qt.longname || undefined,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export async function GET(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -32,7 +71,7 @@ export async function GET(req: Request) {
       .limit(50),
   ]);
 
-  const seen = new Map<string, { identifier: string; asset_type: string; price: number | null; change_24h: number | null; tracked: boolean }>();
+  const seen = new Map<string, ResultItem>();
 
   for (const row of pricesRes.data ?? []) {
     const key = `${row.asset_type}:${row.identifier}`;
@@ -62,31 +101,37 @@ export async function GET(req: Request) {
 
   let results = Array.from(seen.values()).slice(0, 10);
 
-  // If no DB results and query looks like a ticker (1-6 alphanumeric chars),
-  // try to validate it via the data service
-  if (results.length === 0 && /^[A-Z0-9]{1,6}$/.test(q) && DATA_SERVICE_URL) {
-    try {
-      const resp = await fetch(`${DATA_SERVICE_URL}/validate-ticker`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q }),
-        signal: AbortSignal.timeout(5000),
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.results) {
-          results = data.results.map((r: { identifier: string; asset_type: string; name: string; price: number | null }) => ({
-            identifier: r.identifier,
-            asset_type: r.asset_type,
-            price: r.price,
-            change_24h: null,
-            tracked: false,
-            name: r.name,
-          }));
+  // If no DB results, search Yahoo Finance directly for real tickers
+  if (results.length === 0 && /^[A-Z0-9.]{1,10}$/.test(q)) {
+    // Try Yahoo Finance first (no API key needed)
+    const yahooResults = await searchYahooFinance(q);
+    if (yahooResults.length > 0) {
+      results = yahooResults;
+    } else if (DATA_SERVICE_URL) {
+      // Fall back to data service validation
+      try {
+        const resp = await fetch(`${DATA_SERVICE_URL}/validate-ticker`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: q }),
+          signal: AbortSignal.timeout(5000),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.results) {
+            results = data.results.map((r: { identifier: string; asset_type: string; name: string; price: number | null }) => ({
+              identifier: r.identifier,
+              asset_type: r.asset_type,
+              price: r.price,
+              change_24h: null,
+              tracked: false,
+              name: r.name,
+            }));
+          }
         }
+      } catch {
+        // silent
       }
-    } catch {
-      // Validation service unavailable, just return empty
     }
   }
 
