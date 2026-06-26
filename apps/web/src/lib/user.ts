@@ -20,11 +20,16 @@ export async function getUserTier(): Promise<Tier> {
 
   const { data } = await supabase
     .from("profiles")
-    .select("tier")
+    .select("tier, trial_ends_at")
     .eq("id", user.id)
     .single();
 
-  return (data?.tier as Tier) ?? "free";
+  const tier = (data?.tier as Tier) ?? "free";
+  if (tier === "free" && data?.trial_ends_at) {
+    const trialEnd = new Date(data.trial_ends_at);
+    if (trialEnd.getTime() > Date.now()) return "pro";
+  }
+  return tier;
 }
 
 export async function getUserProfile() {

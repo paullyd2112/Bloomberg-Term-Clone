@@ -7,7 +7,7 @@ export default function SubscribeGate({ message = "Your trial has ended." }: { m
       <div>
         <p className="text-white font-semibold text-lg">{message}</p>
         <p className="text-zinc-500 text-sm mt-1">
-          Subscribe to keep access to real-time signals and the full suite.
+          Subscribe to unlock real-time signals and the full suite.
         </p>
       </div>
       <div className="flex gap-3">
@@ -15,11 +15,11 @@ export default function SubscribeGate({ message = "Your trial has ended." }: { m
           href="/dashboard/upgrade"
           className="bg-green-500 hover:bg-green-400 text-black font-bold px-6 py-2.5 rounded-lg text-sm transition-colors"
         >
-          Subscribe now →
+          View plans →
         </Link>
       </div>
       <p className="text-zinc-700 text-xs">
-        Credit card required · Cancel anytime
+        14-day free trial · Cancel anytime
       </p>
     </div>
   );
