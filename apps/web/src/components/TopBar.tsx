@@ -17,7 +17,7 @@ export default function TopBar({ user, tier }: { user: User; tier: Tier }) {
   }
 
   return (
-    <header className="h-14 flex-shrink-0 bg-black/40 backdrop-blur-xl border-b border-white/[0.06] flex items-center justify-between px-5 gap-4">
+    <header className="h-14 flex-shrink-0 bg-black/40 backdrop-blur-xl border-b border-white/[0.06] flex items-center justify-between px-5 gap-4 relative z-30">
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {tier === "free" && (
           <span className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1 whitespace-nowrap flex-shrink-0">
