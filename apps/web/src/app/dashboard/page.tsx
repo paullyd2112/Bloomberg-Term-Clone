@@ -18,14 +18,14 @@ type PlatformAccuracy = {
 
 async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
   const supabase = createClient();
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
 
   const { data, error } = await supabase
     .from("signals")
     .select("asset_type, outcome")
     .in("outcome", ["WIN", "LOSS"])
-    .gte("created_at", thirtyDaysAgo.toISOString());
+    .gte("created_at", cutoff.toISOString());
 
   if (error || !data || data.length === 0) {
     return null;
@@ -135,7 +135,7 @@ export default async function DashboardPage() {
       {/* Platform accuracy (last 30 days) */}
       {accuracy && (
         <section>
-          <SectionHeader>Platform accuracy (30d)</SectionHeader>
+          <SectionHeader>Platform accuracy (7d)</SectionHeader>
           <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4 flex flex-wrap gap-x-6 gap-y-3 items-baseline">
             <div>
               <span
