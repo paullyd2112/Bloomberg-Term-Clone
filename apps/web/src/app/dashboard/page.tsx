@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { Activity, Clock, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserTier } from "@/lib/user";
@@ -267,8 +268,9 @@ export default async function DashboardPage() {
             {movers.map((m) => {
               const up = (m.change_24h ?? 0) >= 0;
               return (
-                <div
+                <Link
                   key={`${m.asset_type}:${m.identifier}`}
+                  href={`/dashboard/asset/${m.asset_type}/${m.identifier}`}
                   className="group flex-shrink-0 bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-4 py-3 flex flex-col gap-1.5 min-w-[120px] hover:bg-white/[0.05] hover:border-white/[0.1] transition-all"
                 >
                   <span className="font-mono text-xs font-semibold text-white truncate">
@@ -287,7 +289,7 @@ export default async function DashboardPage() {
                     {up ? "+" : ""}
                     {Number(m.change_24h).toFixed(2)}%
                   </span>
-                </div>
+                </Link>
               );
             })}
           </div>
