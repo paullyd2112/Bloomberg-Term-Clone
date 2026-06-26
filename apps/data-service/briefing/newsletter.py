@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from supabase_client import supabase
 
 MODEL      = "claude-sonnet-4-6"
-MAX_TOKENS = 4500
+MAX_TOKENS = 6500
 
 _anthropic = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 client     = instructor.from_anthropic(_anthropic)
@@ -31,10 +31,10 @@ APP_URL = os.environ.get("NEXT_PUBLIC_APP_URL", "https://plebs.finance")
 class NewsletterStory(BaseModel):
     category:     str = Field(..., min_length=3, max_length=40)
     headline:     str = Field(..., min_length=10, max_length=120)
-    what_happened: str = Field(..., min_length=60, max_length=600)
-    what_we_know:  str = Field(..., min_length=60, max_length=600)
-    could_mean:    str = Field(..., min_length=60, max_length=600)
-    watch:         str = Field(..., min_length=30, max_length=300)
+    what_happened: str = Field(..., min_length=100, max_length=1000)
+    what_we_know:  str = Field(..., min_length=100, max_length=1000)
+    could_mean:    str = Field(..., min_length=100, max_length=1000)
+    watch:         str = Field(..., min_length=40, max_length=500)
 
 
 class NewsletterContent(BaseModel):
@@ -75,6 +75,7 @@ INLINE LINKS — THIS IS CRITICAL:
 - For tickers, always link to: https://plebs.finance/dashboard/asset/stock/TICKER or https://plebs.finance/dashboard/asset/crypto/TICKER
 
 HARD BANNED — never write these:
+- Em dashes (—). Use periods, commas, or colons instead. This is the #1 tell of AI writing. ZERO em dashes in the entire output.
 - "It's worth noting" / "Notably" used as filler
 - "As we navigate" / "navigate the landscape"
 - "Unpack" / "delve into" / "dive deep"
@@ -87,7 +88,7 @@ HARD BANNED — never write these:
 - Exclamation marks
 
 TONE REFERENCE:
-Good: "The Fed held rates. Again. Markets shrugged — **S&P up 0.3%** on the day. Here's what [actually matters in the statement](https://fed.gov/fomc)."
+Good: "The Fed held rates. Again. Markets shrugged, with the **S&P up 0.3%** on the day. Here's what [actually matters in the statement](https://fed.gov/fomc)."
 Bad: "In a landmark decision that underscores the complexity of today's monetary landscape, the Federal Reserve has opted to maintain its current interest rate policy."
 
 Good: "**$NVDA** [beat by $0.40](https://example.com/nvda-earnings). Revenue up 18% YoY. The stock popped 6% after hours, which tells you how low expectations had gotten."
@@ -289,12 +290,15 @@ def _build_user_prompt(
             )
 
     parts.append(
-        "\nWrite 3-5 stories using the structure. Pick the most interesting data above. "
+        "\nWrite 4-5 stories using the structure. Pick the most interesting data above. "
         "If there's a congressional trade worth highlighting, work it into a story. "
-        "Opening line sets the tone for the day — make it count.\n\n"
+        "Opening line sets the tone for the day. Make it count.\n\n"
         "IMPORTANT: Each section (what_happened, what_we_know, could_mean) should be "
-        "2-4 sentences — give real depth, not one-liners. The reader should walk away "
-        "feeling informed, not teased. Target 600-900 words total across all stories.\n\n"
+        "3-5 sentences with real depth and analysis. The reader should walk away "
+        "feeling informed, not teased. Target 1200-1800 words total across all stories. "
+        "Go deep on each story. More context, more numbers, more analysis.\n\n"
+        "CRITICAL: Do NOT use em dashes (the long dash character). Use periods, commas, "
+        "colons, or semicolons instead. This is non-negotiable.\n\n"
         "INLINE LINKS: Hyperlink key claims, ticker symbols, and data points directly "
         "in the prose using markdown: [text](url). Use the news URLs provided above "
         "for source citations. Link ticker symbols to plebs.finance/dashboard/asset/stock/TICKER "
