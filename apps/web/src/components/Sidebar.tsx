@@ -30,18 +30,19 @@ export default function Sidebar({ tier, billingInterval }: { tier: Tier; billing
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const displayLabel = billingInterval === "lifetime"
     ? `Lifetime ${capitalize(tier)}`
-    : `${tier} plan`;
+    : `${capitalize(tier)} plan`;
 
   return (
-    <aside className="hidden lg:flex w-52 flex-shrink-0 bg-zinc-950 border-r border-zinc-800 flex-col">
+    <aside className="hidden lg:flex w-56 flex-shrink-0 bg-black/40 backdrop-blur-xl border-r border-white/[0.06] flex-col">
       {/* Logo */}
-      <div className="h-14 flex items-center px-4 border-b border-zinc-800">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="Plebs" className="h-7 w-auto" />
+      <div className="h-14 flex items-center px-5 border-b border-white/[0.06]">
+        <span className="text-lg font-semibold tracking-tight text-white">
+          Plebs<span className="text-emerald-400">.</span>
+        </span>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 py-4 space-y-0.5 overflow-y-auto px-2">
         {NAV.map(({ href, label, icon, tier: requiredTier }) => {
           const locked =
             requiredTier === "elite"
@@ -60,17 +61,17 @@ export default function Sidebar({ tier, billingInterval }: { tier: Tier; billing
               key={href}
               href={locked ? "/dashboard/upgrade" : href}
               className={clsx(
-                "flex items-center gap-3 px-4 py-2.5 mx-1.5 rounded-md text-sm transition-colors",
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all",
                 active
-                  ? "bg-zinc-800 text-white"
-                  : "text-zinc-400 hover:text-white hover:bg-zinc-800/50",
-                locked && "opacity-50",
+                  ? "bg-white/[0.08] text-white ring-hairline"
+                  : "text-zinc-400 hover:text-white hover:bg-white/[0.04]",
+                locked && "opacity-40",
               )}
             >
               <span className="text-base flex-shrink-0">{icon}</span>
               <span className="truncate">{label}</span>
               {locked && (
-                <span className="ml-auto text-[10px] text-zinc-500 uppercase tracking-wide">
+                <span className="ml-auto text-[9px] text-emerald-400/60 uppercase tracking-wider font-medium">
                   {requiredTier}
                 </span>
               )}
@@ -80,15 +81,21 @@ export default function Sidebar({ tier, billingInterval }: { tier: Tier; billing
       </nav>
 
       {/* Tier badge */}
-      <div className="p-3 border-t border-zinc-800">
+      <div className="p-4 border-t border-white/[0.06]">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-zinc-500 capitalize">{displayLabel}</span>
+          <div className="flex items-center gap-2">
+            <div className={clsx(
+              "w-1.5 h-1.5 rounded-full",
+              tier === "elite" ? "bg-emerald-400" : tier === "pro" ? "bg-amber-400" : "bg-zinc-500"
+            )} />
+            <span className="text-xs text-zinc-400">{displayLabel}</span>
+          </div>
           {tier === "free" && (
             <Link
               href="/dashboard/upgrade"
-              className="text-xs text-green-400 hover:text-green-300 font-medium"
+              className="text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
             >
-              Upgrade →
+              Upgrade
             </Link>
           )}
         </div>

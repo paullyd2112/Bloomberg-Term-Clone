@@ -34,7 +34,7 @@ export default function BottomNav({ tier }: { tier: Tier }) {
   const items    = tier === "elite" ? NAV_ELITE : tier === "pro" ? NAV_PRO : NAV_FREE;
 
   return (
-    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-zinc-950 border-t border-zinc-800 flex">
+    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-black/70 backdrop-blur-xl border-t border-white/[0.06] flex">
       {items.map(({ href, label, icon, ...rest }) => {
         const isUpgrade = "upgradeOnly" in rest && rest.upgradeOnly;
         const active =
@@ -47,11 +47,11 @@ export default function BottomNav({ tier }: { tier: Tier }) {
             key={href}
             href={href}
             className={clsx(
-              "flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+              "flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors",
               active && !isUpgrade
                 ? "text-white"
                 : isUpgrade
-                ? "text-green-400"
+                ? "text-emerald-400"
                 : "text-zinc-500 hover:text-zinc-300",
             )}
           >
