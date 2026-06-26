@@ -18,7 +18,7 @@ import LiveSignalFeed from "@/components/LiveSignalFeed";
 export const metadata: Metadata = {
   title: "Plebs — Hedge fund tools. Retail prices.",
   description:
-    "Real-time AI signals for stocks, crypto, and prediction markets. Congressional trade tracker, options flow, morning briefing — Wall Street's toolkit, finally for everyone.",
+    "Real-time AI signals for stocks and crypto. Congressional trade tracker, options flow, morning briefing — Wall Street's toolkit, finally for everyone.",
 };
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
@@ -143,8 +143,8 @@ function Hero() {
 function Stats() {
   const items = [
     { value: "3",     label: "Markets covered" },
-    { value: "8:45a", label: "Daily briefing, ET" },
-    { value: "<2s",   label: "Signal latency" },
+    { value: "7a",    label: "Daily briefing, ET" },
+    { value: "60+",   label: "Assets tracked" },
     { value: "14d",   label: "Free trial" },
   ];
 
@@ -170,7 +170,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: "Real-time AI signals",
-    desc: "Model-driven analysis across stocks, crypto, and Polymarket / Kalshi contracts. BUY, SELL, YES, NO — each with a confidence score and the reasoning behind it.",
+    desc: "Model-driven analysis across stocks and crypto. Prediction markets coming soon. BUY, SELL, YES, NO — each with a confidence score and the reasoning behind it.",
     wide: true,
   },
   {
@@ -180,13 +180,13 @@ const FEATURES = [
   },
   {
     icon: Waves,
-    title: "Options & dark pool flow",
-    desc: "Unusual sweeps and block trades flagged in real time. Follow the smart money early.",
+    title: "Unusual options flow",
+    desc: "Unusual sweeps and large block trades flagged automatically. Follow the smart money early.",
   },
   {
     icon: Sunrise,
     title: "Morning briefing",
-    desc: "An AI-written market brief in your inbox at 8:45a ET — top signals, macro, and risk.",
+    desc: "An AI-written market brief in your inbox at 7a ET — top signals, macro, and risk.",
   },
   {
     icon: Wallet,
@@ -249,15 +249,15 @@ function Features() {
 const QUOTES = [
   {
     quote:
-      "The 8:45a brief is the only newsletter I actually open. Caught the TSLA reversal a full session before the move.",
+      "The 7a brief is the only newsletter I actually open. Caught the TSLA reversal a full session before the move.",
     name: "Ryan M.",
     role: "Swing trader",
   },
   {
     quote:
-      "Nobody else is doing prediction-market signals for retail. The Kalshi plays alone have paid for the year.",
+      "The signal accuracy tracking is what sold me. Seeing real win rates per ticker — not just vibes — changed how I trade.",
     name: "Destiny A.",
-    role: "Options + events",
+    role: "Swing trader",
   },
   {
     quote:
@@ -316,9 +316,9 @@ const PLANS = [
     features: [
       "Real-time AI signals — stocks & crypto",
       "Unlimited watchlist",
-      "Full options flow + dark pool",
+      "Unusual options flow",
       "Congressional trade tracker",
-      "Morning briefing email",
+      "Morning briefing email (7a ET)",
       "Portfolio tracker + P&L",
       "Price & signal alerts",
     ],
@@ -333,11 +333,10 @@ const PLANS = [
     href:      "/signup",
     features: [
       "Everything in Pro",
-      "Prediction-market signals (Kalshi + Polymarket)",
-      "AI finds mispriced contracts",
+      "Prediction-market signals — coming soon",
       "Pleby — your AI trading analyst, on call",
       "Personalised morning briefing",
-      "Priority signal delivery",
+      "On-demand AI analysis — score any ticker",
     ],
   },
 ];

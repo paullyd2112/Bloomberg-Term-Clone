@@ -1,5 +1,5 @@
 """
-Newsletter emailer — sends daily newsletter via Resend at 9:45am ET weekdays.
+Newsletter emailer — sends daily newsletter via Resend at 7:15am ET weekdays.
 Free subscribers get editorial + CTA.
 Pro/Elite subscribers get the same editorial + personalized signal data.
 """

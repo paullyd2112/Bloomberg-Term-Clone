@@ -16,7 +16,7 @@ export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
     "Unlimited watchlist",
     "Unusual options flow",
     "Congressional trade tracker",
-    "Morning briefing email (8:45am ET)",
+    "Morning briefing email (7am ET)",
     "Portfolio tracker + P&L",
     "Performance analytics + equity curve",
     "Email alerts when signals fire",
@@ -25,11 +25,10 @@ export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
   elite: [
     "Everything in Pro",
     "On-demand AI analysis — score any ticker instantly",
-    "Prediction market signals — coming soon (Kalshi + Polymarket)",
+    "Prediction market signals — coming soon",
     "Pleby — AI trading analyst chat",
     "Ask Pleby about any asset anytime",
     "Personalised morning briefing",
-    "Priority signal delivery",
   ],
 };
 
