@@ -185,6 +185,37 @@ def _fetch_recent_news(limit: int = 15) -> list[dict]:
         return []
 
 
+def _fetch_yesterday_performance() -> dict | None:
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    day_before = (date.today() - timedelta(days=2)).isoformat()
+    try:
+        result = (
+            supabase.table("signals")
+            .select("outcome, identifier, asset_type, direction")
+            .in_("outcome", ["WIN", "LOSS"])
+            .gte("created_at", day_before + "T00:00:00Z")
+            .lt("created_at", yesterday + "T23:59:59Z")
+            .execute()
+        )
+        rows = result.data or []
+        if not rows:
+            return None
+        wins = [r for r in rows if r["outcome"] == "WIN"]
+        losses = [r for r in rows if r["outcome"] == "LOSS"]
+        total = len(wins) + len(losses)
+        return {
+            "wins": len(wins),
+            "losses": len(losses),
+            "total": total,
+            "win_rate": round(len(wins) / total * 100, 1) if total > 0 else 0,
+            "win_tickers": [f"{r['identifier']} ({r['direction']})" for r in wins[:5]],
+            "loss_tickers": [f"{r['identifier']} ({r['direction']})" for r in losses[:5]],
+        }
+    except Exception as e:
+        logger.warning("newsletter: yesterday performance fetch failed — {}", e)
+        return None
+
+
 # ─── Generator ────────────────────────────────────────────────────────────────
 
 def _build_user_prompt(
@@ -193,10 +224,26 @@ def _build_user_prompt(
     options: list[dict],
     macro: list[dict],
     news: list[dict],
+    yesterday_perf: dict | None = None,
 ) -> str:
     today = date.today().strftime("%A, %B %-d, %Y")
 
     parts = [f"Today is {today}. Write the Plebs.finance daily newsletter.\n"]
+
+    if yesterday_perf:
+        parts.append("YESTERDAY'S SIGNAL SCORECARD:")
+        parts.append(
+            f"  {yesterday_perf['wins']}W – {yesterday_perf['losses']}L "
+            f"({yesterday_perf['win_rate']}% win rate) across {yesterday_perf['total']} resolved signals"
+        )
+        if yesterday_perf["win_tickers"]:
+            parts.append(f"  Winners: {', '.join(yesterday_perf['win_tickers'])}")
+        if yesterday_perf["loss_tickers"]:
+            parts.append(f"  Misses: {', '.join(yesterday_perf['loss_tickers'])}")
+        parts.append(
+            "  Work this into the opening or a brief 'signal scorecard' section. "
+            "Keep it factual and confident — this builds reader trust.\n"
+        )
 
     if signals:
         parts.append("SIGNALS FIRED IN THE LAST 24 HOURS:")
@@ -259,13 +306,14 @@ def _build_user_prompt(
 
 
 def generate_newsletter() -> dict | None:
-    signals  = _fetch_recent_signals()
-    congress = _fetch_congressional_trades()
-    options  = _fetch_options_flow()
-    macro    = _fetch_macro_events_today()
-    news     = _fetch_recent_news()
+    signals        = _fetch_recent_signals()
+    congress       = _fetch_congressional_trades()
+    options        = _fetch_options_flow()
+    macro          = _fetch_macro_events_today()
+    news           = _fetch_recent_news()
+    yesterday_perf = _fetch_yesterday_performance()
 
-    user_prompt = _build_user_prompt(signals, congress, options, macro, news)
+    user_prompt = _build_user_prompt(signals, congress, options, macro, news, yesterday_perf)
 
     try:
         content: NewsletterContent = client.chat.completions.create(
@@ -306,6 +354,7 @@ def generate_newsletter() -> dict | None:
                 "options_flow":  options[:3],
                 "congress":      congress[:3],
                 "macro_today":   macro,
+                "yesterday_performance": yesterday_perf,
             },
         }
 

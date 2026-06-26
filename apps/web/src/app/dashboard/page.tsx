@@ -8,16 +8,9 @@ import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
 
 export const revalidate = 60;
 
-type AssetAccuracy = {
-  asset_type: string;
-  identifier: string;
-  total_signals: number;
-  win_rate: number | null;
-  wins: number;
-  losses: number;
-  neutrals: number;
-  avg_confidence: number | null;
-};
+const ENGINE_CUTOFF = "2026-06-22T00:00:00Z";
+
+type MonthBucket = { month: string; wins: number; losses: number; winRate: number };
 
 type PlatformAccuracy = {
   overallWinRate: number;
@@ -25,44 +18,79 @@ type PlatformAccuracy = {
   totalWins: number;
   totalLosses: number;
   byAssetClass: { asset_type: string; winRate: number; resolved: number }[];
+  byMonth: MonthBucket[];
+  yesterday: { wins: number; losses: number; winRate: number; resolved: number } | null;
 };
 
 async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
   const supabase = createClient();
+
   const { data, error } = await supabase
-    .from("asset_accuracy")
-    .select("asset_type, total_signals, win_rate, wins, losses, neutrals");
+    .from("signals")
+    .select("asset_type, outcome, created_at")
+    .in("outcome", ["WIN", "LOSS"])
+    .gte("created_at", ENGINE_CUTOFF);
 
   if (error || !data || data.length === 0) {
-    console.error("asset_accuracy fetch error:", error?.message);
     return null;
   }
 
-  const rows = data as AssetAccuracy[];
-  const totalWins = rows.reduce((s, r) => s + (r.wins ?? 0), 0);
-  const totalLosses = rows.reduce((s, r) => s + (r.losses ?? 0), 0);
-  const totalResolved = totalWins + totalLosses;
-  const overallWinRate = totalResolved > 0 ? totalWins / totalResolved : 0;
+  let totalWins = 0;
+  let totalLosses = 0;
+  const assetGrouped = new Map<string, { wins: number; losses: number }>();
+  const monthGrouped = new Map<string, { wins: number; losses: number }>();
 
-  const grouped = new Map<string, { wins: number; losses: number }>();
-  for (const r of rows) {
-    const key = r.asset_type ?? "unknown";
-    const g = grouped.get(key) ?? { wins: 0, losses: 0 };
-    g.wins += r.wins ?? 0;
-    g.losses += r.losses ?? 0;
-    grouped.set(key, g);
+  const now = new Date();
+  const yesterdayStr = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  let ydayWins = 0;
+  let ydayLosses = 0;
+
+  for (const row of data) {
+    const isWin = row.outcome === "WIN";
+    if (isWin) totalWins++;
+    else totalLosses++;
+
+    const assetKey = row.asset_type ?? "unknown";
+    const ag = assetGrouped.get(assetKey) ?? { wins: 0, losses: 0 };
+    if (isWin) ag.wins++;
+    else ag.losses++;
+    assetGrouped.set(assetKey, ag);
+
+    const monthKey = (row.created_at as string).slice(0, 7);
+    const mg = monthGrouped.get(monthKey) ?? { wins: 0, losses: 0 };
+    if (isWin) mg.wins++;
+    else mg.losses++;
+    monthGrouped.set(monthKey, mg);
+
+    const dayStr = (row.created_at as string).slice(0, 10);
+    if (dayStr === yesterdayStr) {
+      if (isWin) ydayWins++;
+      else ydayLosses++;
+    }
   }
 
-  const byAssetClass = Array.from(grouped.entries()).map(([asset_type, g]) => {
+  const totalResolved = totalWins + totalLosses;
+  if (totalResolved < 3) return null;
+  const overallWinRate = totalWins / totalResolved;
+
+  const byAssetClass = Array.from(assetGrouped.entries()).map(([asset_type, g]) => {
     const resolved = g.wins + g.losses;
-    return {
-      asset_type,
-      winRate: resolved > 0 ? g.wins / resolved : 0,
-      resolved,
-    };
+    return { asset_type, winRate: resolved > 0 ? g.wins / resolved : 0, resolved };
   });
 
-  return { overallWinRate, totalResolved, totalWins, totalLosses, byAssetClass };
+  const byMonth = Array.from(monthGrouped.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, g]) => {
+      const resolved = g.wins + g.losses;
+      return { month, wins: g.wins, losses: g.losses, winRate: resolved > 0 ? g.wins / resolved : 0 };
+    });
+
+  const ydayResolved = ydayWins + ydayLosses;
+  const yesterday = ydayResolved > 0
+    ? { wins: ydayWins, losses: ydayLosses, winRate: ydayWins / ydayResolved, resolved: ydayResolved }
+    : null;
+
+  return { overallWinRate, totalResolved, totalWins, totalLosses, byAssetClass, byMonth, yesterday };
 }
 
 async function fetchSignals(): Promise<Signal[]> {
@@ -79,18 +107,29 @@ async function fetchSignals(): Promise<Signal[]> {
 
 async function fetchTopMovers() {
   const supabase = createClient();
-  const { data } = await supabase
-    .from("raw_prices")
-    .select("identifier, asset_type, price, change_24h")
-    .not("change_24h", "is", null)
-    .neq("identifier", "MARKET_SENTIMENT")
-    .order("captured_at", { ascending: false })
-    .limit(80);
 
-  if (!data) return [];
+  const [stockRes, cryptoRes] = await Promise.all([
+    supabase
+      .from("raw_prices")
+      .select("identifier, asset_type, price, change_24h")
+      .eq("asset_type", "stock")
+      .not("change_24h", "is", null)
+      .neq("identifier", "MARKET_SENTIMENT")
+      .order("captured_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("raw_prices")
+      .select("identifier, asset_type, price, change_24h")
+      .eq("asset_type", "crypto")
+      .not("change_24h", "is", null)
+      .order("captured_at", { ascending: false })
+      .limit(50),
+  ]);
 
-  const seen = new Map<string, typeof data[0]>();
-  for (const row of data) {
+  const allData = [...(stockRes.data ?? []), ...(cryptoRes.data ?? [])];
+
+  const seen = new Map<string, typeof allData[0]>();
+  for (const row of allData) {
     if (!seen.has(row.identifier)) seen.set(row.identifier, row);
   }
 
@@ -130,50 +169,73 @@ export default async function DashboardPage() {
       {/* Platform accuracy */}
       {accuracy && (
         <section>
-          <SectionHeader>Platform accuracy</SectionHeader>
-          <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4 flex flex-wrap gap-x-6 gap-y-3 items-baseline">
-            <div>
-              <span
-                className={`text-2xl font-bold tabular-nums ${
-                  accuracy.overallWinRate * 100 >= 60
-                    ? "text-emerald-400"
-                    : accuracy.overallWinRate * 100 >= 45
-                    ? "text-amber-400"
-                    : "text-red-400"
-                }`}
-              >
-                {(accuracy.overallWinRate * 100).toFixed(1)}%
-              </span>
-              <span className="text-xs text-zinc-500 ml-1.5">win rate</span>
-            </div>
-            <div>
-              <span className="text-lg font-semibold text-white tabular-nums">
-                {accuracy.totalResolved}
-              </span>
-              <span className="text-xs text-zinc-500 ml-1.5">resolved</span>
-            </div>
-            <span className="text-white/10">|</span>
-            {accuracy.byAssetClass.map((a) => (
-              <div key={a.asset_type} className="flex items-baseline gap-1.5">
-                <span className="text-xs text-zinc-400 capitalize">
-                  {a.asset_type}
+          <SectionHeader>Signal track record</SectionHeader>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Overall */}
+            <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4">
+              <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Overall</div>
+              <div className="flex items-baseline gap-2">
+                <span className={`text-2xl font-bold tabular-nums ${rateColor(accuracy.overallWinRate)}`}>
+                  {(accuracy.overallWinRate * 100).toFixed(1)}%
                 </span>
-                <span
-                  className={`text-sm font-semibold tabular-nums ${
-                    a.winRate * 100 >= 60
-                      ? "text-emerald-400"
-                      : a.winRate * 100 >= 45
-                      ? "text-amber-400"
-                      : "text-red-400"
-                  }`}
-                >
-                  {(a.winRate * 100).toFixed(1)}%
-                </span>
-                <span className="text-xs text-zinc-600">
-                  ({a.resolved})
-                </span>
+                <span className="text-xs text-zinc-500">win rate</span>
               </div>
-            ))}
+              <div className="text-xs text-zinc-500 mt-1">
+                {accuracy.totalWins}W – {accuracy.totalLosses}L · {accuracy.totalResolved} resolved
+              </div>
+            </div>
+
+            {/* Yesterday */}
+            {accuracy.yesterday && (
+              <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4">
+                <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Yesterday</div>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-2xl font-bold tabular-nums ${rateColor(accuracy.yesterday.winRate)}`}>
+                    {(accuracy.yesterday.winRate * 100).toFixed(0)}%
+                  </span>
+                  <span className="text-xs text-zinc-500">win rate</span>
+                </div>
+                <div className="text-xs text-zinc-500 mt-1">
+                  {accuracy.yesterday.wins}W – {accuracy.yesterday.losses}L
+                </div>
+              </div>
+            )}
+
+            {/* By asset class */}
+            <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4">
+              <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">By asset</div>
+              <div className="space-y-1.5">
+                {accuracy.byAssetClass.map((a) => (
+                  <div key={a.asset_type} className="flex items-baseline justify-between">
+                    <span className="text-xs text-zinc-400 capitalize">{a.asset_type}</span>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className={`text-sm font-semibold tabular-nums ${rateColor(a.winRate)}`}>
+                        {(a.winRate * 100).toFixed(1)}%
+                      </span>
+                      <span className="text-[10px] text-zinc-600">({a.resolved})</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Month over month */}
+            {accuracy.byMonth.length > 0 && (
+              <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4 sm:col-span-2 lg:col-span-3">
+                <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Month over month</div>
+                <div className="flex gap-4 overflow-x-auto scrollbar-none">
+                  {accuracy.byMonth.map((m) => (
+                    <div key={m.month} className="flex-shrink-0 min-w-[80px]">
+                      <div className="text-xs text-zinc-400 font-mono">{m.month}</div>
+                      <div className={`text-lg font-bold tabular-nums ${rateColor(m.winRate)}`}>
+                        {(m.winRate * 100).toFixed(0)}%
+                      </div>
+                      <div className="text-[10px] text-zinc-600">{m.wins}W – {m.losses}L</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -221,6 +283,12 @@ export default async function DashboardPage() {
       </section>
     </div>
   );
+}
+
+function rateColor(rate: number): string {
+  if (rate >= 0.6) return "text-emerald-400";
+  if (rate >= 0.45) return "text-amber-400";
+  return "text-red-400";
 }
 
 function SectionHeader({ children }: { children: React.ReactNode }) {

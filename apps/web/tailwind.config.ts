@@ -17,7 +17,7 @@ const config: Config = {
         mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
       },
       animation: {
-        marquee: "marquee 50s linear infinite",
+        marquee: "marquee 80s linear infinite",
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
       },
       keyframes: {

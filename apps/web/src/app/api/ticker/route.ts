@@ -172,31 +172,32 @@ async function liveCrypto(): Promise<TickerItem[]> {
   }
 }
 
+function isMarketOpen(): boolean {
+  const now = new Date();
+  const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const day = et.getDay();
+  if (day === 0 || day === 6) return false;
+  const mins = et.getHours() * 60 + et.getMinutes();
+  return mins >= 570 && mins < 960;
+}
+
 export async function GET() {
-  let items: TickerItem[] = [];
+  const marketOpen = isMarketOpen();
 
-  try {
-    items = await fromRawPrices();
-  } catch {
-    // fall through
+  const [rawItems, liveStockItems, liveCryptoItems] = await Promise.all([
+    fromRawPrices().catch(() => [] as TickerItem[]),
+    marketOpen ? liveStocks().catch(() => [] as TickerItem[]) : Promise.resolve([]),
+    liveCrypto().catch(() => [] as TickerItem[]),
+  ]);
+
+  const merged = new Map<string, TickerItem>();
+
+  for (const item of rawItems) {
+    merged.set(item.identifier, item);
+  }
+  for (const item of [...liveStockItems, ...liveCryptoItems]) {
+    merged.set(item.identifier, item);
   }
 
-  const have = new Set(items.map((i) => i.identifier));
-  const needStocks = TOP_STOCKS.some((s) => !have.has(s));
-  const needCrypto = TOP_CRYPTO.some((s) => !have.has(s));
-
-  if (needStocks || needCrypto) {
-    const [stocks, crypto] = await Promise.all([
-      needStocks ? liveStocks() : Promise.resolve([]),
-      needCrypto ? liveCrypto() : Promise.resolve([]),
-    ]);
-    for (const item of [...stocks, ...crypto]) {
-      if (!have.has(item.identifier)) {
-        items.push(item);
-        have.add(item.identifier);
-      }
-    }
-  }
-
-  return NextResponse.json({ items });
+  return NextResponse.json({ items: Array.from(merged.values()) });
 }
