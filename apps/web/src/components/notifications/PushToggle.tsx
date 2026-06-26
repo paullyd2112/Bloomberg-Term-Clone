@@ -135,8 +135,8 @@ export default function PushToggle() {
           disabled={state === "working"}
           className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex-shrink-0 ${
             state === "on"
-              ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-              : "bg-green-600 text-white hover:bg-green-500"
+              ? "bg-white/[0.06] border border-white/[0.1] text-zinc-300 hover:bg-white/[0.1]"
+              : "bg-emerald-500 text-black hover:bg-emerald-400"
           } disabled:opacity-50`}
         >
           {state === "working" ? "…" : state === "on" ? "Disable" : "Enable"}

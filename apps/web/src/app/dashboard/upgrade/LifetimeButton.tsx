@@ -34,7 +34,7 @@ export default function LifetimeButton({
     <button
       onClick={handleCheckout}
       disabled={loading}
-      className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold text-sm py-2.5 rounded-lg transition-colors"
+      className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold text-sm py-2.5 rounded-xl transition-colors"
     >
       {loading ? "Redirecting…" : "Get lifetime access →"}
     </button>

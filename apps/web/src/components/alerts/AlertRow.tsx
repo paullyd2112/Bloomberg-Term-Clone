@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
+import { Zap, Target, Newspaper, X, Loader2, type LucideIcon } from "lucide-react";
 
 type Alert = {
   id: number;
@@ -16,10 +17,10 @@ type Alert = {
   last_fired_at: string | null;
 };
 
-const TRIGGER_ICON: Record<string, string> = {
-  signal_fired:    "⚡",
-  price_threshold: "◎",
-  news_drop:       "📰",
+const TRIGGER_ICON: Record<string, LucideIcon> = {
+  signal_fired:    Zap,
+  price_threshold: Target,
+  news_drop:       Newspaper,
 };
 
 const TRIGGER_LABEL: Record<string, string> = {
@@ -46,11 +47,13 @@ export default function AlertRow({ alert }: { alert: Alert }) {
     router.refresh();
   }
 
+  const Icon = TRIGGER_ICON[alert.trigger_type];
+
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 border-b border-zinc-800 last:border-0 group transition-colors ${alert.is_active ? "" : "opacity-50"}`}>
+    <div className={`flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] last:border-0 group transition-colors hover:bg-white/[0.03] ${alert.is_active ? "" : "opacity-50"}`}>
       {/* Icon */}
-      <span className="text-base flex-shrink-0 w-6 text-center">
-        {TRIGGER_ICON[alert.trigger_type]}
+      <span className="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.04] text-emerald-400">
+        <Icon className="h-4 w-4" />
       </span>
 
       {/* Asset */}
@@ -58,7 +61,7 @@ export default function AlertRow({ alert }: { alert: Alert }) {
         <div className="flex items-center gap-2 flex-wrap">
           <Link
             href={`/dashboard/asset/${alert.asset_type}/${encodeURIComponent(alert.identifier)}`}
-            className="font-mono font-semibold text-white text-sm hover:text-green-400 transition-colors"
+            className="font-mono font-semibold text-white text-sm hover:text-emerald-400 transition-colors"
           >
             {alert.identifier}
           </Link>
@@ -85,10 +88,10 @@ export default function AlertRow({ alert }: { alert: Alert }) {
         <button
           onClick={handleToggle}
           disabled={toggling}
-          className={`text-xs font-medium px-2.5 py-1 rounded border transition-colors ${
+          className={`text-xs font-medium px-2.5 py-1 rounded-md border transition-colors ${
             alert.is_active
-              ? "border-green-700 text-green-400 hover:bg-green-950/30"
-              : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+              ? "border-emerald-700/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+              : "border-white/[0.1] text-zinc-500 hover:border-white/20 hover:text-zinc-300"
           } disabled:opacity-50`}
         >
           {toggling ? "…" : alert.is_active ? "Active" : "Paused"}
@@ -96,9 +99,13 @@ export default function AlertRow({ alert }: { alert: Alert }) {
         <button
           onClick={handleDelete}
           disabled={deleting}
-          className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-all text-sm px-1"
+          className="flex items-center justify-center opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-all px-1"
         >
-          {deleting ? "…" : "✕"}
+          {deleting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <X className="h-3.5 w-3.5" />
+          )}
         </button>
       </div>
     </div>

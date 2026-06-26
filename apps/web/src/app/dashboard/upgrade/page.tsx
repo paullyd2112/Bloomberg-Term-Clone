@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { getUserTier, getUserProfile } from "@/lib/user";
 import { TIER_FEATURES } from "@/lib/tier";
 import UpgradeButtons from "./UpgradeButtons";
@@ -49,7 +50,7 @@ export default async function UpgradePage() {
             <ul className="space-y-2 flex-1">
               {TIER_FEATURES.pro.map((f) => (
                 <li key={f} className="flex items-start gap-2.5 text-xs text-zinc-300">
-                  <span className="text-emerald-400 mt-0.5 flex-shrink-0">✓</span>
+                  <Check className="h-3.5 w-3.5 text-emerald-400 mt-0.5 flex-shrink-0" />
                   {f}
                 </li>
               ))}
@@ -79,7 +80,7 @@ export default async function UpgradePage() {
             <ul className="space-y-2 flex-1">
               {TIER_FEATURES.elite.map((f) => (
                 <li key={f} className="flex items-start gap-2.5 text-xs text-zinc-300">
-                  <span className="text-emerald-400 mt-0.5 flex-shrink-0">✓</span>
+                  <Check className="h-3.5 w-3.5 text-emerald-400 mt-0.5 flex-shrink-0" />
                   {f}
                 </li>
               ))}
@@ -189,7 +190,7 @@ function PlanCard({
       <ul className="space-y-2 flex-1">
         {features.map((f) => (
           <li key={f} className="flex items-start gap-2.5 text-xs text-zinc-300">
-            <span className="text-emerald-400 mt-0.5 flex-shrink-0">✓</span>
+            <Check className="h-3.5 w-3.5 text-emerald-400 mt-0.5 flex-shrink-0" />
             {f}
           </li>
         ))}

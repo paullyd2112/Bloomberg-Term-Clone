@@ -3,6 +3,7 @@ import { getUserTier } from "@/lib/user";
 import { canAccessFeature } from "@/lib/tier";
 import { format } from "date-fns";
 import Link from "next/link";
+import { Sunrise, ArrowRight } from "lucide-react";
 
 export const revalidate = 300;
 
@@ -33,18 +34,18 @@ type Briefing = {
 };
 
 const TONE_STYLE = {
-  opportunistic: "bg-green-500/15 text-green-400 border-green-700",
-  volatile:      "bg-amber-500/15 text-amber-400 border-amber-700",
-  cautious:      "bg-red-500/15 text-red-400 border-red-700",
-  quiet:         "bg-zinc-700/40 text-zinc-400 border-zinc-600",
+  opportunistic: "bg-emerald-500/15 text-emerald-400 border-emerald-700/40",
+  volatile:      "bg-amber-500/15 text-amber-400 border-amber-700/40",
+  cautious:      "bg-red-500/15 text-red-400 border-red-700/40",
+  quiet:         "bg-white/[0.06] text-zinc-400 border-white/[0.1]",
 };
 
 const DIR_STYLE: Record<string, string> = {
-  BUY:  "bg-green-500/20 text-green-400 border-green-700",
-  YES:  "bg-green-500/20 text-green-400 border-green-700",
-  SELL: "bg-red-500/20 text-red-400 border-red-700",
-  NO:   "bg-red-500/20 text-red-400 border-red-700",
-  HOLD: "bg-zinc-700/40 text-zinc-400 border-zinc-600",
+  BUY:  "bg-emerald-500/20 text-emerald-400 border-emerald-700/40",
+  YES:  "bg-emerald-500/20 text-emerald-400 border-emerald-700/40",
+  SELL: "bg-red-500/20 text-red-400 border-red-700/40",
+  NO:   "bg-red-500/20 text-red-400 border-red-700/40",
+  HOLD: "bg-white/[0.06] text-zinc-400 border-white/[0.1]",
 };
 
 async function fetchBriefings(): Promise<Briefing[]> {
@@ -64,17 +65,20 @@ export default async function BriefingPage() {
   if (!hasBriefingAccess) {
     return (
       <div className="p-6 max-w-2xl mx-auto">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-8 text-center space-y-4">
-          <div className="text-3xl">☀️</div>
-          <h2 className="text-white font-semibold text-lg">Morning Briefing</h2>
-          <p className="text-zinc-400 text-sm leading-relaxed">
+        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-2xl p-8 text-center flex flex-col items-center gap-4">
+          <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-700/30 bg-amber-500/10 text-amber-400">
+            <Sunrise className="h-6 w-6" />
+          </span>
+          <h2 className="text-white font-semibold text-lg tracking-tight">Morning Briefing</h2>
+          <p className="text-zinc-400 text-sm leading-relaxed max-w-md">
             A daily AI-generated market brief lands in your inbox at 8:45am ET — covering top signals, macro context, and prediction market edge. Pro and Elite only.
           </p>
           <Link
             href="/dashboard/upgrade"
-            className="inline-block bg-green-500 hover:bg-green-400 text-black font-semibold text-sm px-5 py-2.5 rounded transition-colors"
+            className="inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm px-5 py-2.5 rounded-lg transition-colors"
           >
-            Upgrade to Pro →
+            Upgrade to Pro
+            <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </div>
@@ -93,22 +97,25 @@ export default async function BriefingPage() {
   const content = latest.content_json;
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
+    <div className="p-5 md:p-8 max-w-3xl mx-auto space-y-6">
       {/* Header */}
       <div className="space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-amber-700/30 bg-amber-500/10 text-amber-400">
+            <Sunrise className="h-3.5 w-3.5" />
+          </span>
           <span className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
             {format(new Date(latest.date), "EEEE, MMMM d, yyyy")}
           </span>
           <span
-            className={`text-xs font-bold px-2 py-0.5 rounded border capitalize ${
+            className={`text-xs font-bold px-2 py-0.5 rounded-md border capitalize ${
               TONE_STYLE[latest.day_tone] ?? TONE_STYLE.quiet
             }`}
           >
             {latest.day_tone}
           </span>
         </div>
-        <h1 className="text-xl md:text-2xl font-bold text-white leading-snug">
+        <h1 className="text-xl md:text-2xl font-semibold text-white leading-snug tracking-tight text-balance">
           {latest.headline}
         </h1>
       </div>
@@ -124,13 +131,13 @@ export default async function BriefingPage() {
           {content.top_trades.map((t, i) => (
             <div
               key={i}
-              className="flex items-start gap-3 bg-zinc-800/50 rounded-lg px-3 py-2.5"
+              className="flex items-start gap-3 bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2.5"
             >
               <span className="font-mono font-bold text-white text-sm flex-shrink-0">
                 {t.identifier}
               </span>
               <span
-                className={`flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded border ${
+                className={`flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-md border ${
                   DIR_STYLE[t.direction] ?? DIR_STYLE.HOLD
                 }`}
               >
@@ -165,7 +172,7 @@ export default async function BriefingPage() {
           {content.watch_today.map((t) => (
             <span
               key={t}
-              className="font-mono text-xs font-semibold bg-zinc-800 border border-zinc-700 text-green-400 rounded px-2 py-1"
+              className="font-mono text-xs font-semibold bg-white/[0.04] border border-white/[0.1] text-emerald-400 rounded-md px-2 py-1"
             >
               {t}
             </span>
@@ -174,7 +181,7 @@ export default async function BriefingPage() {
       </Section>
 
       {/* Risk note */}
-      <div className="bg-zinc-900 border-l-2 border-amber-500 rounded-r-lg px-4 py-3">
+      <div className="bg-amber-500/[0.06] border border-white/[0.06] border-l-2 border-l-amber-500 rounded-r-xl px-4 py-3">
         <div className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-1">
           Risk note
         </div>
@@ -191,14 +198,14 @@ export default async function BriefingPage() {
             {briefings.slice(1).map((b) => (
               <div
                 key={b.id}
-                className="flex items-center justify-between text-sm text-zinc-400 hover:text-white transition-colors py-1.5 border-b border-zinc-800"
+                className="flex items-center justify-between text-sm text-zinc-400 hover:text-white transition-colors py-1.5 border-b border-white/[0.06]"
               >
                 <span className="text-xs text-zinc-500">
                   {format(new Date(b.date), "MMM d")}
                 </span>
                 <span className="flex-1 mx-3 truncate">{b.headline}</span>
                 <span
-                  className={`text-xs px-1.5 py-0.5 rounded border ${
+                  className={`text-xs px-1.5 py-0.5 rounded-md border capitalize ${
                     TONE_STYLE[b.day_tone] ?? TONE_STYLE.quiet
                   }`}
                 >
@@ -221,8 +228,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-2">
-      <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">{label}</div>
+    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-2">
+      <div className="flex items-center gap-2.5 font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em]">
+        <span className="text-emerald-400 text-[10px] leading-none">●</span>
+        {label}
+      </div>
       {children}
     </div>
   );

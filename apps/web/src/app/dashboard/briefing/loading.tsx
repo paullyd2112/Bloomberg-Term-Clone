@@ -11,7 +11,7 @@ export default function BriefingLoading() {
 
       {/* Sections */}
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-2">
+        <div key={i} className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-2">
           <Skeleton className="h-3 w-28" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-5/6" />
