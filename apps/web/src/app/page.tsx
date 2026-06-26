@@ -37,6 +37,7 @@ function Nav() {
           <a href="#terminal" className="hover:text-white transition-colors">The terminal</a>
           <a href="#proof" className="hover:text-white transition-colors">Results</a>
           <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
+          <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
         </div>
 
         <div className="flex items-center gap-1 sm:gap-3">
@@ -415,6 +416,55 @@ function Pricing() {
   );
 }
 
+// ─── FAQ ─────────────────────────────────────────────────────────────────────
+
+const FAQS = [
+  {
+    q: "What exactly is Plebs?",
+    a: "Plebs is an AI-powered trading terminal for retail investors. We run models across stocks, crypto, and options flow to generate real-time BUY/SELL signals with confidence scores and full reasoning. Think Bloomberg Terminal meets AI analyst, priced for normal people.",
+  },
+  {
+    q: "Is this financial advice?",
+    a: "No. Plebs provides AI-generated market analysis for informational purposes only. We surface signals and data, but every trade decision is yours. Always do your own research.",
+  },
+  {
+    q: "How does the free trial work?",
+    a: "You get 14 days of full access to your chosen plan (Pro or Elite). Credit card is required upfront. Cancel anytime during the trial and you won't be charged.",
+  },
+  {
+    q: "What markets do you cover?",
+    a: "Stocks, crypto, and unusual options flow today. Prediction markets (Polymarket, Kalshi) are coming soon on the Elite plan. We track 60+ assets and expanding.",
+  },
+  {
+    q: "How accurate are the signals?",
+    a: "Every signal is tracked to outcome. You can see real win rates per ticker on the dashboard. No cherry-picking, no hiding misses. Full transparency is the whole point.",
+  },
+];
+
+function FAQ() {
+  return (
+    <section id="faq" className="py-24 px-5 sm:px-8">
+      <div className="max-w-3xl mx-auto">
+        <div className="mb-14">
+          <SectionLabel index="04">FAQ</SectionLabel>
+          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tight">
+            Common questions
+          </h2>
+        </div>
+
+        <div className="space-y-px rounded-2xl overflow-hidden border border-white/[0.06]">
+          {FAQS.map((faq) => (
+            <div key={faq.q} className="bg-zinc-950 p-6 sm:p-7">
+              <h3 className="text-white font-medium text-[15px]">{faq.q}</h3>
+              <p className="text-zinc-400 text-sm leading-relaxed mt-2">{faq.a}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ─── CTA strip ────────────────────────────────────────────────────────────────
 
 function CTAStrip() {
@@ -499,6 +549,7 @@ export default function LandingPage() {
         <Features />
         <SocialProof />
         <Pricing />
+        <FAQ />
         <CTAStrip />
       </main>
       <Footer />
