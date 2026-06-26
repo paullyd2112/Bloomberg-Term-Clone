@@ -97,10 +97,24 @@ export default function SignalCard({ signal }: { signal: Signal }) {
         </span>
       </div>
 
-      {/* Reasoning */}
-      <p className="text-sm text-zinc-300 leading-relaxed line-clamp-3">
+      {/* Reasoning — clickable to asset page */}
+      <Link
+        href={`/dashboard/asset/${signal.asset_type}/${encodeURIComponent(signal.identifier)}`}
+        className="block text-sm text-zinc-300 leading-relaxed line-clamp-3 hover:text-zinc-100 transition-colors cursor-pointer"
+      >
         {signal.reasoning}
-      </p>
+      </Link>
+
+      {/* News context */}
+      {signal.news_context && signal.news_context.length > 0 && (
+        <div className="space-y-1">
+          {signal.news_context.slice(0, 3).map((item, i) => (
+            <p key={i} className="text-[11px] text-zinc-500 leading-snug truncate">
+              • {item}
+            </p>
+          ))}
+        </div>
+      )}
 
       {/* Footer */}
       <div className="flex items-center justify-between gap-2 pt-1">
@@ -116,14 +130,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          {signal.news_context && signal.news_context.length > 0 && (
-            <span className="text-[11px] text-zinc-600">
-              {signal.news_context.length} news item{signal.news_context.length > 1 ? "s" : ""}
-            </span>
-          )}
-          <ShareButton signalId={signal.id} />
-        </div>
+        <ShareButton signalId={signal.id} />
       </div>
 
       {/* Disclaimer */}
