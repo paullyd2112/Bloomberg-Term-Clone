@@ -16,7 +16,7 @@ export default async function UpgradePage() {
         <h1 className="text-xl font-bold text-white">Plans &amp; Billing</h1>
         <p className="text-sm text-zinc-400 mt-1">
           {tier === "free"
-            ? "Your trial has ended. Subscribe to keep access."
+            ? "Pick a plan to start your 14-day free trial."
             : <>You&apos;re on the <span className="text-white capitalize font-medium">{tier}</span> plan.</>}
         </p>
       </div>

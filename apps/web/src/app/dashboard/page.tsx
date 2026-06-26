@@ -115,7 +115,8 @@ export default async function DashboardPage() {
   const pending   = signals.filter((s) => s.outcome === "PENDING").length;
 
   if (tier === "free") {
-    return <SubscribeGate />;
+    const { redirect } = await import("next/navigation");
+    redirect("/dashboard/upgrade");
   }
 
   return (

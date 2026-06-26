@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export default function SubscribeGate({ message = "Your trial has ended." }: { message?: string }) {
+export default function SubscribeGate({ message = "Subscribe to access this feature." }: { message?: string }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center gap-5">
       <div className="text-4xl">🔒</div>
