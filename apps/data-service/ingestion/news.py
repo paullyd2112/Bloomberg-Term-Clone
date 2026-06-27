@@ -13,6 +13,7 @@ from loguru import logger
 from dotenv import load_dotenv
 
 from supabase_client import supabase
+from ingestion.trusted_sources import is_trusted_source
 
 load_dotenv()
 
@@ -60,6 +61,9 @@ def ingest_news() -> str:
 
             headline = (a.get("headline") or "").strip()
             if not headline:
+                continue
+
+            if not is_trusted_source(a.get("source", "")):
                 continue
 
             related = a.get("related", "")

@@ -392,12 +392,14 @@ def _write_signal(asset_type: str, identifier: str, price: float | None, signal)
 
 # ─── Core scoring function ────────────────────────────────────────────────────
 
-def score_asset(asset_type: str, identifier: str) -> dict | None:
+def score_asset(asset_type: str, identifier: str, model_override: str | None = None) -> dict | None:
     """
     Build context from Supabase, call Claude via Instructor,
     write validated signal. Returns signal dict or None if skipped.
     """
     # Skip if scored recently
+    use_model = model_override or MODEL
+
     if _signal_exists_recently(asset_type, identifier):
         logger.debug("{}/{}: skipping — scored within {}h", asset_type, identifier, SIGNAL_COOLDOWN_H)
         return None
@@ -438,7 +440,7 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
                 "upcoming_macro":       macro_events,
             }
             signal: StockSignal = client.chat.completions.create(
-                model=MODEL,
+                model=use_model,
                 max_tokens=MAX_TOKENS,
                 system=[{"type": "text", "text": stocks_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": stocks_prompt.build_user_prompt(context)}],
@@ -458,7 +460,7 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
                 "upcoming_macro":      macro_events,
             }
             signal: CryptoSignal = client.chat.completions.create(
-                model=MODEL,
+                model=use_model,
                 max_tokens=MAX_TOKENS,
                 system=[{"type": "text", "text": crypto_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": crypto_prompt.build_user_prompt(context)}],
@@ -476,7 +478,7 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
                 "news_headlines": news,
             }
             signal: PredictionSignal = client.chat.completions.create(
-                model=MODEL,
+                model=use_model,
                 max_tokens=MAX_TOKENS,
                 system=[{"type": "text", "text": pred_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": pred_prompt.build_user_prompt(context)}],
