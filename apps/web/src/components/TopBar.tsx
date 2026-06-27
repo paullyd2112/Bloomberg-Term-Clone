@@ -33,10 +33,6 @@ export default function TopBar({ user, tier }: { user: User; tier: Tier }) {
       </div>
 
       <div className="flex items-center gap-2 flex-shrink-0">
-        <span className="hidden md:block font-mono text-[11px] text-zinc-500 truncate max-w-[180px]">
-          {user.email}
-        </span>
-        <span className="hidden md:block h-4 w-px bg-white/[0.08]" />
         <a
           href="/dashboard/settings"
           className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-white rounded-lg px-2 py-1.5 hover:bg-white/[0.04] transition-colors"

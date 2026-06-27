@@ -153,6 +153,7 @@ export default async function HistoryPage({
   const avgReturn  = allReturns.length > 0 ? allReturns.reduce((a, b) => a + b, 0) / allReturns.length : null;
 
   // --- YTD ---
+  const now = new Date();
   const ytdStart = `${now.getFullYear()}-01-01`;
   const ytdSignals = signals.filter((s) => s.created_at >= ytdStart);
   const ytdStats = computePeriodStats(ytdSignals, "YTD");

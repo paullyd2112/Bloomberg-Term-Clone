@@ -43,6 +43,10 @@ def _fetch_senate() -> list[dict]:
                 params={"page": page, "apikey": FMP_KEY},
                 timeout=30,
             )
+            if resp.status_code in (401, 403):
+                logger.error("congressional: FMP API key invalid or expired (HTTP {})", resp.status_code)
+                sentry_sdk.capture_message(f"FMP_API_KEY invalid/expired: HTTP {resp.status_code}")
+                return []
             resp.raise_for_status()
             data: list[dict] = resp.json() or []
             if not data:
@@ -68,6 +72,10 @@ def _fetch_house() -> list[dict]:
                 params={"page": page, "apikey": FMP_KEY},
                 timeout=30,
             )
+            if resp.status_code in (401, 403):
+                logger.error("congressional: FMP API key invalid or expired (HTTP {})", resp.status_code)
+                sentry_sdk.capture_message(f"FMP_API_KEY invalid/expired: HTTP {resp.status_code}")
+                return []
             resp.raise_for_status()
             data: list[dict] = resp.json() or []
             if not data:

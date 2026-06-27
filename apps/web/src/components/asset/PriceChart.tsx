@@ -70,6 +70,9 @@ export default function PriceChart({
     );
     chart.timeScale().fitContent();
 
+    const logo = containerRef.current.querySelector("#tv-attr-logo");
+    if (logo) logo.remove();
+
     const handleResize = () => {
       if (containerRef.current) {
         const h = containerRef.current.clientWidth < 500 ? 220 : 280;

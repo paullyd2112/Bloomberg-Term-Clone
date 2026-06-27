@@ -332,8 +332,9 @@ function MessageBubble({ role, content }: { role: "user" | "assistant"; content:
   return (
     <div className={`flex items-end gap-2.5 ${role === "user" ? "justify-end" : "justify-start"}`}>
       {role === "assistant" && (
-        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mb-0.5">
-          <span className="text-xs font-bold text-emerald-400">P</span>
+        <div className="flex-shrink-0 w-7 h-7 rounded-full overflow-hidden mb-0.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/pleby-mascot.png" alt="Pleby" className="w-full h-full object-cover" />
         </div>
       )}
       <div

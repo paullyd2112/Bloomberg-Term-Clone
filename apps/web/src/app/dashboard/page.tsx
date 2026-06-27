@@ -104,7 +104,7 @@ async function fetchSignals(): Promise<Signal[]> {
     .eq("is_backtest", false)
     .gte("created_at", ENGINE_CUTOFF)
     .order("created_at", { ascending: false })
-    .limit(60);
+    .limit(200);
   if (error) {
     console.error("fetchSignals error:", error.message);
     return [];

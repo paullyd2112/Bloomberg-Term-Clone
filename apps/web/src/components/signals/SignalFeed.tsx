@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { clsx } from "clsx";
 import { Target } from "lucide-react";
 import SignalCard, { type Signal } from "./SignalCard";
@@ -12,19 +12,55 @@ const TABS = [
   { id: "prediction", label: "Predictions" },
 ] as const;
 
+const PERIODS = [
+  { id: "today", label: "Today" },
+  { id: "week",  label: "This week" },
+  { id: "month", label: "This month" },
+  { id: "all",   label: "All time" },
+] as const;
+
 type Tab = (typeof TABS)[number]["id"];
+type Period = (typeof PERIODS)[number]["id"];
+
+function getPeriodCutoff(period: Period): Date {
+  const now = new Date();
+  switch (period) {
+    case "today": {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case "week": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 7);
+      return d;
+    }
+    case "month": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 30);
+      return d;
+    }
+    default:
+      return new Date(0);
+  }
+}
 
 export default function SignalFeed({ signals }: { signals: Signal[] }) {
   const [activeTab, setActiveTab] = useState<Tab>("all");
+  const [activePeriod, setActivePeriod] = useState<Period>("all");
 
-  const filtered =
-    activeTab === "all"
-      ? signals.filter((s) => s.asset_type !== "prediction")
-      : signals.filter((s) => s.asset_type === activeTab);
+  const filtered = useMemo(() => {
+    const cutoff = getPeriodCutoff(activePeriod);
+    return signals.filter((s) => {
+      const matchesType = activeTab === "all" ? s.asset_type !== "prediction" : s.asset_type === activeTab;
+      const matchesPeriod = new Date(s.created_at) >= cutoff;
+      return matchesType && matchesPeriod;
+    });
+  }, [signals, activeTab, activePeriod]);
 
   return (
     <div className="space-y-4">
-      {/* Tabs */}
+      {/* Asset type tabs */}
       <div className="flex items-center gap-1 border-b border-white/[0.08] pb-0 overflow-x-auto scrollbar-none">
         {TABS.map((tab) => (
           <button
@@ -50,6 +86,30 @@ export default function SignalFeed({ signals }: { signals: Signal[] }) {
                   : signals.filter((s) => s.asset_type === tab.id).length}
               </span>
             )}
+          </button>
+        ))}
+      </div>
+
+      {/* Period filter */}
+      <div className="flex items-center gap-1.5">
+        {PERIODS.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setActivePeriod(p.id)}
+            className={clsx(
+              "text-xs px-3 py-1.5 rounded-lg border transition-colors",
+              activePeriod === p.id
+                ? "bg-white/[0.08] border-white/[0.12] text-white"
+                : "bg-transparent border-white/[0.06] text-zinc-500 hover:text-white hover:border-white/[0.1]",
+            )}
+          >
+            {p.label}
+            <span className="ml-1 text-zinc-600 tabular-nums">
+              {signals.filter((s) => {
+                const matchesType = activeTab === "all" ? s.asset_type !== "prediction" : s.asset_type === activeTab;
+                return matchesType && new Date(s.created_at) >= getPeriodCutoff(p.id);
+              }).length}
+            </span>
           </button>
         ))}
       </div>

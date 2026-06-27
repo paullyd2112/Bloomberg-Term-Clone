@@ -78,7 +78,7 @@ export async function POST(req: Request) {
       // Apply the coupon to the existing subscription
       await stripe.subscriptions.update(profile.stripe_subscription_id, {
         coupon: coupon.id,
-      });
+      } as any);
 
       // Mark offer as used so they can't do this again
       const admin = createAdminClient();

@@ -44,7 +44,7 @@ export async function POST() {
   await stripe.subscriptions.update(profile.stripe_subscription_id, {
     trial_end: "now",
     coupon: coupon.id,
-  });
+  } as any);
 
   return NextResponse.json({
     ok: true,
