@@ -21,6 +21,7 @@ from ingestion.earnings import ingest_earnings
 from ingestion.macro_events import seed_macro_events
 from ingestion.fred import enrich_macro_events
 from ingestion.news import ingest_news
+from ingestion.crypto_momentum import ingest_momentum_coins
 from scoring.engine import score_stocks, score_stocks_event_only, score_crypto, score_prediction_markets, score_options_flow
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
@@ -114,6 +115,9 @@ def job_score_options_flow():
 
 def job_ingest_news():
     return ingest_news()
+
+def job_crypto_momentum():
+    return ingest_momentum_coins()
 
 def job_generate_newsletter():
     return generate_newsletter()
@@ -267,6 +271,10 @@ scheduler.add_job(lambda: _run_job("ingest_crypto", job_ingest_crypto),
                   IntervalTrigger(hours=1), id="ingest_crypto")
 scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
                   CronTrigger(minute=20, hour="*"), id="score_crypto")
+
+# Crypto momentum screener — every 2 hours, catches pumps/breakouts outside watchlist
+scheduler.add_job(lambda: _run_job("crypto_momentum", job_crypto_momentum),
+                  CronTrigger(minute=45, hour="*/2"), id="crypto_momentum")
 
 # Options flow scoring — runs after flow ingestion, backtest-only until validated
 scheduler.add_job(lambda: _run_stock_job("score_options_flow", job_score_options_flow),
@@ -536,6 +544,50 @@ def score_now():
 @app.route("/score-now/status")
 def score_now_status():
     state = _job_state.get("score_now", {"status": "never_run"})
+    return jsonify(state)
+
+
+@app.route("/run-job/<job_name>", methods=["POST"])
+def run_job_manual(job_name: str):
+    """Manually trigger any registered job by name."""
+    import threading
+    import traceback
+
+    job_map = {
+        "ingest_congressional": job_ingest_congressional,
+        "ingest_insider_trades": job_ingest_insider_trades,
+        "resolve_outcomes": job_resolve_outcomes,
+        "refresh_asset_accuracy": job_refresh_asset_accuracy,
+        "ingest_news": job_ingest_news,
+        "ingest_stocks": job_ingest_stocks,
+        "ingest_crypto": job_ingest_crypto,
+        "score_stocks": job_score_stocks,
+        "score_crypto": job_score_crypto,
+        "crypto_momentum": job_crypto_momentum,
+    }
+
+    fn = job_map.get(job_name)
+    if not fn:
+        return jsonify({"error": f"Unknown job: {job_name}", "available": list(job_map.keys())}), 404
+
+    def _run():
+        try:
+            _job_state[f"manual_{job_name}"] = {"status": "running", "started": datetime.now(timezone.utc).isoformat()}
+            result = fn()
+            _job_state[f"manual_{job_name}"] = {"status": "ok", "result": str(result), "finished": datetime.now(timezone.utc).isoformat()}
+            logger.info("Manual {}: {}", job_name, result)
+        except Exception as e:
+            _job_state[f"manual_{job_name}"] = {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+            logger.error("Manual {} failed: {}", job_name, e)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return jsonify({"status": "started", "job": job_name, "check": f"/run-job/{job_name}/status"})
+
+
+@app.route("/run-job/<job_name>/status")
+def run_job_status(job_name: str):
+    state = _job_state.get(f"manual_{job_name}", {"status": "never_run"})
     return jsonify(state)
 
 

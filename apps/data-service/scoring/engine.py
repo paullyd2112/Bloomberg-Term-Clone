@@ -561,6 +561,11 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
         except (TypeError, ValueError):
             pass
 
+    # Skip low-value signals: HOLD with low confidence adds noise
+    if signal.direction == "HOLD" and signal.confidence < 50:
+        logger.debug("{}/{}: skipping low-confidence HOLD ({}%)", asset_type, identifier, signal.confidence)
+        return None
+
     # Write to Supabase
     try:
         record = _write_signal(asset_type, identifier, current_price, signal, news_with_urls)
