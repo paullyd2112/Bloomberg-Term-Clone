@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { History, ClipboardList, ArrowRight, TrendingUp, TrendingDown, BarChart3, Calendar, Target } from "lucide-react";
+import { History, ClipboardList, ArrowRight, TrendingUp, TrendingDown, BarChart3, Target } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserTier } from "@/lib/user";
 import SubscribeGate from "@/components/ui/SubscribeGate";
@@ -152,14 +152,6 @@ export default async function HistoryPage({
   const allReturns = signals.map(computeReturn).filter((r): r is number => r !== null);
   const avgReturn  = allReturns.length > 0 ? allReturns.reduce((a, b) => a + b, 0) / allReturns.length : null;
 
-  const cutoffDate = new Date(ENGINE_CUTOFF);
-  const now = new Date();
-  const daysSinceCutoff = Math.max(1, (now.getTime() - cutoffDate.getTime()) / 86400000);
-  const totalReturn = allReturns.length > 0 ? allReturns.reduce((a, b) => a + b, 0) : null;
-  const annualizedReturn = totalReturn !== null && daysSinceCutoff > 0
-    ? (totalReturn / daysSinceCutoff) * 365
-    : null;
-
   // --- YTD ---
   const ytdStart = `${now.getFullYear()}-01-01`;
   const ytdSignals = signals.filter((s) => s.created_at >= ytdStart);
@@ -229,7 +221,7 @@ export default async function HistoryPage({
       </div>
 
       {/* Top-level stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatCard label="Resolved" value={wl} icon={Target} />
         <StatCard
           label="Win rate"
@@ -243,12 +235,6 @@ export default async function HistoryPage({
           label="Avg confidence"
           value={total > 0 ? `${avgConf.toFixed(0)}%` : "—"}
           icon={Target}
-        />
-        <StatCard
-          label="Ann. return (est)"
-          value={annualizedReturn !== null ? `${annualizedReturn >= 0 ? "+" : ""}${annualizedReturn.toFixed(1)}%` : "—"}
-          color={annualizedReturn !== null && annualizedReturn > 0 ? "green" : annualizedReturn !== null && annualizedReturn < 0 ? "red" : undefined}
-          icon={TrendingUp}
         />
       </div>
 

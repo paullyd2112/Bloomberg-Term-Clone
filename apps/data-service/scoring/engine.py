@@ -25,6 +25,7 @@ load_dotenv()
 MODEL              = "claude-sonnet-4-6"
 SIGNAL_COOLDOWN_H  = 4      # skip if signal generated within this many hours
 MAX_TOKENS         = 1024
+ENGINE_CUTOFF      = "2026-06-22T00:00:00Z"  # signals before this date are unreliable
 
 _anthropic = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 client     = instructor.from_anthropic(_anthropic)
@@ -303,14 +304,81 @@ def _get_upcoming_macro(days: int = 2) -> list[str]:
     return lines
 
 
+# ─── Accuracy penalty ────────────────────────────────────────────────────────
+
+def _get_asset_accuracy(identifier: str, asset_type: str) -> dict | None:
+    """Query resolved signals (WIN/LOSS only) for an asset since ENGINE_CUTOFF.
+
+    Returns {"wins": N, "losses": N, "total": N, "win_rate": float} if
+    there are 3+ resolved signals, otherwise None (not enough data).
+    """
+    try:
+        result = (
+            supabase.table("signals")
+            .select("outcome")
+            .eq("identifier", identifier)
+            .eq("asset_type", asset_type)
+            .in_("outcome", ["WIN", "LOSS"])
+            .gte("created_at", ENGINE_CUTOFF)
+            .execute()
+        )
+        rows = result.data or []
+    except Exception as e:
+        logger.warning("accuracy lookup failed for {}/{}: {}", asset_type, identifier, e)
+        return None
+
+    if len(rows) < 3:
+        return None
+
+    wins   = sum(1 for r in rows if r["outcome"] == "WIN")
+    losses = sum(1 for r in rows if r["outcome"] == "LOSS")
+    total  = wins + losses
+    win_rate = round(wins / total * 100, 1) if total > 0 else 0.0
+
+    return {"wins": wins, "losses": losses, "total": total, "win_rate": win_rate}
+
+
+def _apply_accuracy_penalty(confidence: int, accuracy: dict | None) -> int:
+    """Cap confidence when an asset has a poor historical win rate.
+
+    Rules:
+    - 3+ resolved signals AND win_rate < 15% → cap at 55
+    - 3+ resolved signals AND win_rate < 30% → cap at 60
+    - Fewer than 3 resolved signals → no penalty
+    """
+    if accuracy is None:
+        return confidence
+
+    win_rate = accuracy["win_rate"]
+
+    if win_rate < 15:
+        cap = 55
+    elif win_rate < 30:
+        cap = 60
+    else:
+        return confidence
+
+    if confidence > cap:
+        logger.warning(
+            "Accuracy penalty: confidence {} → {} (win_rate={:.1f}%, {}/{} wins, {} resolved signals)",
+            confidence, cap, win_rate, accuracy["wins"], accuracy["total"], accuracy["total"],
+        )
+        return cap
+
+    return confidence
+
+
 # ─── Signal writer ────────────────────────────────────────────────────────────
 
 def _write_signal(asset_type: str, identifier: str, price: float | None, signal) -> dict:
+    accuracy = _get_asset_accuracy(identifier, asset_type)
+    adjusted_confidence = _apply_accuracy_penalty(signal.confidence, accuracy)
+
     base = {
         "asset_type":      asset_type,
         "identifier":      identifier,
         "direction":       signal.direction,
-        "confidence":      signal.confidence,
+        "confidence":      adjusted_confidence,
         "reasoning":       signal.reasoning,
         "time_horizon":    signal.time_horizon,
         "price_at_signal": price,
@@ -797,11 +865,14 @@ def _options_signal_exists_recently(ticker: str) -> bool:
 
 
 def _write_options_signal(ticker: str, price: float | None, signal: OptionsFlowSignal) -> dict:
+    accuracy = _get_asset_accuracy(ticker, "stock")
+    adjusted_confidence = _apply_accuracy_penalty(signal.confidence, accuracy)
+
     record = {
         "asset_type":      "stock",
         "identifier":      ticker,
         "direction":       signal.direction,
-        "confidence":      signal.confidence,
+        "confidence":      adjusted_confidence,
         "reasoning":       f"[Options flow] {signal.reasoning}",
         "time_horizon":    signal.time_horizon,
         "price_at_signal": price,
