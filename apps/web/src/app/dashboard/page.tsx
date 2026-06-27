@@ -2,11 +2,12 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { Activity, Clock, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getUserTier } from "@/lib/user";
+import { getUserTier, getUserProfile } from "@/lib/user";
 import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
 import SubscribeGate from "@/components/ui/SubscribeGate";
 import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
+import SkipTrialBanner from "@/components/SkipTrialBanner";
 
 export const revalidate = 60;
 
@@ -145,8 +146,8 @@ async function fetchTopMovers() {
 }
 
 export default async function DashboardPage() {
-  const user    = await getUser();
   const tier    = await getUserTier();
+  const profile = await getUserProfile();
   const [signals, movers, accuracy] = await Promise.all([
     fetchSignals(),
     fetchTopMovers(),
@@ -177,6 +178,10 @@ export default async function DashboardPage() {
           Live AI signals across stocks, crypto, and prediction markets — updating in real time.
         </p>
       </header>
+
+      {tier !== "free" && profile?.billing_interval !== "lifetime" && (
+        <SkipTrialBanner />
+      )}
 
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
