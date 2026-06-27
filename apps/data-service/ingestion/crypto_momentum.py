@@ -162,7 +162,7 @@ def ingest_momentum_coins() -> str:
         if is_new or is_major_move:
             try:
                 from scoring.engine import score_asset
-                result = score_asset("crypto", coin["symbol"])
+                result = score_asset("crypto", coin["symbol"], model_override="claude-haiku-4-5")
                 if result:
                     scored += 1
                     logger.info(

@@ -17,6 +17,7 @@ from loguru import logger
 from dotenv import load_dotenv
 
 from supabase_client import supabase
+from ingestion.trusted_sources import is_trusted_source
 
 load_dotenv()
 
@@ -367,8 +368,8 @@ def _fetch_and_store_news(ticker: str) -> int:
                 a["datetime"], tz=timezone.utc
             ).isoformat() if a.get("datetime") else None,
         }
-        for a in articles[:5]          # cap at 5 most recent per run
-        if a.get("headline")
+        for a in articles[:10]
+        if a.get("headline") and is_trusted_source(a.get("source", ""))
     ]
 
     if rows:
