@@ -97,9 +97,9 @@ export default function SignalCard({ signal }: { signal: Signal }) {
         </span>
       </div>
 
-      {/* Reasoning — clickable to asset page */}
+      {/* Reasoning — clickable to signal detail */}
       <Link
-        href={`/dashboard/asset/${signal.asset_type}/${encodeURIComponent(signal.identifier)}`}
+        href={`/signal/${signal.id}`}
         className="block text-sm text-zinc-300 leading-relaxed line-clamp-3 hover:text-zinc-100 transition-colors cursor-pointer"
       >
         {signal.reasoning}
@@ -122,7 +122,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
           <span className="text-[11px] text-zinc-500">
             {HORIZON_LABEL[signal.time_horizon] ?? signal.time_horizon}
           </span>
-          {signal.price_at_signal && (
+          {signal.price_at_signal != null && (
             <span className="text-[11px] text-zinc-500 font-mono">
               @ {signal.asset_type === "prediction"
                   ? `${(signal.price_at_signal * 100).toFixed(1)}%`

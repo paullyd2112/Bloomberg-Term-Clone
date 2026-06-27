@@ -330,16 +330,21 @@ function MessageBubble({ role, content }: { role: "user" | "assistant"; content:
   const toolCalls = extractToolCalls(content);
 
   return (
-    <div className={`flex ${role === "user" ? "justify-end" : "justify-start"}`}>
+    <div className={`flex items-end gap-2.5 ${role === "user" ? "justify-end" : "justify-start"}`}>
+      {role === "assistant" && (
+        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mb-0.5">
+          <span className="text-xs font-bold text-emerald-400">P</span>
+        </div>
+      )}
       <div
-        className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+        className={`max-w-[80%] px-4 py-2.5 ${
           role === "user"
-            ? "bg-white/[0.08] text-white"
-            : "bg-white/[0.03] border border-white/[0.06] ring-hairline text-zinc-100"
+            ? "bg-emerald-500/20 border border-emerald-500/25 text-white rounded-2xl rounded-br-md"
+            : "bg-white/[0.04] border border-white/[0.08] text-zinc-100 rounded-2xl rounded-bl-md"
         }`}
       >
         {role === "assistant" && toolCalls.length > 0 && (
-          <div className="mb-2 space-y-1 text-[11px] text-zinc-500 border-l-2 border-white/[0.1] pl-2">
+          <div className="mb-2 space-y-1 text-[11px] text-zinc-500 border-l-2 border-emerald-500/20 pl-2">
             {toolCalls.map((t, i) => (
               <div key={i} className="flex items-center gap-1.5">
                 <Check className="h-3 w-3 text-emerald-400 flex-shrink-0" />
