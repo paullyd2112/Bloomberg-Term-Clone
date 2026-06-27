@@ -16,8 +16,11 @@ from supabase_client import supabase
 
 load_dotenv()
 
-FMP_KEY      = os.environ.get("FMP_API_KEY", "")
 BASE_URL     = "https://financialmodelingprep.com/api/v4"
+
+
+def _fmp_key() -> str:
+    return os.environ.get("FMP_API_KEY", "")
 LOOKBACK_DAYS = 90
 MAX_PAGES    = 5   # up to 500 records per chamber per run
 
@@ -32,7 +35,7 @@ def _normalize_transaction(raw: str) -> str | None:
 
 
 def _fetch_senate() -> list[dict]:
-    if not FMP_KEY:
+    if not _fmp_key():
         logger.warning("congressional: FMP_API_KEY not set — skipping")
         return []
     rows: list[dict] = []
@@ -40,7 +43,7 @@ def _fetch_senate() -> list[dict]:
         try:
             resp = httpx.get(
                 f"{BASE_URL}/senate-trading-rss-feed",
-                params={"page": page, "apikey": FMP_KEY},
+                params={"page": page, "apikey": _fmp_key()},
                 timeout=30,
             )
             if resp.status_code in (401, 403):
@@ -62,14 +65,14 @@ def _fetch_senate() -> list[dict]:
 
 
 def _fetch_house() -> list[dict]:
-    if not FMP_KEY:
+    if not _fmp_key():
         return []
     rows: list[dict] = []
     for page in range(MAX_PAGES):
         try:
             resp = httpx.get(
                 f"{BASE_URL}/house-disclosure-rss-feed",
-                params={"page": page, "apikey": FMP_KEY},
+                params={"page": page, "apikey": _fmp_key()},
                 timeout=30,
             )
             if resp.status_code in (401, 403):

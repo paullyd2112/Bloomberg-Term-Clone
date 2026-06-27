@@ -4,7 +4,7 @@ import { getUser } from "@/lib/user";
 
 export const dynamic = "force-dynamic";
 
-const DATA_SERVICE_URL = process.env.DATA_SERVICE_URL ?? "";
+const DATA_SERVICE_URL = process.env.DATA_SERVICE_URL || "https://bloomberg-term-clone-production.up.railway.app";
 
 type ResultItem = {
   identifier: string;

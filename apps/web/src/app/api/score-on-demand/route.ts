@@ -11,7 +11,7 @@ const Body = z.object({
   identifier: z.string().min(1).max(20),
 });
 
-const DATA_SERVICE_URL = process.env.DATA_SERVICE_URL ?? "";
+const DATA_SERVICE_URL = process.env.DATA_SERVICE_URL || "https://bloomberg-term-clone-production.up.railway.app";
 const DAILY_LIMIT = 10;
 
 export async function POST(request: Request) {

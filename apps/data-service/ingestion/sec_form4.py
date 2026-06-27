@@ -18,8 +18,11 @@ from supabase_client import supabase
 
 load_dotenv()
 
-FMP_KEY       = os.environ.get("FMP_API_KEY", "")
 BASE_URL      = "https://financialmodelingprep.com/api/v4"
+
+
+def _fmp_key() -> str:
+    return os.environ.get("FMP_API_KEY", "")
 LOOKBACK_DAYS = 60
 MAX_PAGES     = 8   # ~100 records/page
 
@@ -40,7 +43,7 @@ def _normalize_transaction(acq_disp: str, txn_type: str) -> str | None:
 
 
 def _fetch_insider_feed() -> list[dict]:
-    if not FMP_KEY:
+    if not _fmp_key():
         logger.warning("insider_trades: FMP_API_KEY not set — skipping")
         return []
     rows: list[dict] = []
@@ -48,7 +51,7 @@ def _fetch_insider_feed() -> list[dict]:
         try:
             resp = httpx.get(
                 f"{BASE_URL}/insider-trading-rss-feed",
-                params={"page": page, "apikey": FMP_KEY},
+                params={"page": page, "apikey": _fmp_key()},
                 timeout=30,
             )
             if resp.status_code in (401, 403):

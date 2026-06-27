@@ -9,7 +9,7 @@ const Body = z.object({
   identifier: z.string().min(1).max(10),
 });
 
-const DATA_SERVICE_URL = process.env.DATA_SERVICE_URL ?? "";
+const DATA_SERVICE_URL = process.env.DATA_SERVICE_URL || "https://bloomberg-term-clone-production.up.railway.app";
 
 export async function POST(request: Request) {
   const user = await requireUser().catch(() => null);
