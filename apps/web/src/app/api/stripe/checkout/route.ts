@@ -52,6 +52,41 @@ export async function POST(req: Request) {
     }
   }
 
+  // ── Guard: one membership at a time ──────────────────────────────────────
+  const { data: currentProfile } = await supabase
+    .from("profiles")
+    .select("tier, stripe_subscription_id, billing_interval")
+    .eq("id", user.id)
+    .single();
+
+  const existingSubId = currentProfile?.stripe_subscription_id as string | null;
+  const currentTier   = (currentProfile?.tier ?? "free") as string;
+
+  // Block if user already has a lifetime plan
+  if (currentTier !== "free" && currentProfile?.billing_interval === "lifetime") {
+    return NextResponse.json(
+      { error: "You already have lifetime access. No additional subscription needed." },
+      { status: 400 },
+    );
+  }
+
+  // If they have an active subscription, cancel it before creating the new one.
+  // This handles upgrades (pro→elite), downgrades, and interval changes.
+  if (existingSubId) {
+    try {
+      await stripe.subscriptions.cancel(existingSubId, {
+        prorate: true,
+      });
+    } catch (e) {
+      console.warn("Could not cancel existing subscription:", existingSubId, e);
+    }
+  }
+
+  if (!priceId) {
+    console.error("Missing price ID for plan:", plan);
+    return NextResponse.json({ error: `Price not configured for ${plan}` }, { status: 500 });
+  }
+
   const isLifetime  = plan === "lifetime_pro"   || plan === "lifetime_elite";
   const isMonthly   = plan === "pro_monthly"    || plan === "elite_monthly";
   const isQuarterly = plan === "pro_quarterly"  || plan === "elite_quarterly";
@@ -72,19 +107,14 @@ export async function POST(req: Request) {
   };
 
   if (!isLifetime) {
+    const isUpgrade = currentTier !== "free" && existingSubId;
     sessionConfig.subscription_data = {
-      ...(hasTrial ? { trial_period_days: 14 } : {}),
+      ...(hasTrial && !isUpgrade ? { trial_period_days: 14 } : {}),
       metadata: baseMetadata,
     };
   } else {
-    // Set metadata on the session itself so checkout.session.completed webhook can read it
     sessionConfig.metadata = baseMetadata;
     sessionConfig.payment_intent_data = { metadata: baseMetadata };
-  }
-
-  if (!priceId) {
-    console.error("Missing price ID for plan:", plan);
-    return NextResponse.json({ error: `Price not configured for ${plan}` }, { status: 500 });
   }
 
   try {
