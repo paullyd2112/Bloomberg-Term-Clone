@@ -167,6 +167,21 @@ export async function POST(req: Request) {
         const interval = (sub.items.data[0]?.price.recurring?.interval ?? null) as string | null;
         const active   = ["active", "trialing"].includes(sub.status);
 
+        // If user cancels during trial, revoke access immediately.
+        // They haven't paid anything so there's nothing to honor.
+        const canceledDuringTrial =
+          sub.status === "trialing" && sub.cancel_at_period_end;
+
+        if (canceledDuringTrial) {
+          await updateUserTier(userId, "free", null, null);
+          try {
+            await stripe.subscriptions.cancel(sub.id);
+          } catch (e) {
+            console.error("Failed to cancel trial sub:", e);
+          }
+          break;
+        }
+
         await updateUserTier(userId, active ? tier : "free", sub.id, interval);
 
         // Reward referrer automatically when referred user goes active/trialing
