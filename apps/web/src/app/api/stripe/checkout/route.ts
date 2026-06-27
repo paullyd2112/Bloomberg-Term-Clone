@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   // Block if user already has a lifetime plan
   if (currentTier !== "free" && currentProfile?.billing_interval === "lifetime") {
     return NextResponse.json(
-      { error: "You already have lifetime access. No additional subscription needed." },
+      { error: "You already have a lifetime membership :) There is no further upgrade." },
       { status: 400 },
     );
   }

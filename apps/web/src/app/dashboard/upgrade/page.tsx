@@ -4,6 +4,7 @@ import { TIER_FEATURES } from "@/lib/tier";
 import UpgradeButtons from "./UpgradeButtons";
 import LifetimeButton from "./LifetimeButton";
 import BillingPortalButton from "./BillingPortalButton";
+import CancelButton from "./CancelButton";
 
 export default async function UpgradePage() {
   const tier = await getUserTier();
@@ -125,14 +126,21 @@ export default async function UpgradePage() {
 
       {/* Billing portal */}
       {tier !== "free" && (
-        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5 flex items-center justify-between gap-4">
-          <div>
-            <div className="text-sm font-medium text-white">Billing & invoices</div>
-            <div className="text-xs text-zinc-500 mt-1">
-              Manage your subscription, update payment method, or download invoices.
+        <div className="space-y-3">
+          <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5 flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-medium text-white">Billing & invoices</div>
+              <div className="text-xs text-zinc-500 mt-1">
+                Manage your subscription, update payment method, or download invoices.
+              </div>
             </div>
+            <BillingPortalButton />
           </div>
-          <BillingPortalButton />
+          {profile?.billing_interval !== "lifetime" && (
+            <div className="flex justify-end px-1">
+              <CancelButton />
+            </div>
+          )}
         </div>
       )}
     </div>
