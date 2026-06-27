@@ -552,8 +552,8 @@ def score_now_debug():
     key1 = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     key2 = os.environ.get("SUPABASE_SERVICE_ROLE_KEY_", "")
     env_diag["SUPABASE_URL"] = f"{url[:30]}..." if url else "NOT SET"
-    env_diag["SUPABASE_SERVICE_ROLE_KEY"] = f"{key1[:10]}...({len(key1)} chars)" if key1 else "NOT SET"
-    env_diag["SUPABASE_SERVICE_ROLE_KEY_"] = f"{key2[:10]}...({len(key2)} chars)" if key2 else "NOT SET"
+    env_diag["SUPABASE_SERVICE_ROLE_KEY"] = f"SET ({len(key1)} chars)" if key1 else "NOT SET"
+    env_diag["SUPABASE_SERVICE_ROLE_KEY_"] = f"SET ({len(key2)} chars)" if key2 else "NOT SET"
     env_diag["key_used"] = "SUPABASE_SERVICE_ROLE_KEY" if key1 else ("SUPABASE_SERVICE_ROLE_KEY_" if key2 else "NONE")
 
     # Test a direct Supabase insert

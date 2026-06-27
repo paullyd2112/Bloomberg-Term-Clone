@@ -10,7 +10,6 @@ const RATE_LIMIT_WINDOW_S  = 60;
 
 const RATE_LIMITS: Record<string, number> = {
   "/api/newsletter/subscribe":     5,
-  "/api/stripe/webhook":           20,
   "/api/backtest":                 5,
   "/api/allocator":                5,
   "/api/search":                   30,

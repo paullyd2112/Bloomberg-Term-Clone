@@ -276,16 +276,16 @@ export default function OnboardingPage() {
             <div>
               <h1 className="text-2xl font-bold text-white">You&apos;re all set!</h1>
               <p className="text-zinc-400 text-sm mt-2">
-                Your 14-day trial is active. Full access starts now.
+                One more step: pick a plan to start your 14-day free trial.
               </p>
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 text-left space-y-2">
               <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                Included in your trial
+                What you get with your trial
               </p>
               {[
-                "AI signals — stocks, crypto & predictions",
+                "AI signals: stocks, crypto & predictions",
                 "Unlimited watchlist",
                 "Unusual options flow",
                 "Morning briefing email (7am ET)",
@@ -300,16 +300,16 @@ export default function OnboardingPage() {
 
             <div className="space-y-3">
               <Link
-                href="/dashboard"
+                href="/dashboard/upgrade"
                 className="block w-full bg-green-500 hover:bg-green-400 text-black font-bold py-3 rounded-lg transition-colors text-center"
               >
-                Open dashboard →
+                Choose a plan →
               </Link>
               <Link
-                href="/dashboard/upgrade"
-                className="block text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+                href="/dashboard"
+                className="block text-sm text-zinc-500 hover:text-zinc-300 transition-colors text-center"
               >
-                View plans &amp; pricing
+                Browse the dashboard first
               </Link>
             </div>
           </div>

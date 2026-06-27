@@ -52,9 +52,9 @@ export async function generateMetadata({
     .eq("id", params.id)
     .single();
 
-  if (!data) return { title: "Signal — Plebs.io" };
+  if (!data) return { title: "Signal — Plebs.finance" };
 
-  const title = `${data.direction} ${data.identifier} (${data.confidence}%) — Plebs.io`;
+  const title = `${data.direction} ${data.identifier} (${data.confidence}%) — Plebs.finance`;
   const desc  = (data.reasoning as string).slice(0, 160);
 
   return {
@@ -63,7 +63,7 @@ export async function generateMetadata({
     openGraph: {
       title,
       description: desc,
-      siteName:    "Plebs.io",
+      siteName:    "Plebs.finance",
       type:        "website",
     },
     twitter: {
