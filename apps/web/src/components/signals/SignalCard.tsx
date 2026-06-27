@@ -13,6 +13,7 @@ export type Signal = {
   time_horizon: string;
   price_at_signal: number | null;
   news_context: string[] | null;
+  news_urls: string[] | null;
   created_at: string;
   outcome: "WIN" | "LOSS" | "NEUTRAL" | "PENDING";
 };
@@ -108,11 +109,24 @@ export default function SignalCard({ signal }: { signal: Signal }) {
       {/* News context */}
       {signal.news_context && signal.news_context.length > 0 && (
         <div className="space-y-1">
-          {signal.news_context.slice(0, 3).map((item, i) => (
-            <p key={i} className="text-[11px] text-zinc-500 leading-snug truncate">
-              • {item}
-            </p>
-          ))}
+          {signal.news_context.slice(0, 3).map((item, i) => {
+            const url = signal.news_urls?.[i];
+            return url ? (
+              <a
+                key={i}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-[11px] text-zinc-500 leading-snug truncate hover:text-emerald-400 transition-colors"
+              >
+                • {item}
+              </a>
+            ) : (
+              <p key={i} className="text-[11px] text-zinc-500 leading-snug truncate">
+                • {item}
+              </p>
+            );
+          })}
         </div>
       )}
 

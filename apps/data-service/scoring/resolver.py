@@ -241,11 +241,11 @@ def resolve_outcomes() -> str:
                 continue
 
             entry_price = signal.get("price_at_signal")
-            if not entry_price:
+            if entry_price is None:
                 continue
 
             current_price = _get_current_price(asset_type, signal["identifier"])
-            if not current_price:
+            if current_price is None:
                 continue
 
             outcome = _score_outcome(

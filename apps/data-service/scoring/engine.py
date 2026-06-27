@@ -91,8 +91,7 @@ def _get_latest_price(asset_type: str, identifier: str) -> dict | None:
 
 def _get_recent_news(asset_type: str, identifier: str, limit: int = 3) -> list[str]:
     try:
-        # For crypto, also pull general crypto news
-        query = supabase.table("news_items").select("headline")
+        query = supabase.table("news_items").select("headline, url")
         if asset_type == "crypto":
             query = query.in_("identifier", [identifier, "CRYPTO_GENERAL"])
         else:
@@ -106,6 +105,30 @@ def _get_recent_news(asset_type: str, identifier: str, limit: int = 3) -> list[s
             .execute()
         )
         return [r["headline"] for r in result.data if r.get("headline")]
+    except Exception as e:
+        logger.warning("news fetch failed for {}/{}: {}", asset_type, identifier, e)
+        return []
+
+
+def _get_recent_news_with_urls(asset_type: str, identifier: str, limit: int = 3) -> list[dict]:
+    try:
+        query = supabase.table("news_items").select("headline, url")
+        if asset_type == "crypto":
+            query = query.in_("identifier", [identifier, "CRYPTO_GENERAL"])
+        else:
+            query = query.eq("identifier", identifier)
+
+        result = (
+            query
+            .eq("asset_type", asset_type)
+            .order("published_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return [
+            {"headline": r["headline"], "url": r.get("url") or ""}
+            for r in result.data if r.get("headline")
+        ]
     except Exception as e:
         logger.warning("news fetch failed for {}/{}: {}", asset_type, identifier, e)
         return []
@@ -370,9 +393,19 @@ def _apply_accuracy_penalty(confidence: int, accuracy: dict | None) -> int:
 
 # ─── Signal writer ────────────────────────────────────────────────────────────
 
-def _write_signal(asset_type: str, identifier: str, price: float | None, signal) -> dict:
+def _write_signal(asset_type: str, identifier: str, price: float | None, signal, news_with_urls: list[dict] | None = None) -> dict:
     accuracy = _get_asset_accuracy(identifier, asset_type)
     adjusted_confidence = _apply_accuracy_penalty(signal.confidence, accuracy)
+
+    url_lookup = {}
+    if news_with_urls:
+        for item in news_with_urls:
+            url_lookup[item["headline"].lower().strip()] = item.get("url", "")
+
+    news_urls = []
+    for headline in (signal.news_context or []):
+        matched_url = url_lookup.get(headline.lower().strip(), "")
+        news_urls.append(matched_url)
 
     base = {
         "asset_type":      asset_type,
@@ -383,6 +416,7 @@ def _write_signal(asset_type: str, identifier: str, price: float | None, signal)
         "time_horizon":    signal.time_horizon,
         "price_at_signal": price,
         "news_context":    signal.news_context,
+        "news_urls":       news_urls,
         "is_backtest":     False,
         "outcome":         "PENDING",
     }
@@ -410,6 +444,7 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
     meta          = price_row.get("metadata") or {}
     current_price = price_row.get("price")
     news          = _get_recent_news(asset_type, identifier)
+    news_with_urls = _get_recent_news_with_urls(asset_type, identifier)
 
     # Without a valid price there is nothing meaningful to score
     if current_price is None:
@@ -528,7 +563,7 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
 
     # Write to Supabase
     try:
-        record = _write_signal(asset_type, identifier, current_price, signal)
+        record = _write_signal(asset_type, identifier, current_price, signal, news_with_urls)
         logger.info(
             "{}/{}: {} {}% confidence — {}",
             asset_type, identifier,

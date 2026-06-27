@@ -14,6 +14,7 @@ type Signal = {
   time_horizon:    string;
   price_at_signal: number | null;
   news_context:    string[] | null;
+  news_urls:       string[] | null;
   created_at:      string;
   outcome:         "WIN" | "LOSS" | "NEUTRAL" | "PENDING";
 };
@@ -80,15 +81,15 @@ export default async function SharedSignalPage({
   params: { id: string };
 }) {
   const supabase = createClient();
-  const { data: signal } = await supabase
-    .from("signals")
-    .select("*")
-    .eq("id", params.id)
-    .single();
+  const [{ data: signal }, { data: { user } }] = await Promise.all([
+    supabase.from("signals").select("*").eq("id", params.id).single(),
+    supabase.auth.getUser(),
+  ]);
 
   if (!signal) notFound();
 
   const s         = signal as Signal;
+  const isLoggedIn = !!user;
   const dirStyle  = DIRECTION_STYLE[s.direction] ?? DIRECTION_STYLE.HOLD;
   const outcome   = OUTCOME_STYLE[s.outcome];
   const timeAgo   = formatDistanceToNow(new Date(s.created_at), { addSuffix: true });
@@ -169,32 +170,69 @@ export default async function SharedSignalPage({
               </span>
             </span>
           )}
-          {s.news_context && s.news_context.length > 0 && (
+          {s.news_context && s.news_context.length > 0 && !s.news_urls?.some(u => u) && (
             <span>{s.news_context.length} news items</span>
           )}
         </div>
+        {/* News context with links */}
+        {s.news_context && s.news_context.length > 0 && (
+          <div className="space-y-1.5 pt-1 border-t border-zinc-800">
+            <div className="text-[10px] uppercase tracking-widest text-zinc-600 mb-1">Related news</div>
+            {s.news_context.map((item, i) => {
+              const url = s.news_urls?.[i];
+              return url ? (
+                <a
+                  key={i}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-xs text-zinc-400 leading-snug truncate hover:text-green-400 transition-colors"
+                >
+                  • {item}
+                </a>
+              ) : (
+                <p key={i} className="text-xs text-zinc-500 leading-snug truncate">
+                  • {item}
+                </p>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* CTA */}
       <div className="mt-8 text-center space-y-3">
-        <p className="text-zinc-400 text-sm">
-          Get live signals for stocks, crypto &amp; prediction markets.
-        </p>
-        <div className="flex gap-3 justify-center">
-          <Link
-            href="/signup"
-            className="inline-block bg-green-500 hover:bg-green-400 text-black font-bold text-sm px-6 py-2.5 rounded-lg transition-colors"
-          >
-            Start free trial →
-          </Link>
-          <Link
-            href="/login"
-            className="inline-block border border-zinc-700 hover:border-zinc-500 text-zinc-300 text-sm px-6 py-2.5 rounded-lg transition-colors"
-          >
-            Log in
-          </Link>
-        </div>
-        <p className="text-zinc-600 text-xs">14-day free trial · Credit card required</p>
+        {isLoggedIn ? (
+          <>
+            <Link
+              href="/dashboard"
+              className="inline-block bg-green-500 hover:bg-green-400 text-black font-bold text-sm px-6 py-2.5 rounded-lg transition-colors"
+            >
+              ← Back to Dashboard
+            </Link>
+          </>
+        ) : (
+          <>
+            <p className="text-zinc-400 text-sm">
+              Get live signals for stocks, crypto &amp; prediction markets.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Link
+                href="/signup"
+                className="inline-block bg-green-500 hover:bg-green-400 text-black font-bold text-sm px-6 py-2.5 rounded-lg transition-colors"
+              >
+                Start free trial →
+              </Link>
+              <Link
+                href="/login"
+                className="inline-block border border-zinc-700 hover:border-zinc-500 text-zinc-300 text-sm px-6 py-2.5 rounded-lg transition-colors"
+              >
+                Log in
+              </Link>
+            </div>
+            <p className="text-zinc-600 text-xs">14-day free trial · Credit card required</p>
+          </>
+        )}
       </div>
 
       <p className="mt-6 text-[11px] text-zinc-700 text-center max-w-md mx-auto leading-relaxed">
