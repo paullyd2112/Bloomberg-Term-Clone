@@ -12,7 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import NewsletterSignup from "@/components/NewsletterSignup";
-import TickerBar from "@/components/TickerBar";
+import TickerBar, { MarketStatusBadge } from "@/components/TickerBar";
 import LiveSignalFeed from "@/components/LiveSignalFeed";
 
 export const metadata: Metadata = {
@@ -86,15 +86,8 @@ function Hero() {
         <div className="grid lg:grid-cols-12 gap-12 lg:gap-10 items-center">
           {/* Left — editorial copy */}
           <div className="lg:col-span-6">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs mb-7">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              </span>
-              <span className="font-mono uppercase tracking-[0.18em] text-[10px] text-emerald-400">
-                Live
-              </span>
-              <span className="text-zinc-500">Markets open · signals updating</span>
+            <div className="mb-7">
+              <MarketStatusBadge className="text-xs" />
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-semibold text-white leading-[1.04] tracking-tight text-balance">
@@ -146,7 +139,7 @@ function Stats() {
     { value: "3",     label: "Markets covered" },
     { value: "7a",    label: "Daily briefing, ET" },
     { value: "60+",   label: "Assets tracked" },
-    { value: "14d",   label: "Free trial" },
+    { value: "14d",   label: "Trial period" },
   ];
 
   return (
@@ -405,7 +398,7 @@ function Pricing() {
         </div>
 
         <p className="text-center text-zinc-500 text-sm mt-8">
-          14-day free trial, cancel anytime. Prefer to pay once?{" "}
+          14-day trial — credit card required, cancel anytime. Prefer to pay once?{" "}
           <Link href="/signup" className="text-emerald-400 hover:text-emerald-300 underline underline-offset-4 transition-colors">
             Lifetime access from $399
           </Link>
@@ -483,7 +476,7 @@ function CTAStrip() {
             href="/signup"
             className="group mt-8 inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-base px-9 py-3.5 rounded-xl transition-colors"
           >
-            Start your free trial
+            Start your trial
             <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </Link>
 

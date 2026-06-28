@@ -158,11 +158,6 @@ export default async function DashboardPage() {
   const lossCount = signals.filter((s) => s.outcome === "LOSS").length;
   const pending   = signals.filter((s) => s.outcome === "PENDING").length;
 
-  if (tier === "free") {
-    const { redirect } = await import("next/navigation");
-    redirect("/dashboard/upgrade");
-  }
-
   return (
     <div className="p-5 md:p-8 space-y-8 max-w-7xl mx-auto">
       {/* Page header */}
