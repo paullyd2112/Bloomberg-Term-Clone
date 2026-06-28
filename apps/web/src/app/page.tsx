@@ -12,7 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import NewsletterSignup from "@/components/NewsletterSignup";
-import TickerBar, { MarketStatusBadge } from "@/components/TickerBar";
+import TickerBar from "@/components/TickerBar";
 import LiveSignalFeed from "@/components/LiveSignalFeed";
 
 export const metadata: Metadata = {
@@ -85,8 +85,15 @@ function Hero() {
         <div className="grid lg:grid-cols-12 gap-12 lg:gap-10 items-center">
           {/* Left — editorial copy */}
           <div className="lg:col-span-6">
-            <div className="mb-7">
-              <MarketStatusBadge className="text-xs" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs mb-7">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              </span>
+              <span className="font-mono uppercase tracking-[0.18em] text-[10px] text-emerald-400">
+                Live
+              </span>
+              <span className="text-zinc-500">Markets open · signals updating</span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-semibold text-white leading-[1.04] tracking-tight text-balance">
@@ -96,7 +103,7 @@ function Hero() {
             </h1>
 
             <p className="mt-6 text-lg text-zinc-400 max-w-md leading-relaxed text-pretty">
-              Real-time AI signals across stocks, crypto, and prediction markets —
+              Real-time AI signals across stocks and crypto —
               plus options flow, congressional trades, and a morning briefing. One terminal.
             </p>
 
@@ -163,7 +170,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: "Real-time AI signals",
-    desc: "Model-driven analysis across stocks and crypto. Prediction markets coming soon. BUY, SELL, YES, NO — each with a confidence score and the reasoning behind it.",
+    desc: "Model-driven analysis across stocks and crypto. BUY, SELL, or HOLD — each with a confidence score and the reasoning behind it.",
     wide: true,
   },
   {
@@ -262,13 +269,12 @@ const PLANS = [
     name:      "Elite",
     price:     "$80",
     period:    "/mo",
-    blurb:     "The real alpha — prediction markets and your own AI analyst.",
+    blurb:     "The real alpha — your own AI analyst and personalized briefings.",
     highlight: true,
     cta:       "Start 14-day trial",
     href:      "/signup",
     features: [
       "Everything in Pro",
-      "Prediction-market signals — coming soon",
       "Pleby — your AI trading analyst, on call",
       "Personalised morning briefing",
       "On-demand AI analysis — score any ticker",
@@ -367,7 +373,7 @@ const FAQS = [
   },
   {
     q: "What markets do you cover?",
-    a: "Stocks, crypto, and unusual options flow today. Prediction markets (Polymarket, Kalshi) are coming soon on the Elite plan. We track 60+ assets and expanding.",
+    a: "Stocks, crypto, and unusual options flow. We track 60+ assets and expanding. Congressional trades, insider filings, and a daily morning briefing round it out.",
   },
   {
     q: "How accurate are the signals?",
@@ -475,7 +481,7 @@ export default function LandingPage() {
     <div className="font-sans bg-black min-h-screen antialiased selection:bg-emerald-500/30 selection:text-white">
       <Nav />
       <div className="pt-14">
-        <TickerBar />
+        <TickerBar showStatus={false} />
       </div>
       <main>
         <Hero />

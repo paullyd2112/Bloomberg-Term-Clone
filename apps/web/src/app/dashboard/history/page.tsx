@@ -89,7 +89,7 @@ function getMonthKey(iso: string): string {
 }
 
 function rateColor(rate: number): string {
-  if (rate >= 60) return "text-emerald-400";
+  if (rate >= 55) return "text-emerald-400";
   if (rate >= 45) return "text-amber-400";
   return "text-red-400";
 }

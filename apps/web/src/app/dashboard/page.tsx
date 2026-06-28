@@ -336,7 +336,7 @@ export default async function DashboardPage() {
 }
 
 function rateColor(rate: number): string {
-  if (rate >= 0.6) return "text-emerald-400";
+  if (rate >= 0.55) return "text-emerald-400";
   if (rate >= 0.45) return "text-amber-400";
   return "text-red-400";
 }

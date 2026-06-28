@@ -10,7 +10,7 @@ type AssetPref  = "stocks" | "crypto";
 const EXPERIENCE_OPTIONS: { value: Experience; label: string; desc: string }[] = [
   { value: "beginner",     label: "Beginner",     desc: "New to trading, learning the ropes" },
   { value: "intermediate", label: "Intermediate",  desc: "Comfortable with stocks and charts" },
-  { value: "advanced",     label: "Advanced",      desc: "Options, leverage, prediction markets" },
+  { value: "advanced",     label: "Advanced",      desc: "Options, leverage, active trading" },
 ];
 
 const ASSET_OPTIONS: { value: AssetPref; label: string; icon: string; desc: string }[] = [
@@ -285,7 +285,7 @@ export default function OnboardingPage() {
                 What you get with your trial
               </p>
               {[
-                "AI signals: stocks, crypto & predictions",
+                "AI signals: stocks & crypto",
                 "Unlimited watchlist",
                 "Unusual options flow",
                 "Morning briefing email (7am ET)",

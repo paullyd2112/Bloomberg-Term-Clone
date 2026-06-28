@@ -120,7 +120,7 @@ function nudgePrice(base: number): number {
   return Math.max(0.0001, base + delta);
 }
 
-export default function TickerBar() {
+export default function TickerBar({ showStatus = true }: { showStatus?: boolean } = {}) {
   const [items, setItems] = useState<TickerItem[]>([]);
   const baseItems = useRef<TickerItem[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -162,12 +162,13 @@ export default function TickerBar() {
 
   return (
     <div className="relative bg-black/60 backdrop-blur-sm border-b border-white/[0.06] h-10 flex items-center overflow-hidden select-none">
-      {/* Market status pill */}
-      <div className="relative z-20 flex-shrink-0 pl-3 pr-2">
-        <MarketStatusBadge />
-      </div>
+      {showStatus && (
+        <div className="relative z-20 flex-shrink-0 pl-3 pr-2">
+          <MarketStatusBadge />
+        </div>
+      )}
 
-      <div className="pointer-events-none absolute left-[145px] top-0 bottom-0 w-12 z-10 bg-gradient-to-r from-black/60 to-transparent" />
+      <div className={`pointer-events-none absolute top-0 bottom-0 w-12 z-10 bg-gradient-to-r from-black/60 to-transparent ${showStatus ? "left-[145px]" : "left-0"}`} />
       <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 z-10 bg-gradient-to-l from-black to-transparent" />
 
       <div className="flex animate-marquee">
