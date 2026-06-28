@@ -295,7 +295,7 @@ scheduler.add_job(lambda: _run_stock_job("enrich_fred", job_enrich_fred),
 # Congressional — daily at 8am ET (Senate Stock Watcher → Finnhub → FMP)
 scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressional),
                   CronTrigger(hour=8, minute=0), id="ingest_congressional")
-# Insider trades (SEC Form 4) — daily at 8:15am ET (Finnhub → FMP)
+# Insider trades (SEC Form 4) — daily at 8:15am ET (EDGAR → Finnhub → FMP)
 scheduler.add_job(lambda: _run_job("ingest_insider_trades", job_ingest_insider_trades),
                   CronTrigger(hour=8, minute=15), id="ingest_insider_trades")
 
