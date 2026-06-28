@@ -29,7 +29,6 @@ def _fmp_key() -> str:
 
 
 def _get_tracked_tickers() -> list[str]:
-    """Pull unique stock tickers we're actively tracking."""
     try:
         result = (
             supabase.table("raw_prices")
@@ -52,6 +51,7 @@ def _fetch_finnhub(tickers: list[str]) -> list[dict]:
 
     cutoff = date.today() - timedelta(days=LOOKBACK_DAYS)
     rows: list[dict] = []
+    auth_failed = False
 
     for ticker in tickers:
         try:
@@ -64,7 +64,9 @@ def _fetch_finnhub(tickers: list[str]) -> list[dict]:
                 logger.warning("insider_trades: Finnhub rate limit hit at {} — stopping", ticker)
                 break
             if resp.status_code in (401, 403):
-                logger.error("insider_trades: Finnhub key invalid (HTTP {})", resp.status_code)
+                logger.error("insider_trades: Finnhub key invalid or endpoint restricted (HTTP {})", resp.status_code)
+                sentry_sdk.capture_message(f"Finnhub insider-transactions auth failure: HTTP {resp.status_code}")
+                auth_failed = True
                 break
             resp.raise_for_status()
 
@@ -118,12 +120,15 @@ def _fetch_finnhub(tickers: list[str]) -> list[dict]:
                     "report_date":   filing_date.isoformat() if filing_date else None,
                 })
 
-            time.sleep(0.12)  # Finnhub free tier: ~60 calls/min
+            time.sleep(0.12)
         except Exception as e:
             logger.warning("insider_trades: Finnhub fetch failed for {} — {}", ticker, e)
             continue
 
-    logger.info("insider_trades: Finnhub returned {} records across {} tickers", len(rows), len(tickers))
+    if auth_failed:
+        logger.error("insider_trades: Finnhub auth failed — returning 0 rows (key may be invalid)")
+    else:
+        logger.info("insider_trades: Finnhub returned {} records across {} tickers", len(rows), len(tickers))
     return rows
 
 
@@ -259,20 +264,32 @@ def _get_existing_keys() -> set[tuple]:
 
 def ingest_insider_trades() -> str:
     tickers = _get_tracked_tickers()
+    sources_tried = []
 
     # Try Finnhub first (free, per-ticker)
     all_rows = _fetch_finnhub(tickers) if tickers else []
+    if all_rows:
+        sources_tried.append(f"finnhub({len(all_rows)})")
+    else:
+        sources_tried.append("finnhub(0)")
 
     # Fall back to FMP bulk feed if Finnhub got nothing
     if not all_rows:
         logger.info("insider_trades: Finnhub returned 0 — trying FMP fallback")
         all_rows = _fetch_fmp()
+        if all_rows:
+            sources_tried.append(f"fmp({len(all_rows)})")
+        else:
+            sources_tried.append("fmp(0)")
 
     all_rows = _dedup(all_rows)
+    source_log = ", ".join(sources_tried)
 
     if not all_rows:
-        logger.info("insider_trades: no trades from any source")
-        return "0 inserted (no data from Finnhub or FMP)"
+        msg = f"0 inserted — all sources returned empty [{source_log}]"
+        logger.warning("insider_trades: {}", msg)
+        sentry_sdk.capture_message(f"insider_trades: {msg}")
+        return msg
 
     existing = _get_existing_keys()
     new_rows = [
@@ -281,13 +298,13 @@ def ingest_insider_trades() -> str:
     ]
 
     if not new_rows:
-        logger.info("insider_trades: {} fetched, all already stored", len(all_rows))
-        return "0 inserted (all duplicates)"
+        logger.info("insider_trades: {} fetched, all already stored [{}]", len(all_rows), source_log)
+        return f"0 inserted (all duplicates) [{source_log}]"
 
     try:
         supabase.table("insider_trades").insert(new_rows).execute()
-        logger.info("insider_trades: inserted {} new ({} fetched)", len(new_rows), len(all_rows))
-        return f"{len(new_rows)} inserted"
+        logger.info("insider_trades: inserted {} new ({} fetched) [{}]", len(new_rows), len(all_rows), source_log)
+        return f"{len(new_rows)} inserted [{source_log}]"
     except Exception as e:
         logger.error("insider_trades: insert failed — {}", e)
         sentry_sdk.capture_exception(e)
