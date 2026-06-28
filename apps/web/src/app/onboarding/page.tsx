@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 type Experience = "beginner" | "intermediate" | "advanced";
-type AssetPref  = "stocks" | "crypto" | "predictions";
+type AssetPref  = "stocks" | "crypto";
 
 const EXPERIENCE_OPTIONS: { value: Experience; label: string; desc: string }[] = [
   { value: "beginner",     label: "Beginner",     desc: "New to trading, learning the ropes" },
@@ -16,7 +16,6 @@ const EXPERIENCE_OPTIONS: { value: Experience; label: string; desc: string }[] =
 const ASSET_OPTIONS: { value: AssetPref; label: string; icon: string; desc: string }[] = [
   { value: "stocks",      label: "Stocks",             icon: "📈", desc: "Equities, ETFs, options flow" },
   { value: "crypto",      label: "Crypto",              icon: "₿",  desc: "BTC, ETH, altcoins" },
-  { value: "predictions", label: "Prediction markets",  icon: "🎯", desc: "Polymarket & Kalshi" },
 ];
 
 const STEPS = ["profile", "experience", "markets", "done"] as const;
