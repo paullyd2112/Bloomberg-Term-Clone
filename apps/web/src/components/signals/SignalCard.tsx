@@ -90,9 +90,14 @@ export default function SignalCard({ signal }: { signal: Signal }) {
             style={{ width: `${signal.confidence}%` }}
           />
         </div>
-        <span className="text-xs text-zinc-400 w-8 text-right tabular-nums">
-          {signal.confidence}%
-        </span>
+        <div className="group relative">
+          <span className="text-xs text-zinc-400 w-8 text-right tabular-nums cursor-help">
+            {signal.confidence}%
+          </span>
+          <div className="hidden group-hover:block absolute bottom-full right-0 mb-1.5 w-52 bg-zinc-800 border border-white/10 text-zinc-300 text-[11px] rounded-lg px-3 py-2 shadow-xl z-50">
+            Model certainty in this signal direction, based on technical indicators, sentiment, and market context.
+          </div>
+        </div>
       </div>
 
       {/* Reasoning — clickable to signal detail */}

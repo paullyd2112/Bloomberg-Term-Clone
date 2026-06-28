@@ -129,7 +129,12 @@ export default async function SharedSignalPage({
         <div>
           <div className="flex justify-between text-xs text-zinc-500 mb-1.5">
             <span>Confidence</span>
-            <span className="tabular-nums font-medium text-zinc-300">{s.confidence}%</span>
+            <div className="group relative inline-block">
+              <span className="tabular-nums font-medium text-zinc-300 cursor-help">{s.confidence}%</span>
+              <div className="hidden group-hover:block absolute bottom-full right-0 mb-1.5 w-52 bg-zinc-800 border border-white/10 text-zinc-300 text-[11px] rounded-lg px-3 py-2 shadow-xl z-50">
+                Model certainty in this signal direction, based on technical indicators, sentiment, and market context.
+              </div>
+            </div>
           </div>
           <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
             <div
