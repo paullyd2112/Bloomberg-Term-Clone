@@ -311,7 +311,7 @@ export default async function HistoryPage({
                 <div className={`text-lg font-bold tabular-nums ${rateColor(m.winRate)}`}>
                   {m.resolved > 0 ? `${m.winRate.toFixed(0)}%` : "—"}
                 </div>
-                <div className="text-[10px] text-zinc-600">{m.wins}W – {m.losses}L</div>
+                <div className="text-[10px] text-zinc-600">{m.wins}W – {m.losses}L · {m.resolved} signals</div>
                 {m.avgReturn !== null && (
                   <div className={`text-[10px] tabular-nums ${returnColor(m.avgReturn)}`}>
                     {m.avgReturn >= 0 ? "+" : ""}{m.avgReturn.toFixed(2)}%/trade
@@ -334,7 +334,7 @@ export default async function HistoryPage({
                 <div className={`text-lg font-bold tabular-nums ${rateColor(w.winRate)}`}>
                   {w.resolved > 0 ? `${w.winRate.toFixed(0)}%` : "—"}
                 </div>
-                <div className="text-[10px] text-zinc-600">{w.wins}W – {w.losses}L</div>
+                <div className="text-[10px] text-zinc-600">{w.wins}W – {w.losses}L · {w.resolved} signals</div>
                 {w.avgReturn !== null && (
                   <div className={`text-[10px] tabular-nums ${returnColor(w.avgReturn)}`}>
                     {w.avgReturn >= 0 ? "+" : ""}{w.avgReturn.toFixed(2)}%/trade
