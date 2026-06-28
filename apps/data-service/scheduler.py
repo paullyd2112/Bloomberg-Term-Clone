@@ -996,6 +996,118 @@ def backtest_data_diagnostic():
                         "traceback": traceback.format_exc()}), 500
 
 
+@app.route("/pipeline-check")
+def pipeline_check():
+    """
+    One-stop diagnostic: checks every data pipeline for recent data,
+    reports what's working, what's empty, and why.
+    """
+    from supabase_client import supabase
+    from datetime import date as _date, timedelta as _td
+
+    checks = {}
+    cutoff_7d = (datetime.now(timezone.utc) - _td(days=7)).isoformat()
+    cutoff_30d = (datetime.now(timezone.utc) - _td(days=30)).isoformat()
+
+    def _count(table, since=None, extra_filters=None):
+        try:
+            q = supabase.table(table).select("id", count="exact")
+            if since:
+                q = q.gte("created_at", since)
+            if extra_filters:
+                for k, v in extra_filters.items():
+                    q = q.eq(k, v)
+            return q.execute().count or 0
+        except Exception as e:
+            return f"error: {e}"
+
+    def _count_date(table, date_col="trade_date", since=None):
+        try:
+            q = supabase.table(table).select("id", count="exact")
+            if since:
+                q = q.gte(date_col, since)
+            return q.execute().count or 0
+        except Exception as e:
+            return f"error: {e}"
+
+    checks["signals"] = {
+        "total": _count("signals"),
+        "last_7d": _count("signals", since=cutoff_7d),
+        "stocks_7d": _count("signals", since=cutoff_7d, extra_filters={"asset_type": "stock"}),
+        "crypto_7d": _count("signals", since=cutoff_7d, extra_filters={"asset_type": "crypto"}),
+    }
+
+    try:
+        since_cutoff = "2026-06-22"
+        q = supabase.table("signals").select("outcome, confidence", count="exact").gte("created_at", since_cutoff).execute()
+        rows = q.data or []
+        wins = sum(1 for r in rows if r.get("outcome") == "win")
+        losses = sum(1 for r in rows if r.get("outcome") == "loss")
+        pending = sum(1 for r in rows if r.get("outcome") in (None, "PENDING", "pending"))
+        total = len(rows)
+        decisive = wins + losses
+
+        by_bracket = {}
+        for bracket_name, lo, hi in [("50-59", 50, 59), ("60-69", 60, 69), ("70-79", 70, 79), ("80-89", 80, 89), ("90-100", 90, 100)]:
+            b_rows = [r for r in rows if lo <= (r.get("confidence") or 0) <= hi]
+            b_wins = sum(1 for r in b_rows if r.get("outcome") == "win")
+            b_losses = sum(1 for r in b_rows if r.get("outcome") == "loss")
+            b_dec = b_wins + b_losses
+            by_bracket[bracket_name] = {
+                "total": len(b_rows),
+                "wins": b_wins,
+                "losses": b_losses,
+                "pending": len(b_rows) - b_wins - b_losses,
+                "win_rate": round(b_wins / b_dec * 100, 1) if b_dec else None,
+            }
+
+        checks["performance_since_june22"] = {
+            "total": total,
+            "wins": wins,
+            "losses": losses,
+            "pending": pending,
+            "decisive": decisive,
+            "win_rate": round(wins / decisive * 100, 1) if decisive else None,
+            "by_confidence_bracket": by_bracket,
+        }
+    except Exception as e:
+        checks["performance_since_june22"] = f"error: {e}"
+
+    checks["congressional_trades"] = {
+        "total": _count_date("congressional_trades"),
+        "last_30d": _count_date("congressional_trades", since=(datetime.now(timezone.utc) - _td(days=30)).strftime("%Y-%m-%d")),
+    }
+
+    checks["insider_trades"] = {
+        "total": _count_date("insider_trades"),
+        "last_30d": _count_date("insider_trades", since=(datetime.now(timezone.utc) - _td(days=30)).strftime("%Y-%m-%d")),
+    }
+
+    checks["prediction_markets"] = {
+        "total_raw_prices": _count("raw_prices", extra_filters={"asset_type": "prediction"}),
+        "last_7d": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "prediction"}),
+        "scoring_enabled": False,
+        "note": "Ingestion running every 30min. Scoring disabled until data matures.",
+    }
+
+    checks["raw_prices_7d"] = {
+        "stocks": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "stock"}),
+        "crypto": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "crypto"}),
+    }
+
+    checks["news_items_7d"] = _count("news_items", since=cutoff_7d)
+
+    checks["env_keys"] = {
+        "FMP_API_KEY": "set" if os.environ.get("FMP_API_KEY") else "MISSING",
+        "ANTHROPIC_API_KEY": "set" if os.environ.get("ANTHROPIC_API_KEY") else "MISSING",
+        "ENABLE_SCHEDULER": os.environ.get("ENABLE_SCHEDULER", "false"),
+    }
+
+    checks["scheduler_running"] = scheduler.running
+
+    return jsonify(checks)
+
+
 # ─── Entry point ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     logger.info("Starting Plebs data service")
