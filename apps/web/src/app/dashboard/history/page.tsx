@@ -60,10 +60,12 @@ type PeriodStats = {
 };
 
 function computePeriodStats(signals: ResolvedSignal[], label: string): PeriodStats {
-  const wins = signals.filter((s) => s.outcome === "WIN").length;
-  const losses = signals.filter((s) => s.outcome === "LOSS").length;
+  // Only count signals with valid entry prices in aggregate metrics
+  const priced = signals.filter((s) => s.price_at_signal != null && s.price_at_signal > 0);
+  const wins = priced.filter((s) => s.outcome === "WIN").length;
+  const losses = priced.filter((s) => s.outcome === "LOSS").length;
   const resolved = wins + losses;
-  const returns = signals.map(computeReturn).filter((r): r is number => r !== null);
+  const returns = priced.map(computeReturn).filter((r): r is number => r !== null);
   const avgReturn = returns.length > 0 ? returns.reduce((a, b) => a + b, 0) / returns.length : null;
   return {
     label,
@@ -142,14 +144,16 @@ export default async function HistoryPage({
 
   const signals = (data ?? []) as ResolvedSignal[];
 
-  const wins     = signals.filter((s) => s.outcome === "WIN");
-  const losses   = signals.filter((s) => s.outcome === "LOSS");
-  const total    = signals.length;
+  // Only include signals with valid entry prices in aggregate metrics
+  const pricedSignals = signals.filter((s) => s.price_at_signal != null && s.price_at_signal > 0);
+  const wins     = pricedSignals.filter((s) => s.outcome === "WIN");
+  const losses   = pricedSignals.filter((s) => s.outcome === "LOSS");
+  const total    = pricedSignals.length;
   const wl       = wins.length + losses.length;
   const winRate  = wl > 0 ? (wins.length / wl) * 100 : 0;
-  const avgConf  = total > 0 ? signals.reduce((s, w) => s + w.confidence, 0) / total : 0;
+  const avgConf  = total > 0 ? pricedSignals.reduce((s, w) => s + w.confidence, 0) / total : 0;
 
-  const allReturns = signals.map(computeReturn).filter((r): r is number => r !== null);
+  const allReturns = pricedSignals.map(computeReturn).filter((r): r is number => r !== null);
   const avgReturn  = allReturns.length > 0 ? allReturns.reduce((a, b) => a + b, 0) / allReturns.length : null;
 
   // --- YTD ---
@@ -226,7 +230,7 @@ export default async function HistoryPage({
         <StatCard label="Resolved" value={wl} icon={Target} />
         <StatCard
           label="Win rate"
-          value={wl > 0 ? `${winRate.toFixed(1)}%` : "—"}
+          value={wl > 0 ? `${winRate.toFixed(1)}% (${wl})` : "—"}
           color={winRate >= 55 ? "green" : winRate > 0 ? "red" : undefined}
           icon={BarChart3}
         />
@@ -248,10 +252,10 @@ export default async function HistoryPage({
             <span className={`text-2xl font-bold tabular-nums ${rateColor(ytdStats.winRate)}`}>
               {ytdStats.resolved > 0 ? `${ytdStats.winRate.toFixed(1)}%` : "—"}
             </span>
-            <span className="text-xs text-zinc-500">win rate</span>
+            <span className="text-xs text-zinc-500">win rate · {ytdStats.resolved} signals</span>
           </div>
           <div className="text-xs text-zinc-500 mt-1">
-            {ytdStats.wins}W – {ytdStats.losses}L · {ytdStats.resolved} resolved
+            {ytdStats.wins}W – {ytdStats.losses}L
           </div>
           {ytdStats.avgReturn !== null && (
             <div className={`text-xs mt-1 ${returnColor(ytdStats.avgReturn)}`}>
@@ -272,7 +276,7 @@ export default async function HistoryPage({
                     {a.resolved > 0 ? `${a.winRate.toFixed(1)}%` : "—"}
                   </span>
                   <span className="text-[10px] text-zinc-600">
-                    {a.wins}W–{a.losses}L
+                    {a.wins}W–{a.losses}L · {a.resolved} signals
                   </span>
                 </div>
               </div>
@@ -425,7 +429,7 @@ export default async function HistoryPage({
                             {ret >= 0 ? "+" : ""}{ret.toFixed(2)}%
                           </span>
                         ) : (
-                          <span className="text-zinc-600">—</span>
+                          <span className="text-zinc-600">N/A</span>
                         )}
                       </td>
                       <td className="py-2.5 px-3 text-center">

@@ -1,16 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Share2, Check } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ShareButton({ signalId }: { signalId: number }) {
   const [copied, setCopied] = useState(false);
+  const referralCodeRef = useRef<string | null>(null);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase
+        .from("profiles")
+        .select("referral_code")
+        .eq("id", user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.referral_code) {
+            referralCodeRef.current = data.referral_code as string;
+          }
+        });
+    });
+  }, []);
 
   const handleShare = async () => {
-    const url =
+    const base =
       typeof window !== "undefined"
         ? `${window.location.origin}/signal/${signalId}`
         : `/signal/${signalId}`;
+
+    const url = referralCodeRef.current
+      ? `${base}?ref=${referralCodeRef.current}`
+      : base;
 
     try {
       await navigator.clipboard.writeText(url);

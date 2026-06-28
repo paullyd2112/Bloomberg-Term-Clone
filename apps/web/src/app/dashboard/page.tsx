@@ -157,6 +157,8 @@ export default async function DashboardPage() {
   const winCount  = signals.filter((s) => s.outcome === "WIN").length;
   const lossCount = signals.filter((s) => s.outcome === "LOSS").length;
   const pending   = signals.filter((s) => s.outcome === "PENDING").length;
+  const resolved  = winCount + lossCount;
+  const allPending = resolved === 0 && pending > 0;
 
   return (
     <div className="p-5 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -179,12 +181,27 @@ export default async function DashboardPage() {
       )}
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Total signals" value={signals.length} icon={Activity} />
-        <StatCard label="Pending" value={pending} icon={Clock} />
-        <StatCard label="Wins" value={winCount} color="green" icon={TrendingUp} />
-        <StatCard label="Losses" value={lossCount} color="red" icon={TrendingDown} />
-      </div>
+      {allPending ? (
+        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-6 py-5">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />
+            </span>
+            <div>
+              <p className="text-sm font-medium text-white">Signals are being analyzed</p>
+              <p className="text-xs text-zinc-500 mt-0.5">{pending} signal{pending === 1 ? "" : "s"} pending resolution — win rate will appear once signals resolve</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard label="Total signals" value={signals.length} icon={Activity} />
+          <StatCard label="Pending" value={pending} icon={Clock} />
+          <StatCard label="Wins" value={winCount} color="green" icon={TrendingUp} />
+          <StatCard label="Losses" value={lossCount} color="red" icon={TrendingDown} />
+        </div>
+      )}
 
       {/* Platform accuracy */}
       {accuracy && (
@@ -198,10 +215,10 @@ export default async function DashboardPage() {
                 <span className={`text-2xl font-bold tabular-nums ${rateColor(accuracy.overallWinRate)}`}>
                   {(accuracy.overallWinRate * 100).toFixed(1)}%
                 </span>
-                <span className="text-xs text-zinc-500">win rate</span>
+                <span className="text-xs text-zinc-500">win rate · {accuracy.totalResolved} signals</span>
               </div>
               <div className="text-xs text-zinc-500 mt-1">
-                {accuracy.totalWins}W – {accuracy.totalLosses}L · {accuracy.totalResolved} resolved
+                {accuracy.totalWins}W – {accuracy.totalLosses}L
               </div>
             </div>
 
@@ -213,7 +230,7 @@ export default async function DashboardPage() {
                   <span className={`text-2xl font-bold tabular-nums ${rateColor(accuracy.yesterday.winRate)}`}>
                     {(accuracy.yesterday.winRate * 100).toFixed(0)}%
                   </span>
-                  <span className="text-xs text-zinc-500">win rate</span>
+                  <span className="text-xs text-zinc-500">win rate · {accuracy.yesterday.resolved} signals</span>
                 </div>
                 <div className="text-xs text-zinc-500 mt-1">
                   {accuracy.yesterday.wins}W – {accuracy.yesterday.losses}L
@@ -232,7 +249,7 @@ export default async function DashboardPage() {
                       <span className={`text-sm font-semibold tabular-nums ${rateColor(a.winRate)}`}>
                         {(a.winRate * 100).toFixed(1)}%
                       </span>
-                      <span className="text-[10px] text-zinc-600">({a.resolved})</span>
+                      <span className="text-[10px] text-zinc-600">({a.resolved} signal{a.resolved === 1 ? "" : "s"})</span>
                     </div>
                   </div>
                 ))}
@@ -244,15 +261,18 @@ export default async function DashboardPage() {
               <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4 sm:col-span-2 lg:col-span-3">
                 <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Month over month</div>
                 <div className="flex gap-4 overflow-x-auto scrollbar-none">
-                  {accuracy.byMonth.map((m) => (
-                    <div key={m.month} className="flex-shrink-0 min-w-[80px]">
-                      <div className="text-xs text-zinc-400 font-mono">{m.month}</div>
-                      <div className={`text-lg font-bold tabular-nums ${rateColor(m.winRate)}`}>
-                        {(m.winRate * 100).toFixed(0)}%
+                  {accuracy.byMonth.map((m) => {
+                    const monthResolved = m.wins + m.losses;
+                    return (
+                      <div key={m.month} className="flex-shrink-0 min-w-[80px]">
+                        <div className="text-xs text-zinc-400 font-mono">{m.month}</div>
+                        <div className={`text-lg font-bold tabular-nums ${rateColor(m.winRate)}`}>
+                          {(m.winRate * 100).toFixed(0)}%
+                        </div>
+                        <div className="text-[10px] text-zinc-600">{m.wins}W – {m.losses}L · {monthResolved} signals</div>
                       </div>
-                      <div className="text-[10px] text-zinc-600">{m.wins}W – {m.losses}L</div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

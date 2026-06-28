@@ -35,7 +35,6 @@ function Nav() {
 
         <div className="hidden md:flex items-center gap-8 text-sm text-zinc-400">
           <a href="#terminal" className="hover:text-white transition-colors">The terminal</a>
-          <a href="#proof" className="hover:text-white transition-colors">Results</a>
           <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
           <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
         </div>
@@ -118,7 +117,7 @@ function Hero() {
             </div>
 
             <p className="mt-5 font-mono text-[11px] uppercase tracking-wider text-zinc-600">
-              Cancel anytime · No lock-in
+              Credit card required · Cancel anytime
             </p>
           </div>
 
@@ -238,64 +237,6 @@ function Features() {
   );
 }
 
-// ─── Social proof ────────────────────────────────────────────────────────────
-
-const QUOTES = [
-  {
-    quote:
-      "The 7a brief is the only newsletter I actually open. Caught the TSLA reversal a full session before the move.",
-    name: "Ryan M.",
-    role: "Swing trader",
-  },
-  {
-    quote:
-      "The signal accuracy tracking is what sold me. Seeing real win rates per ticker — not just vibes — changed how I trade.",
-    name: "Destiny A.",
-    role: "Swing trader",
-  },
-  {
-    quote:
-      "Congress tracker flagged a senator loading semis before the AI bill vote. That one alert covered months of sub.",
-    name: "Marcus T.",
-    role: "Equities",
-  },
-];
-
-function SocialProof() {
-  return (
-    <section id="proof" className="py-24 px-5 sm:px-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="max-w-2xl mb-14">
-          <SectionLabel index="02">Results</SectionLabel>
-          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tight text-balance">
-            Traders don&apos;t churn. They tell their group chat.
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-white/[0.06] rounded-2xl overflow-hidden border border-white/[0.06]">
-          {QUOTES.map((q) => (
-            <figure key={q.name} className="bg-zinc-950 p-8 flex flex-col">
-              <span className="font-serif text-4xl leading-none text-emerald-500/40">&ldquo;</span>
-              <blockquote className="mt-3 text-zinc-200 leading-relaxed flex-1 text-pretty">
-                {q.quote}
-              </blockquote>
-              <figcaption className="mt-6 pt-5 border-t border-white/[0.06] flex items-center gap-3">
-                <div className="h-9 w-9 rounded-full bg-emerald-500/10 border border-emerald-700/30 flex items-center justify-center font-mono text-sm font-semibold text-emerald-400">
-                  {q.name.charAt(0)}
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-white">{q.name}</div>
-                  <div className="text-xs text-zinc-500">{q.role}</div>
-                </div>
-              </figcaption>
-            </figure>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 // ─── Pricing ──────────────────────────────────────────────────────────────────
 
 const PLANS = [
@@ -340,7 +281,7 @@ function Pricing() {
     <section id="pricing" className="py-24 px-5 sm:px-8">
       <div className="max-w-5xl mx-auto">
         <div className="max-w-2xl mb-14">
-          <SectionLabel index="03">Pricing</SectionLabel>
+          <SectionLabel index="02">Pricing</SectionLabel>
           <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tight">
             Two tiers. The signals pay for themselves.
           </h2>
@@ -439,7 +380,7 @@ function FAQ() {
     <section id="faq" className="py-24 px-5 sm:px-8">
       <div className="max-w-3xl mx-auto">
         <div className="mb-14">
-          <SectionLabel index="04">FAQ</SectionLabel>
+          <SectionLabel index="03">FAQ</SectionLabel>
           <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tight">
             Common questions
           </h2>
@@ -540,7 +481,6 @@ export default function LandingPage() {
         <Hero />
         <Stats />
         <Features />
-        <SocialProof />
         <Pricing />
         <FAQ />
         <CTAStrip />
