@@ -301,7 +301,7 @@ export default async function AssetPage({ params }: PageProps) {
               <SectionHeader label="AI accuracy" />
               <div className="space-y-2">
                 <StatRow label="Total signals" value={accuracy.total_signals} />
-                <StatRow label="Win rate" value={`${((accuracy.win_rate ?? 0) * 100).toFixed(1)}%`} highlight />
+                <StatRow label="Win rate" value={`${((accuracy.win_rate ?? 0) * 100).toFixed(1)}% (${accuracy.wins + accuracy.losses} resolved)`} highlight />
                 <StatRow label="Wins" value={accuracy.wins} />
                 <StatRow label="Losses" value={accuracy.losses} />
                 <StatRow label="Neutral" value={accuracy.neutrals} />

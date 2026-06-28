@@ -14,7 +14,7 @@ export default function AccuracyBadge({ accuracy }: { accuracy: Accuracy }) {
 
   return (
     <span className={`text-xs font-bold px-2 py-0.5 rounded border ${color}`}>
-      {pct.toFixed(0)}% win rate
+      {pct.toFixed(0)}% win rate · {accuracy.total_signals} signals
     </span>
   );
 }
