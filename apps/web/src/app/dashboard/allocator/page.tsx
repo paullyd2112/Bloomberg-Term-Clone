@@ -96,7 +96,7 @@ export default function AllocatorPage() {
 
   const stockPct = result?.allocations.filter(a => a.asset_type === "stock").reduce((s, a) => s + a.allocation_pct, 0) ?? 0;
   const cryptoPct = result?.allocations.filter(a => a.asset_type === "crypto").reduce((s, a) => s + a.allocation_pct, 0) ?? 0;
-  const predPct = result?.allocations.filter(a => a.asset_type === "prediction").reduce((s, a) => s + a.allocation_pct, 0) ?? 0;
+  const predPct = 0;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 md:py-10">

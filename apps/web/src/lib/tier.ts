@@ -25,7 +25,6 @@ export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
   elite: [
     "Everything in Pro",
     "On-demand AI analysis — score any ticker instantly",
-    "Prediction market signals — coming soon",
     "Pleby — AI trading analyst chat",
     "Ask Pleby about any asset anytime",
     "Personalised morning briefing",

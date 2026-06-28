@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type AssetType    = "stock" | "crypto" | "prediction";
+type AssetType    = "stock" | "crypto";
 type TriggerType  = "signal_fired" | "price_threshold" | "news_drop";
 
 const TRIGGER_LABELS: Record<TriggerType, string> = {
@@ -64,7 +64,6 @@ export default function AddAlertForm({ onClose }: { onClose: () => void }) {
           >
             <option value="stock">Stock</option>
             <option value="crypto">Crypto</option>
-            <option value="prediction">Prediction</option>
           </select>
         </div>
 
@@ -115,7 +114,7 @@ export default function AddAlertForm({ onClose }: { onClose: () => void }) {
       {triggerType === "price_threshold" && (
         <div>
           <label className="block text-xs text-zinc-400 mb-1">
-            Price threshold ({assetType === "prediction" ? "0–1" : "$"})
+            Price threshold ($)
           </label>
           <input
             required

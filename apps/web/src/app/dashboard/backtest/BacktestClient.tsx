@@ -120,7 +120,6 @@ export default function BacktestClient() {
               <option value="all">All</option>
               <option value="stock">Stocks</option>
               <option value="crypto">Crypto</option>
-              <option value="prediction">Predictions</option>
             </select>
           </div>
 

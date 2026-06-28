@@ -15,7 +15,6 @@ const EXPERIENCE_OPTIONS: { value: Experience; label: string }[] = [
 const ASSET_OPTIONS: { value: AssetPref; label: string }[] = [
   { value: "stocks",      label: "Stocks" },
   { value: "crypto",      label: "Crypto" },
-  { value: "predictions", label: "Predictions" },
 ];
 
 type Props = {

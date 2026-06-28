@@ -239,7 +239,7 @@ export default function PlebyClient() {
                 <img src="/pleby-mascot.png" alt="Pleby" className="h-36 w-auto mx-auto" />
                 <h2 className="text-white font-semibold text-lg tracking-tight">Ask Pleby</h2>
                 <p className="text-zinc-500 text-sm max-w-md mx-auto leading-relaxed">
-                  Your AI trading analyst. Ask about any stock, crypto, or prediction market — Pleby pulls live signals, options flow, earnings, and news to give you a synthesized take.
+                  Your AI trading analyst. Ask about any stock or crypto — Pleby pulls live signals, options flow, earnings, and news to give you a synthesized take.
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center pt-2">
                   {[

@@ -14,7 +14,7 @@ import OnDemandScore from "@/components/asset/OnDemandScore";
 
 export const revalidate = 60;
 
-const VALID_TYPES = ["stock", "crypto", "prediction"] as const;
+const VALID_TYPES = ["stock", "crypto"] as const;
 type AssetType = (typeof VALID_TYPES)[number];
 
 type PageProps = {

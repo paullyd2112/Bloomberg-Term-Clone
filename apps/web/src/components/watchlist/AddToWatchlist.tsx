@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, ArrowRight } from "lucide-react";
 
-type AssetType = "stock" | "crypto" | "prediction";
+type AssetType = "stock" | "crypto";
 
 export default function AddToWatchlist({
   onAdded,
@@ -78,14 +78,13 @@ export default function AddToWatchlist({
           >
             <option value="stock">Stock</option>
             <option value="crypto">Crypto</option>
-            <option value="prediction">Prediction</option>
           </select>
 
           <input
             autoFocus
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
-            placeholder={assetType === "stock" ? "e.g. AAPL" : assetType === "crypto" ? "e.g. BTC" : "e.g. ticker"}
+            placeholder={assetType === "stock" ? "e.g. AAPL" : "e.g. BTC"}
             className="bg-white/[0.04] border border-white/[0.1] text-white text-xs rounded-lg px-2 py-1.5 w-28 focus:outline-none focus:border-emerald-500/50 placeholder-zinc-500 uppercase"
             maxLength={60}
             required

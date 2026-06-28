@@ -157,15 +157,6 @@ export default async function BriefingPage() {
         <p className="text-zinc-300 text-sm leading-relaxed">{content.macro_context}</p>
       </Section>
 
-      {/* Prediction market edge */}
-      {content.prediction_market_edge && (
-        <Section label="Prediction market edge">
-          <p className="text-zinc-300 text-sm leading-relaxed">
-            {content.prediction_market_edge}
-          </p>
-        </Section>
-      )}
-
       {/* Watch today */}
       <Section label="Watch today">
         <div className="flex flex-wrap gap-2">

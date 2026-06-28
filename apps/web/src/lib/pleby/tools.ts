@@ -6,7 +6,7 @@ export const PLEBY_TOOLS: Anthropic.Tool[] = [
   {
     name: "get_asset_overview",
     description:
-      "Get the latest price, 24h change, and volume for an asset. Use this as your first call when the user asks about any specific stock, crypto, or prediction market.",
+      "Get the latest price, 24h change, and volume for an asset. Use this as your first call when the user asks about any specific stock or crypto.",
     input_schema: {
       type: "object",
       properties: {
@@ -16,7 +16,7 @@ export const PLEBY_TOOLS: Anthropic.Tool[] = [
         },
         asset_type: {
           type: "string",
-          enum: ["stock", "crypto", "prediction"],
+          enum: ["stock", "crypto"],
           description: "Type of asset",
         },
       },
