@@ -7,7 +7,7 @@ const Body = z.object({
   full_name:          z.string().min(1).max(200),
   phone_number:       z.string().max(30).nullable().optional(),
   trading_experience: z.enum(["beginner", "intermediate", "advanced"]).optional(),
-  asset_preferences:  z.array(z.enum(["stocks", "crypto", "predictions"])).optional(),
+  asset_preferences:  z.array(z.enum(["stocks", "crypto"])).optional(),
   email_alerts:       z.boolean().optional(),
   sms_alerts:         z.boolean().optional(),
 });

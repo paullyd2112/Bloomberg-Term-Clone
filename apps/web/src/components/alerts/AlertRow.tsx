@@ -70,9 +70,7 @@ export default function AlertRow({ alert }: { alert: Alert }) {
           <span className="text-xs text-zinc-500">{TRIGGER_LABEL[alert.trigger_type]}</span>
           {alert.trigger_type === "price_threshold" && alert.threshold != null && (
             <span className="text-xs font-mono text-zinc-400">
-              @ {alert.asset_type === "prediction"
-                  ? `${(alert.threshold * 100).toFixed(1)}%`
-                  : `$${Number(alert.threshold).toLocaleString()}`}
+              @ ${Number(alert.threshold).toLocaleString()}
             </span>
           )}
         </div>

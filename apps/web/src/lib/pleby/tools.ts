@@ -44,7 +44,7 @@ export const PLEBY_TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: {
         identifier: { type: "string" },
-        asset_type: { type: "string", enum: ["stock", "crypto", "prediction"] },
+        asset_type: { type: "string", enum: ["stock", "crypto"] },
       },
       required: ["identifier", "asset_type"],
     },

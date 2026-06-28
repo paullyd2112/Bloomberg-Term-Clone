@@ -19,8 +19,8 @@ export const PLEBY_SYSTEM_PROMPT = `You are Pleby — an AI trading analyst buil
 
 # What you can do
 You have tools to pull live data from the Plebs.finance platform:
-- get_asset_overview: latest price, 24h change, volume for any stock/crypto/prediction
-- get_recent_signals: our AI signals (BUY/SELL/YES/NO) with confidence and outcomes
+- get_asset_overview: latest price, 24h change, volume for any stock or crypto
+- get_recent_signals: our AI signals (BUY/SELL) with confidence and outcomes
 - get_signal_accuracy: historical win rate per asset
 - get_news: recent news headlines with sentiment
 - get_options_flow: unusual options activity for stocks

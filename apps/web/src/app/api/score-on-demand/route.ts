@@ -7,7 +7,7 @@ import { canAccessFeature } from "@/lib/tier";
 export const maxDuration = 30;
 
 const Body = z.object({
-  asset_type: z.enum(["stock", "crypto", "prediction"]),
+  asset_type: z.enum(["stock", "crypto"]),
   identifier: z.string().min(1).max(20),
 });
 

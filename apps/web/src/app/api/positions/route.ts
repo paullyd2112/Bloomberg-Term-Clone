@@ -5,9 +5,9 @@ import { requireUser } from "@/lib/user";
 import type { Tier } from "@/lib/tier";
 
 const OpenBody = z.object({
-  asset_type:  z.enum(["stock", "crypto", "prediction"]),
+  asset_type:  z.enum(["stock", "crypto"]),
   identifier:  z.string().min(1).max(100).transform((s) => s.toUpperCase()),
-  direction:   z.enum(["LONG", "SHORT", "YES", "NO"]),
+  direction:   z.enum(["LONG", "SHORT"]),
   entry_price: z.number().positive(),
   size:        z.number().positive(),
 });

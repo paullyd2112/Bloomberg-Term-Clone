@@ -59,10 +59,7 @@ export default function PriceChart({
       topColor,
       bottomColor: "rgba(0, 0, 0, 0)",
       lineWidth: 2,
-      priceFormat:
-        assetType === "prediction"
-          ? { type: "custom", formatter: (p: number) => `${(p * 100).toFixed(1)}%` }
-          : { type: "price", precision: 2, minMove: 0.01 },
+      priceFormat: { type: "price", precision: 2, minMove: 0.01 },
     });
 
     series.setData(

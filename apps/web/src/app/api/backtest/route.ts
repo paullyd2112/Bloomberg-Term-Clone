@@ -5,9 +5,9 @@ import { getUser, getUserTier } from "@/lib/user";
 import { isPaidTier } from "@/lib/tier";
 
 const BacktestBody = z.object({
-  asset_type:     z.enum(["all", "stock", "crypto", "prediction"]),
-  direction:      z.enum(["all", "BUY", "SELL", "YES", "NO"]),
-  horizon:        z.enum(["all", "intraday", "swing", "longterm", "before_close"]),
+  asset_type:     z.enum(["all", "stock", "crypto"]),
+  direction:      z.enum(["all", "BUY", "SELL"]),
+  horizon:        z.enum(["all", "intraday", "swing", "longterm"]),
   min_confidence: z.number().int().min(0).max(100),
   start_date:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   end_date:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -17,9 +17,9 @@ const BacktestBody = z.object({
 export const dynamic = "force-dynamic";
 
 export type BacktestParams = {
-  asset_type: "all" | "stock" | "crypto" | "prediction";
-  direction:  "all" | "BUY" | "SELL" | "YES" | "NO";
-  horizon:    "all" | "intraday" | "swing" | "longterm" | "before_close";
+  asset_type: "all" | "stock" | "crypto";
+  direction:  "all" | "BUY" | "SELL";
+  horizon:    "all" | "intraday" | "swing" | "longterm";
   min_confidence: number;
   start_date: string;
   end_date:   string;
@@ -58,7 +58,7 @@ type RawSignal = {
 
 function tradePnl(sig: RawSignal, tradeSize: number): number | null {
   if (sig.price_at_signal && sig.outcome_price && sig.price_at_signal > 0) {
-    const isBull = sig.direction === "BUY" || sig.direction === "YES";
+    const isBull = sig.direction === "BUY";
     const pct = isBull
       ? (sig.outcome_price - sig.price_at_signal) / sig.price_at_signal
       : (sig.price_at_signal - sig.outcome_price) / sig.price_at_signal;
@@ -111,14 +111,13 @@ function computeResults(signals: RawSignal[], tradeSize: number): BacktestResult
     equityCurve.push({ date: sig.created_at.slice(0, 10), pnl: Math.round(cumPnl * 100) / 100 });
   }
 
-  const decided = wins + losses;
   const totalPriced = pricedSignals.length;
   return {
     total_trades:      totalPriced,
     wins,
     losses,
     neutrals,
-    win_rate:          decided > 0 ? Math.round((wins / decided) * 1000) / 10 : 0,
+    win_rate:          totalPriced > 0 ? Math.round((wins / totalPriced) * 1000) / 10 : 0,
     total_pnl:         Math.round(cumPnl * 100) / 100,
     avg_pnl_per_trade: totalPriced > 0 ? Math.round((cumPnl / totalPriced) * 100) / 100 : 0,
     best_trade:        bestTrade === -Infinity ? 0 : Math.round(bestTrade * 100) / 100,

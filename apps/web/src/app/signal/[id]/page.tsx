@@ -8,22 +8,19 @@ type Signal = {
   id:              number;
   asset_type:      string;
   identifier:      string;
-  direction:       "BUY" | "SELL" | "HOLD" | "YES" | "NO";
+  direction:       "BUY" | "SELL" | "HOLD";
   confidence:      number;
   reasoning:       string;
   time_horizon:    string;
   price_at_signal: number | null;
   news_context:    string[] | null;
-  news_urls:       string[] | null;
   created_at:      string;
   outcome:         "WIN" | "LOSS" | "NEUTRAL" | "PENDING";
 };
 
 const DIRECTION_STYLE: Record<string, string> = {
   BUY:  "bg-green-500/20 text-green-400 border-green-700",
-  YES:  "bg-green-500/20 text-green-400 border-green-700",
   SELL: "bg-red-500/20 text-red-400 border-red-700",
-  NO:   "bg-red-500/20 text-red-400 border-red-700",
   HOLD: "bg-zinc-700/40 text-zinc-400 border-zinc-600",
 };
 
@@ -93,7 +90,6 @@ export default async function SharedSignalPage({
   const dirStyle  = DIRECTION_STYLE[s.direction] ?? DIRECTION_STYLE.HOLD;
   const outcome   = OUTCOME_STYLE[s.outcome];
   const timeAgo   = formatDistanceToNow(new Date(s.created_at), { addSuffix: true });
-  const isPredict = s.asset_type === "prediction";
 
   return (
     <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center px-4 py-16">
@@ -164,13 +160,11 @@ export default async function SharedSignalPage({
             <span>
               Entry:{" "}
               <span className="font-mono text-zinc-300">
-                {isPredict
-                  ? `${(Number(s.price_at_signal) * 100).toFixed(1)}%`
-                  : `$${Number(s.price_at_signal).toLocaleString()}`}
+                ${Number(s.price_at_signal).toLocaleString()}
               </span>
             </span>
           )}
-          {s.news_context && s.news_context.length > 0 && !s.news_urls?.some(u => u) && (
+          {s.news_context && s.news_context.length > 0 && (
             <span>{s.news_context.length} news items</span>
           )}
         </div>
@@ -178,24 +172,11 @@ export default async function SharedSignalPage({
         {s.news_context && s.news_context.length > 0 && (
           <div className="space-y-1.5 pt-1 border-t border-zinc-800">
             <div className="text-[10px] uppercase tracking-widest text-zinc-600 mb-1">Related news</div>
-            {s.news_context.map((item, i) => {
-              const url = s.news_urls?.[i];
-              return url ? (
-                <a
-                  key={i}
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-xs text-zinc-400 leading-snug truncate hover:text-green-400 transition-colors"
-                >
-                  • {item}
-                </a>
-              ) : (
-                <p key={i} className="text-xs text-zinc-500 leading-snug truncate">
-                  • {item}
-                </p>
-              );
-            })}
+            {s.news_context.map((item, i) => (
+              <p key={i} className="text-xs text-zinc-500 leading-snug truncate">
+                • {item}
+              </p>
+            ))}
           </div>
         )}
       </div>

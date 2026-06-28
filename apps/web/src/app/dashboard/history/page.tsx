@@ -26,7 +26,7 @@ type ResolvedSignal = {
 
 function computeReturn(sig: ResolvedSignal): number | null {
   if (!sig.price_at_signal || !sig.outcome_price || sig.price_at_signal <= 0) return null;
-  const isBull = sig.direction === "BUY" || sig.direction === "YES";
+  const isBull = sig.direction === "BUY";
   return isBull
     ? ((sig.outcome_price - sig.price_at_signal) / sig.price_at_signal) * 100
     : ((sig.price_at_signal - sig.outcome_price) / sig.price_at_signal) * 100;
@@ -39,7 +39,6 @@ function formatDate(iso: string): string {
 
 function formatPrice(price: number | null, assetType: string): string {
   if (price == null) return "—";
-  if (assetType === "prediction") return `${(price * 100).toFixed(1)}%`;
   return `$${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
@@ -404,9 +403,9 @@ export default async function HistoryPage({
                       <td className="py-2.5 px-3">
                         <span
                           className={
-                            sig.direction === "BUY" || sig.direction === "YES"
+                            sig.direction === "BUY"
                               ? "text-emerald-400 text-xs font-semibold"
-                              : sig.direction === "SELL" || sig.direction === "NO"
+                              : sig.direction === "SELL"
                               ? "text-red-400 text-xs font-semibold"
                               : "text-zinc-400 text-xs font-semibold"
                           }

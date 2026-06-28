@@ -7,22 +7,19 @@ export type Signal = {
   id: number;
   asset_type: string;
   identifier: string;
-  direction: "BUY" | "SELL" | "HOLD" | "YES" | "NO";
+  direction: "BUY" | "SELL" | "HOLD";
   confidence: number;
   reasoning: string;
   time_horizon: string;
   price_at_signal: number | null;
   news_context: string[] | null;
-  news_urls: string[] | null;
   created_at: string;
   outcome: "WIN" | "LOSS" | "NEUTRAL" | "PENDING";
 };
 
 const DIRECTION_STYLE: Record<string, string> = {
   BUY:  "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  YES:  "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
   SELL: "bg-red-500/15 text-red-400 border-red-500/30",
-  NO:   "bg-red-500/15 text-red-400 border-red-500/30",
   HOLD: "bg-white/[0.06] text-zinc-400 border-white/10",
 };
 
@@ -109,24 +106,11 @@ export default function SignalCard({ signal }: { signal: Signal }) {
       {/* News context */}
       {signal.news_context && signal.news_context.length > 0 && (
         <div className="space-y-1">
-          {signal.news_context.slice(0, 3).map((item, i) => {
-            const url = signal.news_urls?.[i];
-            return url ? (
-              <a
-                key={i}
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-[11px] text-zinc-500 leading-snug truncate hover:text-emerald-400 transition-colors"
-              >
-                • {item}
-              </a>
-            ) : (
-              <p key={i} className="text-[11px] text-zinc-500 leading-snug truncate">
-                • {item}
-              </p>
-            );
-          })}
+          {signal.news_context.slice(0, 3).map((item, i) => (
+            <p key={i} className="text-[11px] text-zinc-500 leading-snug truncate">
+              • {item}
+            </p>
+          ))}
         </div>
       )}
 
@@ -138,9 +122,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
           </span>
           {signal.price_at_signal != null && (
             <span className="text-[11px] text-zinc-500 font-mono">
-              @ {signal.asset_type === "prediction"
-                  ? `${(signal.price_at_signal * 100).toFixed(1)}%`
-                  : `$${Number(signal.price_at_signal).toLocaleString()}`}
+              @ ${Number(signal.price_at_signal).toLocaleString()}
             </span>
           )}
         </div>

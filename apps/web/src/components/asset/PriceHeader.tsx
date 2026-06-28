@@ -50,8 +50,6 @@ export default function PriceHeader({
   const formattedPrice =
     price == null
       ? "—"
-      : assetType === "prediction"
-      ? `${(price * 100).toFixed(1)}%`
       : price >= 1000
       ? `$${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
       : `$${Number(price).toFixed(4).replace(/\.?0+$/, "")}`;

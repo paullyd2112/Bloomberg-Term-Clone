@@ -13,9 +13,7 @@ type LandingSignal = {
 
 const DIRECTION_COLOR: Record<string, string> = {
   BUY:  "text-green-400 border-green-700 bg-green-500/10",
-  YES:  "text-green-400 border-green-700 bg-green-500/10",
   SELL: "text-red-400 border-red-700 bg-red-500/10",
-  NO:   "text-red-400 border-red-700 bg-red-500/10",
 };
 
 const HORIZON_LABEL: Record<string, string> = {

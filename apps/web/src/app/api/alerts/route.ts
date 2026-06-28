@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/user";
 import type { Tier } from "@/lib/tier";
 
 const Body = z.object({
-  asset_type:   z.enum(["stock", "crypto", "prediction"]),
+  asset_type:   z.enum(["stock", "crypto"]),
   identifier:   z.string().min(1).max(100).transform((s) => s.toUpperCase()),
   trigger_type: z.enum(["signal_fired", "price_threshold", "news_drop"]),
   threshold:    z.number().positive().optional(),

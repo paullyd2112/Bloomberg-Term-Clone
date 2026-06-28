@@ -37,13 +37,11 @@ const RISK_LABELS: Record<RiskTolerance, string> = {
 const ASSET_TEXT: Record<string, string> = {
   stock:      "text-blue-400",
   crypto:     "text-amber-400",
-  prediction: "text-purple-400",
 };
 
 const ASSET_LABELS: Record<string, string> = {
   stock:      "Stock",
   crypto:     "Crypto",
-  prediction: "Prediction",
 };
 
 function formatDate(iso: string) {
@@ -96,7 +94,6 @@ export default function AllocatorPage() {
 
   const stockPct = result?.allocations.filter(a => a.asset_type === "stock").reduce((s, a) => s + a.allocation_pct, 0) ?? 0;
   const cryptoPct = result?.allocations.filter(a => a.asset_type === "crypto").reduce((s, a) => s + a.allocation_pct, 0) ?? 0;
-  const predPct = 0;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 md:py-10">
@@ -222,12 +219,10 @@ export default function AllocatorPage() {
             <div className="flex rounded-full overflow-hidden h-3 mb-3">
               {stockPct > 0  && <div className="bg-blue-500"   style={{ width: `${stockPct}%` }} />}
               {cryptoPct > 0 && <div className="bg-amber-500"  style={{ width: `${cryptoPct}%` }} />}
-              {predPct > 0   && <div className="bg-purple-500" style={{ width: `${predPct}%` }} />}
             </div>
             <div className="flex gap-4 text-xs">
               {stockPct > 0  && <span className="text-blue-400">Stocks {stockPct}%</span>}
               {cryptoPct > 0 && <span className="text-amber-400">Crypto {cryptoPct}%</span>}
-              {predPct > 0   && <span className="text-purple-400">Prediction {predPct}%</span>}
             </div>
           </div>
 

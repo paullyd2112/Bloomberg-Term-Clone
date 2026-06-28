@@ -19,7 +19,6 @@ type BriefingContent = {
   market_overview:        string;
   top_trades:             Trade[];
   macro_context:          string;
-  prediction_market_edge: string;
   watch_today:            string[];
   risk_note:              string;
 };
@@ -42,9 +41,7 @@ const TONE_STYLE = {
 
 const DIR_STYLE: Record<string, string> = {
   BUY:  "bg-emerald-500/20 text-emerald-400 border-emerald-700/40",
-  YES:  "bg-emerald-500/20 text-emerald-400 border-emerald-700/40",
   SELL: "bg-red-500/20 text-red-400 border-red-700/40",
-  NO:   "bg-red-500/20 text-red-400 border-red-700/40",
   HOLD: "bg-white/[0.06] text-zinc-400 border-white/[0.1]",
 };
 
