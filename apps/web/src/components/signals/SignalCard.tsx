@@ -144,7 +144,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
             </span>
           )}
         </div>
-        <ShareButton signalId={signal.id} />
+        <ShareButton signalId={signal.id} ticker={signal.identifier} direction={signal.direction} confidence={signal.confidence} />
       </div>
 
       {/* Disclaimer */}
