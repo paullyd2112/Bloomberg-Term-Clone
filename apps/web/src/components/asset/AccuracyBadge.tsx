@@ -5,6 +5,7 @@ type Accuracy = {
 
 export default function AccuracyBadge({ accuracy }: { accuracy: Accuracy }) {
   if (!accuracy.total_signals || accuracy.win_rate == null) return null;
+  if (accuracy.total_signals < 5) return null;
 
   const pct  = accuracy.win_rate * 100;
   const color =
@@ -14,7 +15,7 @@ export default function AccuracyBadge({ accuracy }: { accuracy: Accuracy }) {
 
   return (
     <span className={`text-xs font-bold px-2 py-0.5 rounded border ${color}`}>
-      {pct.toFixed(0)}% win rate · {accuracy.total_signals} signals
+      {pct.toFixed(0)}% win rate · {accuracy.total_signals} {accuracy.total_signals === 1 ? "signal" : "signals"}
     </span>
   );
 }
