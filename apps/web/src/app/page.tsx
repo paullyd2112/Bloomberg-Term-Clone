@@ -458,7 +458,7 @@ function Footer() {
           <Link href="/dashboard" className="hover:text-zinc-200 transition-colors">Dashboard</Link>
           <Link href="/terms"     className="hover:text-zinc-200 transition-colors">Terms</Link>
           <Link href="/privacy"   className="hover:text-zinc-200 transition-colors">Privacy</Link>
-          <Link href="/unsubscribe" className="hover:text-zinc-200 transition-colors">Unsubscribe</Link>
+          <Link href="/glossary"  className="hover:text-zinc-200 transition-colors">Glossary</Link>
         </div>
         <div className="font-mono text-xs text-zinc-600">
           © {new Date().getFullYear()} Plebs · Not financial advice
