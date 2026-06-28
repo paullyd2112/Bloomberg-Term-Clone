@@ -93,7 +93,7 @@ function Hero() {
               <span className="font-mono uppercase tracking-[0.18em] text-[10px] text-emerald-400">
                 Live
               </span>
-              <span className="text-zinc-500">Markets open · signals updating</span>
+              <span className="text-zinc-500">Live</span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-semibold text-white leading-[1.04] tracking-tight text-balance">

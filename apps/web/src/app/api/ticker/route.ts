@@ -37,26 +37,30 @@ const CG_IDS: Record<string, string> = {
 
 // ─── Primary source: freshest rows from raw_prices (populated by scheduler) ────
 
-async function fromRawPrices(): Promise<TickerItem[]> {
+async function fromRawPrices(marketOpen: boolean): Promise<TickerItem[]> {
   const admin = createAdminClient();
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const [{ data: stocks }, { data: crypto }] = await Promise.all([
-    admin
-      .from("raw_prices")
-      .select("identifier, price, change_24h, asset_type")
-      .eq("asset_type", "stock")
-      .in("identifier", TOP_STOCKS)
-      .gte("captured_at", since)
-      .order("captured_at", { ascending: false }),
-    admin
-      .from("raw_prices")
-      .select("identifier, price, change_24h, asset_type")
-      .eq("asset_type", "crypto")
-      .in("identifier", TOP_CRYPTO)
-      .gte("captured_at", since)
-      .order("captured_at", { ascending: false }),
-  ]);
+  const stockQuery = admin
+    .from("raw_prices")
+    .select("identifier, price, change_24h, asset_type")
+    .eq("asset_type", "stock")
+    .in("identifier", TOP_STOCKS)
+    .order("captured_at", { ascending: false });
+
+  const cryptoQuery = admin
+    .from("raw_prices")
+    .select("identifier, price, change_24h, asset_type")
+    .eq("asset_type", "crypto")
+    .in("identifier", TOP_CRYPTO)
+    .order("captured_at", { ascending: false });
+
+  if (marketOpen) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    stockQuery.gte("captured_at", since);
+    cryptoQuery.gte("captured_at", since);
+  }
+
+  const [{ data: stocks }, { data: crypto }] = await Promise.all([stockQuery, cryptoQuery]);
 
   const dedup = (rows: TickerItem[] | null) => {
     const seen = new Set<string>();
@@ -185,7 +189,7 @@ export async function GET() {
   const marketOpen = isMarketOpen();
 
   const [rawItems, liveStockItems, liveCryptoItems] = await Promise.all([
-    fromRawPrices().catch(() => [] as TickerItem[]),
+    fromRawPrices(marketOpen).catch(() => [] as TickerItem[]),
     marketOpen ? liveStocks().catch(() => [] as TickerItem[]) : Promise.resolve([]),
     liveCrypto().catch(() => [] as TickerItem[]),
   ]);
