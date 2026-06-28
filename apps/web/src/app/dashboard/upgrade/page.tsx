@@ -23,6 +23,33 @@ export default async function UpgradePage() {
         </p>
       </div>
 
+      {/* Subscription plans */}
+      <div>
+        <h2 className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.15em] text-zinc-500 mb-4">
+          <span className="text-emerald-400/60">●</span>
+          Subscription plans
+        </h2>
+        <div className="grid gap-5 md:grid-cols-2">
+          <PlanCard
+            name="Pro"
+            price={{ monthly: 40, quarterly: 100 }}
+            description="Serious retail traders"
+            features={TIER_FEATURES.pro}
+            current={tier === "pro" && profile?.billing_interval !== "lifetime"}
+            tier="pro"
+            highlighted
+          />
+          <PlanCard
+            name="Elite"
+            price={{ monthly: 80, quarterly: 200 }}
+            description="For the obsessed"
+            features={TIER_FEATURES.elite}
+            current={tier === "elite" && profile?.billing_interval !== "lifetime"}
+            tier="elite"
+          />
+        </div>
+      </div>
+
       {/* Lifetime plans */}
       <div>
         <div className="flex items-center justify-between mb-4">
@@ -94,33 +121,6 @@ export default async function UpgradePage() {
               <LifetimeButton plan="lifetime_elite" />
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Subscription plans */}
-      <div>
-        <h2 className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.15em] text-zinc-500 mb-4">
-          <span className="text-emerald-400/60">●</span>
-          Subscription plans
-        </h2>
-        <div className="grid gap-5 md:grid-cols-2">
-          <PlanCard
-            name="Pro"
-            price={{ monthly: 40, quarterly: 100 }}
-            description="Serious retail traders"
-            features={TIER_FEATURES.pro}
-            current={tier === "pro" && profile?.billing_interval !== "lifetime"}
-            tier="pro"
-            highlighted
-          />
-          <PlanCard
-            name="Elite"
-            price={{ monthly: 80, quarterly: 200 }}
-            description="For the obsessed"
-            features={TIER_FEATURES.elite}
-            current={tier === "elite" && profile?.billing_interval !== "lifetime"}
-            tier="elite"
-          />
         </div>
       </div>
 
