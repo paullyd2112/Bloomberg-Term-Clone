@@ -45,6 +45,9 @@ twilio==9.4.1
 # Economic data
 fredapi==0.5.2
 
+# SEC EDGAR (insider trades via Form 4)
+edgartools>=5.0.0
+
 # Utilities
 python-dotenv==1.0.1
 pydantic>=2.8.0,<3.0.0

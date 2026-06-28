@@ -292,10 +292,10 @@ scheduler.add_job(lambda: _run_stock_job("seed_macro_events", job_seed_macro_eve
 scheduler.add_job(lambda: _run_stock_job("enrich_fred", job_enrich_fred),
                   CronTrigger(hour=6, minute=45, day_of_week="mon-fri"), id="enrich_fred")
 
-# Congressional — daily at 8am ET (FMP Basic API)
+# Congressional — daily at 8am ET (Senate Stock Watcher → Finnhub → FMP)
 scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressional),
                   CronTrigger(hour=8, minute=0), id="ingest_congressional")
-# Insider trades (SEC Form 4) — daily at 8:15am ET (FMP)
+# Insider trades (SEC Form 4) — daily at 8:15am ET (EDGAR → Finnhub → FMP)
 scheduler.add_job(lambda: _run_job("ingest_insider_trades", job_ingest_insider_trades),
                   CronTrigger(hour=8, minute=15), id="ingest_insider_trades")
 

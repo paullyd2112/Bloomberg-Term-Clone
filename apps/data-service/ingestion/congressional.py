@@ -1,7 +1,8 @@
 """
 Congressional trades ingestion — multi-source.
-Primary: Finnhub /stock/congressional-trading (per-ticker, included in most plans).
-Fallback: FMP /v4/senate-trading-rss-feed + house-disclosure-rss-feed (bulk, paid v4).
+Primary: Senate Stock Watcher (free, GitHub-hosted JSON from efdsearch.senate.gov).
+Secondary: Finnhub /stock/congressional-trading (premium).
+Tertiary: FMP /v4/senate-trading-rss-feed + house-disclosure-rss-feed (premium v4).
 Runs daily at 8:00am ET via scheduler.
 """
 
@@ -22,6 +23,11 @@ FINNHUB_KEY   = os.environ.get("FINNHUB_API_KEY", "")
 FMP_BASE      = "https://financialmodelingprep.com/api/v4"
 LOOKBACK_DAYS = 90
 FMP_MAX_PAGES = 5
+
+SENATE_WATCHER_URL = (
+    "https://raw.githubusercontent.com/"
+    "timothycarambat/senate-stock-watcher-data/master/aggregate/all_transactions.json"
+)
 
 
 def _fmp_key() -> str:
@@ -51,11 +57,89 @@ def _normalize_transaction(raw: str) -> str | None:
     return None
 
 
-# ── Finnhub source (primary) ─────────────────────────────────────────────────
+# ── Senate Stock Watcher source (primary, free) ─────────────────────────────
+
+def _parse_watcher_date(raw: str) -> date | None:
+    """Parse MM/DD/YYYY or YYYY-MM-DD date strings."""
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw[:10])
+    except (ValueError, TypeError):
+        pass
+    for fmt in ("%m/%d/%Y", "%m/%d/%y"):
+        try:
+            from datetime import datetime as _dt
+            return _dt.strptime(raw, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _fetch_senate_watcher() -> list[dict]:
+    """Pull from the Senate Stock Watcher GitHub data repo — free, no auth."""
+    cutoff = date.today() - timedelta(days=LOOKBACK_DAYS)
+    rows: list[dict] = []
+
+    try:
+        resp = httpx.get(SENATE_WATCHER_URL, timeout=30)
+        if resp.status_code != 200:
+            logger.error(
+                "congressional: Senate Stock Watcher returned HTTP {} — expected raw JSON",
+                resp.status_code,
+            )
+            sentry_sdk.capture_message(
+                f"Senate Stock Watcher HTTP {resp.status_code}"
+            )
+            return []
+
+        records: list[dict] = resp.json()
+        logger.info("congressional: Senate Stock Watcher returned {} raw records", len(records))
+    except Exception as e:
+        logger.error("congressional: Senate Stock Watcher fetch failed — {}", e)
+        sentry_sdk.capture_exception(e)
+        return []
+
+    for r in records:
+        ticker = (r.get("ticker") or "").strip().upper()
+        if not ticker or ticker in ("--", "N/A", ""):
+            continue
+
+        txn = _normalize_transaction(r.get("type") or "")
+        if txn is None:
+            continue
+
+        trade_date = _parse_watcher_date(r.get("transaction_date"))
+        if not trade_date or trade_date < cutoff:
+            continue
+
+        politician = (r.get("senator") or "").strip()
+        if not politician:
+            continue
+
+        rows.append({
+            "politician":   politician,
+            "party":        "",
+            "ticker":       ticker,
+            "transaction":  txn,
+            "amount_range": (r.get("amount") or "").strip(),
+            "trade_date":   trade_date.isoformat(),
+            "report_date":  None,
+        })
+
+    logger.info(
+        "congressional: Senate Stock Watcher parsed {} trades within {}-day window",
+        len(rows), LOOKBACK_DAYS,
+    )
+    return rows
+
+
+# ── Finnhub source (secondary, premium) ─────────────────────────────────────
 
 def _fetch_finnhub(tickers: list[str]) -> list[dict]:
     if not FINNHUB_KEY:
-        logger.warning("congressional: FINNHUB_API_KEY not set — skipping Finnhub source")
+        logger.info("congressional: FINNHUB_API_KEY not set — skipping Finnhub")
         return []
 
     cutoff = date.today() - timedelta(days=LOOKBACK_DAYS)
@@ -79,11 +163,12 @@ def _fetch_finnhub(tickers: list[str]) -> list[dict]:
                 logger.warning("congressional: Finnhub rate limit hit at {} — stopping", ticker)
                 break
             if resp.status_code in (401, 403):
-                logger.warning("congressional: Finnhub congressional endpoint not available (HTTP {}) — may need premium", resp.status_code)
+                logger.warning("congressional: Finnhub congressional endpoint requires premium (HTTP {})", resp.status_code)
+                sentry_sdk.capture_message(f"Finnhub congressional 401/403: HTTP {resp.status_code}")
                 return []
             if resp.status_code == 404:
-                # Endpoint might not exist on this plan
-                logger.info("congressional: Finnhub congressional endpoint returned 404 — not available on this plan")
+                logger.warning("congressional: Finnhub congressional endpoint not found (404) — not on this plan")
+                sentry_sdk.capture_message("Finnhub congressional 404: endpoint not available")
                 return []
             resp.raise_for_status()
 
@@ -126,7 +211,7 @@ def _fetch_finnhub(tickers: list[str]) -> list[dict]:
     return rows
 
 
-# ── FMP source (fallback) ────────────────────────────────────────────────────
+# ── FMP source (tertiary, premium) ──────────────────────────────────────────
 
 def _fetch_fmp_chamber(endpoint: str, chamber: str) -> list[dict]:
     if not _fmp_key():
@@ -242,21 +327,36 @@ def _get_existing_keys() -> set[tuple]:
 
 
 def ingest_congressional() -> str:
-    tickers = _get_tracked_tickers()
+    sources_tried = []
 
-    # Try Finnhub first (per-ticker, free/most plans)
-    all_rows = _fetch_finnhub(tickers) if tickers else []
+    # 1. Senate Stock Watcher (free, government data)
+    all_rows = _fetch_senate_watcher()
+    if all_rows:
+        sources_tried.append(f"senate_watcher({len(all_rows)})")
 
-    # Fall back to FMP bulk feed if Finnhub got nothing
+    # 2. Finnhub (premium, per-ticker)
     if not all_rows:
-        logger.info("congressional: Finnhub returned 0 — trying FMP fallback")
+        sources_tried.append("senate_watcher(0)")
+        tickers = _get_tracked_tickers()
+        all_rows = _fetch_finnhub(tickers) if tickers else []
+        if all_rows:
+            sources_tried.append(f"finnhub({len(all_rows)})")
+
+    # 3. FMP (premium, bulk)
+    if not all_rows:
+        sources_tried.append("finnhub(0)")
         all_rows = _fetch_fmp_all()
+        if all_rows:
+            sources_tried.append(f"fmp({len(all_rows)})")
 
     all_rows = _dedup(all_rows)
+    source_log = ", ".join(sources_tried)
 
     if not all_rows:
-        logger.info("congressional: no trades from any source")
-        return "0 inserted (no data from Finnhub or FMP)"
+        msg = f"0 inserted — all sources returned empty [{source_log}]"
+        logger.warning("congressional: {}", msg)
+        sentry_sdk.capture_message(f"congressional: {msg}")
+        return msg
 
     existing = _get_existing_keys()
     new_rows = [
@@ -265,13 +365,13 @@ def ingest_congressional() -> str:
     ]
 
     if not new_rows:
-        logger.info("congressional: {} fetched, all already stored", len(all_rows))
-        return "0 inserted (all duplicates)"
+        logger.info("congressional: {} fetched, all already stored [{}]", len(all_rows), source_log)
+        return f"0 inserted (all duplicates) [{source_log}]"
 
     try:
         supabase.table("congressional_trades").insert(new_rows).execute()
-        logger.info("congressional: inserted {} new trades ({} fetched)", len(new_rows), len(all_rows))
-        return f"{len(new_rows)} inserted"
+        logger.info("congressional: inserted {} new trades ({} fetched) [{}]", len(new_rows), len(all_rows), source_log)
+        return f"{len(new_rows)} inserted [{source_log}]"
     except Exception as e:
         logger.error("congressional: insert failed — {}", e)
         sentry_sdk.capture_exception(e)

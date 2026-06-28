@@ -1,7 +1,8 @@
 """
 Insider trading ingestion (SEC Form 4) — multi-source.
-Primary: Finnhub /stock/insider-transactions (free tier, per-ticker).
-Fallback: FMP /v4/insider-trading-rss-feed (bulk, paid tier).
+Primary: SEC EDGAR via edgartools (free, no API key, government data).
+Secondary: Finnhub /stock/insider-transactions (free tier, per-ticker).
+Tertiary: FMP /v4/insider-trading-rss-feed (bulk, paid tier).
 Runs daily at 8:15am ET via scheduler.
 """
 
@@ -22,6 +23,7 @@ FINNHUB_KEY   = os.environ.get("FINNHUB_API_KEY", "")
 FMP_BASE      = "https://financialmodelingprep.com/api/v4"
 LOOKBACK_DAYS = 60
 FMP_MAX_PAGES = 8
+EDGAR_IDENTITY = os.environ.get("EDGAR_IDENTITY", "bloomberg-terminal-clone noreply@example.com")
 
 
 def _fmp_key() -> str:
@@ -29,7 +31,6 @@ def _fmp_key() -> str:
 
 
 def _get_tracked_tickers() -> list[str]:
-    """Pull unique stock tickers we're actively tracking."""
     try:
         result = (
             supabase.table("raw_prices")
@@ -43,15 +44,140 @@ def _get_tracked_tickers() -> list[str]:
         return []
 
 
-# ── Finnhub source (primary) ─────────────────────────────────────────────────
+# ── SEC EDGAR source (primary, free) ────────────────────────────────────────
+
+def _fetch_edgar(tickers: list[str]) -> list[dict]:
+    """Fetch Form 4 insider transactions from SEC EDGAR via edgartools."""
+    try:
+        from edgar import set_identity, Company
+    except ImportError:
+        logger.warning("insider_trades: edgartools not installed — skipping EDGAR source")
+        return []
+
+    set_identity(EDGAR_IDENTITY)
+    cutoff = date.today() - timedelta(days=LOOKBACK_DAYS)
+    rows: list[dict] = []
+    errors = 0
+
+    for ticker in tickers:
+        try:
+            company = Company(ticker)
+            filings = company.get_filings(form="4")
+            if not filings:
+                continue
+
+            recent = filings.filter(date=f"{cutoff.isoformat()}:{date.today().isoformat()}")
+            if not recent:
+                continue
+
+            for filing in recent[:20]:
+                try:
+                    form4 = filing.obj()
+                except Exception:
+                    continue
+
+                if not hasattr(form4, "transactions") or not form4.transactions:
+                    continue
+
+                filing_date = None
+                if hasattr(filing, "filing_date"):
+                    try:
+                        filing_date = date.fromisoformat(str(filing.filing_date)[:10])
+                    except (ValueError, TypeError):
+                        pass
+
+                owner_name = ""
+                owner_title = ""
+                if hasattr(form4, "reporting_owner"):
+                    ro = form4.reporting_owner
+                    if hasattr(ro, "name"):
+                        owner_name = str(ro.name).strip()
+                    if hasattr(ro, "officer_title"):
+                        owner_title = str(ro.officer_title or "").strip()
+
+                for txn in form4.transactions:
+                    txn_code = ""
+                    if hasattr(txn, "transaction_code"):
+                        txn_code = (str(txn.transaction_code) or "").upper()
+                    elif hasattr(txn, "code"):
+                        txn_code = (str(txn.code) or "").upper()
+
+                    if txn_code in ("P", "A"):
+                        side = "buy"
+                    elif txn_code in ("S", "D", "F"):
+                        side = "sell"
+                    else:
+                        continue
+
+                    txn_date = None
+                    for attr in ("transaction_date", "date"):
+                        if hasattr(txn, attr):
+                            try:
+                                txn_date = date.fromisoformat(str(getattr(txn, attr))[:10])
+                            except (ValueError, TypeError):
+                                pass
+                            if txn_date:
+                                break
+                    if not txn_date or txn_date < cutoff:
+                        continue
+
+                    shares = None
+                    for attr in ("shares", "amount", "transaction_shares"):
+                        if hasattr(txn, attr):
+                            try:
+                                shares = int(float(str(getattr(txn, attr))))
+                            except (ValueError, TypeError):
+                                pass
+                            if shares:
+                                break
+
+                    price = None
+                    for attr in ("price_per_share", "price", "transaction_price_per_share"):
+                        if hasattr(txn, attr):
+                            try:
+                                price = float(str(getattr(txn, attr)))
+                            except (ValueError, TypeError):
+                                pass
+                            if price:
+                                break
+
+                    value = round(abs(shares) * price, 2) if (shares and price) else None
+
+                    rows.append({
+                        "insider_name":  owner_name,
+                        "insider_title": owner_title,
+                        "ticker":        ticker,
+                        "transaction":   side,
+                        "shares":        abs(shares) if shares else None,
+                        "price":         price,
+                        "value_usd":     value,
+                        "trade_date":    txn_date.isoformat(),
+                        "report_date":   filing_date.isoformat() if filing_date else None,
+                    })
+
+            time.sleep(0.15)
+        except Exception as e:
+            errors += 1
+            logger.warning("insider_trades: EDGAR fetch failed for {} — {}", ticker, e)
+            if errors >= 5:
+                logger.error("insider_trades: EDGAR hit {} errors — stopping early", errors)
+                break
+            continue
+
+    logger.info("insider_trades: EDGAR returned {} records across {} tickers ({} errors)", len(rows), len(tickers), errors)
+    return rows
+
+
+# ── Finnhub source (secondary) ──────────────────────────────────────────────
 
 def _fetch_finnhub(tickers: list[str]) -> list[dict]:
     if not FINNHUB_KEY:
-        logger.warning("insider_trades: FINNHUB_API_KEY not set — skipping Finnhub source")
+        logger.info("insider_trades: FINNHUB_API_KEY not set — skipping Finnhub")
         return []
 
     cutoff = date.today() - timedelta(days=LOOKBACK_DAYS)
     rows: list[dict] = []
+    auth_failed = False
 
     for ticker in tickers:
         try:
@@ -64,7 +190,9 @@ def _fetch_finnhub(tickers: list[str]) -> list[dict]:
                 logger.warning("insider_trades: Finnhub rate limit hit at {} — stopping", ticker)
                 break
             if resp.status_code in (401, 403):
-                logger.error("insider_trades: Finnhub key invalid (HTTP {})", resp.status_code)
+                logger.error("insider_trades: Finnhub key invalid or endpoint restricted (HTTP {})", resp.status_code)
+                sentry_sdk.capture_message(f"Finnhub insider-transactions auth failure: HTTP {resp.status_code}")
+                auth_failed = True
                 break
             resp.raise_for_status()
 
@@ -118,16 +246,19 @@ def _fetch_finnhub(tickers: list[str]) -> list[dict]:
                     "report_date":   filing_date.isoformat() if filing_date else None,
                 })
 
-            time.sleep(0.12)  # Finnhub free tier: ~60 calls/min
+            time.sleep(0.12)
         except Exception as e:
             logger.warning("insider_trades: Finnhub fetch failed for {} — {}", ticker, e)
             continue
 
-    logger.info("insider_trades: Finnhub returned {} records across {} tickers", len(rows), len(tickers))
+    if auth_failed:
+        logger.error("insider_trades: Finnhub auth failed — returning 0 rows (key may be invalid)")
+    else:
+        logger.info("insider_trades: Finnhub returned {} records across {} tickers", len(rows), len(tickers))
     return rows
 
 
-# ── FMP source (fallback) ────────────────────────────────────────────────────
+# ── FMP source (tertiary) ───────────────────────────────────────────────────
 
 def _normalize_fmp_transaction(acq_disp: str, txn_type: str) -> str | None:
     ad = (acq_disp or "").strip().upper()
@@ -259,20 +390,39 @@ def _get_existing_keys() -> set[tuple]:
 
 def ingest_insider_trades() -> str:
     tickers = _get_tracked_tickers()
+    sources_tried = []
 
-    # Try Finnhub first (free, per-ticker)
-    all_rows = _fetch_finnhub(tickers) if tickers else []
+    # 1. SEC EDGAR via edgartools (free, government data)
+    all_rows = _fetch_edgar(tickers) if tickers else []
+    if all_rows:
+        sources_tried.append(f"edgar({len(all_rows)})")
+    else:
+        sources_tried.append("edgar(0)")
 
-    # Fall back to FMP bulk feed if Finnhub got nothing
+    # 2. Finnhub (free tier, per-ticker)
     if not all_rows:
-        logger.info("insider_trades: Finnhub returned 0 — trying FMP fallback")
+        all_rows = _fetch_finnhub(tickers) if tickers else []
+        if all_rows:
+            sources_tried.append(f"finnhub({len(all_rows)})")
+        else:
+            sources_tried.append("finnhub(0)")
+
+    # 3. FMP (premium, bulk)
+    if not all_rows:
         all_rows = _fetch_fmp()
+        if all_rows:
+            sources_tried.append(f"fmp({len(all_rows)})")
+        else:
+            sources_tried.append("fmp(0)")
 
     all_rows = _dedup(all_rows)
+    source_log = ", ".join(sources_tried)
 
     if not all_rows:
-        logger.info("insider_trades: no trades from any source")
-        return "0 inserted (no data from Finnhub or FMP)"
+        msg = f"0 inserted — all sources returned empty [{source_log}]"
+        logger.warning("insider_trades: {}", msg)
+        sentry_sdk.capture_message(f"insider_trades: {msg}")
+        return msg
 
     existing = _get_existing_keys()
     new_rows = [
@@ -281,13 +431,13 @@ def ingest_insider_trades() -> str:
     ]
 
     if not new_rows:
-        logger.info("insider_trades: {} fetched, all already stored", len(all_rows))
-        return "0 inserted (all duplicates)"
+        logger.info("insider_trades: {} fetched, all already stored [{}]", len(all_rows), source_log)
+        return f"0 inserted (all duplicates) [{source_log}]"
 
     try:
         supabase.table("insider_trades").insert(new_rows).execute()
-        logger.info("insider_trades: inserted {} new ({} fetched)", len(new_rows), len(all_rows))
-        return f"{len(new_rows)} inserted"
+        logger.info("insider_trades: inserted {} new ({} fetched) [{}]", len(new_rows), len(all_rows), source_log)
+        return f"{len(new_rows)} inserted [{source_log}]"
     except Exception as e:
         logger.error("insider_trades: insert failed — {}", e)
         sentry_sdk.capture_exception(e)
