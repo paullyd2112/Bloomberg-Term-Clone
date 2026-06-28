@@ -225,7 +225,7 @@ export default function LoginForm() {
       <p className="text-center text-xs text-zinc-500">
         No account?{" "}
         <Link href={`/signup?next=${encodeURIComponent(next)}`} className="text-green-400 hover:text-green-300">
-          Start free trial
+          Start trial
         </Link>
       </p>
     </div>

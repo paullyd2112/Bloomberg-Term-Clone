@@ -73,7 +73,7 @@ async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
   }
 
   const totalResolved = totalWins + totalLosses;
-  if (totalResolved < 3) return null;
+  if (totalResolved < 5) return null;
   const overallWinRate = totalWins / totalResolved;
 
   const byAssetClass = Array.from(assetGrouped.entries()).map(([asset_type, g]) => {
@@ -89,7 +89,7 @@ async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
     });
 
   const ydayResolved = ydayWins + ydayLosses;
-  const yesterday = ydayResolved > 0
+  const yesterday = ydayResolved >= 3
     ? { wins: ydayWins, losses: ydayLosses, winRate: ydayWins / ydayResolved, resolved: ydayResolved }
     : null;
 
@@ -191,6 +191,7 @@ export default async function DashboardPage() {
             <div>
               <p className="text-sm font-medium text-white">Signals are being analyzed</p>
               <p className="text-xs text-zinc-500 mt-0.5">{pending} signal{pending === 1 ? "" : "s"} pending resolution — win rate will appear once signals resolve</p>
+              <p className="text-xs text-zinc-600 mt-0.5">Signals typically resolve within 6–24 hours depending on the time horizon.</p>
             </div>
           </div>
         </div>

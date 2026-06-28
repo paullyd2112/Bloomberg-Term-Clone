@@ -142,7 +142,7 @@ export default async function PerformancePage() {
         <Metric label="Total return" value={`${stats.returnPct >= 0 ? "+" : ""}${stats.returnPct.toFixed(1)}%`} color={stats.returnPct >= 0 ? "green" : "red"} />
         <Metric label="Realized P&L" value={fmtUsd(stats.realized)} color={stats.realized >= 0 ? "green" : "red"} />
         <Metric label="Win rate" value={`${stats.winRate.toFixed(0)}%`} sub={`${stats.wins}W · ${stats.losses}L · ${stats.count} trades`} />
-        <Metric label="Profit factor" value={stats.profitFactor === Infinity ? "∞" : stats.profitFactor.toFixed(2)} />
+        <Metric label="Profit factor" value={stats.profitFactor === Infinity ? "— (no losses)" : stats.profitFactor.toFixed(2)} />
       </div>
 
       {/* Equity curve */}

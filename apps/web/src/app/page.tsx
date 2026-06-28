@@ -362,7 +362,7 @@ const FAQS = [
     a: "No. Plebs provides AI-generated market analysis for informational purposes only. We surface signals and data, but every trade decision is yours. Always do your own research.",
   },
   {
-    q: "How does the free trial work?",
+    q: "How does the trial work?",
     a: "You get 14 days of full access to your chosen plan (Pro or Elite). Credit card is required upfront. Cancel anytime during the trial and you won't be charged.",
   },
   {

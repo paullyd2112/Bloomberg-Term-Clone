@@ -56,7 +56,7 @@ export default function SignupForm() {
         <h2 className="text-white font-semibold">Check your email</h2>
         <p className="text-zinc-400 text-sm">
           We sent a confirmation link to <span className="text-white">{email}</span>.
-          Click it to activate your account and start your 14-day free trial.
+          Click it to activate your account and start your 14-day trial.
         </p>
         <Link href="/login" className="text-green-400 text-sm hover:text-green-300">
           Back to sign in
@@ -125,7 +125,7 @@ export default function SignupForm() {
           disabled={loading}
           className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold rounded px-4 py-2.5 text-sm transition-colors"
         >
-          {loading ? "Creating account…" : "Create account — free trial"}
+          {loading ? "Creating account…" : "Create account — 14-day trial"}
         </button>
       </form>
 

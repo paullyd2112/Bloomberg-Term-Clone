@@ -221,7 +221,7 @@ export default async function SharedSignalPage({
                 href="/signup"
                 className="inline-block bg-green-500 hover:bg-green-400 text-black font-bold text-sm px-6 py-2.5 rounded-lg transition-colors"
               >
-                Start free trial →
+                Start trial →
               </Link>
               <Link
                 href="/login"
@@ -230,7 +230,7 @@ export default async function SharedSignalPage({
                 Log in
               </Link>
             </div>
-            <p className="text-zinc-600 text-xs">14-day free trial · Credit card required</p>
+            <p className="text-zinc-600 text-xs">14-day trial · Credit card required</p>
           </>
         )}
       </div>
