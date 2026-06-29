@@ -303,11 +303,13 @@ scheduler.add_job(lambda: _run_job("ingest_insider_trades", job_ingest_insider_t
 scheduler.add_job(lambda: _run_job("ingest_news", job_ingest_news),
                   CronTrigger(hour=6, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_news")
 
-# Newsletter — generate at 7:00am, send via Resend at 7:15am ET weekdays
+# Newsletter — generate at 7:00am, send via Resend at 7:15am ET weekdays, retry at 7:45am
 scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newsletter),
                   CronTrigger(hour=7, minute=0, day_of_week="mon-fri", timezone="America/New_York"), id="generate_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter", job_send_newsletter),
                   CronTrigger(hour=7, minute=15, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
+scheduler.add_job(lambda: _run_job("send_newsletter_retry", job_send_newsletter),
+                  CronTrigger(hour=7, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter_retry")
 # Personalized Elite briefing — runs after main newsletter, one AI call per Elite user
 scheduler.add_job(lambda: _run_job("send_elite_briefings", job_send_elite_briefings),
                   CronTrigger(hour=7, minute=20, day_of_week="mon-fri", timezone="America/New_York"), id="send_elite_briefings")
@@ -564,6 +566,8 @@ def run_job_manual(job_name: str):
         "score_stocks": job_score_stocks,
         "score_crypto": job_score_crypto,
         "crypto_momentum": job_crypto_momentum,
+        "generate_newsletter": job_generate_newsletter,
+        "send_newsletter": job_send_newsletter,
     }
 
     fn = job_map.get(job_name)
