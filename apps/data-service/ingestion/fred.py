@@ -23,6 +23,8 @@ FRED_SERIES: dict[str, dict] = {
     "CPIAUCSL":   {"name": "CPI (All Urban Consumers)",     "category": "inflation",  "format": "pct_change"},
     "PCEPI":      {"name": "PCE Price Index",                "category": "inflation",  "format": "pct_change"},
     "PPIFIS":     {"name": "PPI (Final Demand)",             "category": "inflation",  "format": "pct_change"},
+    "ICSA":       {"name": "Initial Jobless Claims",          "category": "employment", "format": "level"},
+    "CCSA":       {"name": "Continuing Claims",              "category": "employment", "format": "level"},
     "UNRATE":     {"name": "Unemployment Rate",              "category": "employment", "format": "level"},
     "PAYEMS":     {"name": "Non-Farm Payrolls",              "category": "employment", "format": "change"},
     "GDP":        {"name": "Real GDP",                       "category": "gdp",        "format": "pct_change"},
@@ -188,7 +190,7 @@ def get_macro_context_for_scoring() -> list[str]:
 
     lines: list[str] = []
 
-    key_indicators = ["FEDFUNDS", "CPIAUCSL", "UNRATE", "T10Y2Y", "VIXCLS", "UMCSENT"]
+    key_indicators = ["FEDFUNDS", "CPIAUCSL", "UNRATE", "ICSA", "CCSA", "T10Y2Y", "VIXCLS", "UMCSENT"]
     for sid in key_indicators:
         data = snapshot.get(sid)
         if not data:
