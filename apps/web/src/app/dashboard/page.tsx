@@ -103,6 +103,7 @@ async function fetchSignals(): Promise<Signal[]> {
     .select("*")
     .eq("is_backtest", false)
     .gte("created_at", ENGINE_CUTOFF)
+    .gte("confidence", 70)
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) {
