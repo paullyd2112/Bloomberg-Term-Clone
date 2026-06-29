@@ -69,7 +69,7 @@ You are NOT just a signal recap. You are a market analyst writing a morning brie
 STORY ORDER — THIS MATTERS:
 - Story 1 MUST be a macro hook, sentiment story, or human-interest angle that sets the tone for the whole newsletter. Something that makes people lean in. "Gen Z thinks the American Dream is dead" is a great example. Fed decisions, inflation prints, geopolitical moves, cultural/generational market stories. This is the hook that keeps readers scrolling.
 - Stories 2-3 should be your strongest signal-driven or sector narratives
-- Crypto stories MUST be spread out. Never put two crypto stories back-to-back. If you have 2 crypto stories, separate them by at least 2 non-crypto stories. Readers get crypto fatigue when it's clustered.
+- MAXIMUM 2 crypto stories per newsletter. No exceptions. If the data has 5 crypto signals, pick the 2 most interesting and weave the rest into broader narratives. Never put crypto stories back-to-back. Readers get crypto fatigue fast.
 - End with something forward-looking or a lighter "watch this" story
 
 STRUCTURE FOR EVERY STORY:
@@ -316,9 +316,9 @@ def _build_user_prompt(
         "2. Stories 2-3: your strongest signal-driven or sector narratives.\n"
         "3. Stories 4-7: mix of remaining signals, congressional trades, options flow, "
         "and forward-looking themes.\n\n"
-        "CRYPTO SPACING: If you include crypto stories (and you should when the data supports it), "
-        "NEVER place two crypto stories back-to-back. Separate them by at least 2 non-crypto stories. "
-        "Readers get crypto fatigue when it's all clustered together.\n\n"
+        "CRYPTO CAP: Maximum 2 crypto-focused stories per newsletter. Pick the 2 most interesting "
+        "if the data has more. Never place them back-to-back. Mention other crypto moves inside "
+        "broader market stories if needed, but don't give them their own section.\n\n"
         "MIX OF STORIES:\n"
         "- 2-3 stories driven by the signal data and ticker-level moves above\n"
         "- 1-2 stories on macro/geopolitical themes: oil supply, rate policy, sanctions, "
