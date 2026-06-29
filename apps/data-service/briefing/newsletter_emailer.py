@@ -7,6 +7,7 @@ Pro/Elite subscribers get the same editorial + personalized signal data.
 import html
 import os
 import re
+import time
 from datetime import date
 
 import resend
@@ -14,6 +15,9 @@ import sentry_sdk
 from loguru import logger
 
 from supabase_client import supabase
+
+MAX_RETRIES    = 3
+RETRY_DELAYS   = [2, 5, 12]
 
 resend.api_key   = os.environ.get("RESEND_API_KEY", "") or os.environ.get("RESEND_API_KEY_", "")
 FROM_ADDRESS     = "Pleby from Plebs <daily@plebs.finance>"
@@ -268,10 +272,54 @@ def _render_text(briefing: dict) -> str:
 
 # ─── Main sender ──────────────────────────────────────────────────────────────
 
+def _send_with_retry(payload: dict) -> bool:
+    for attempt in range(MAX_RETRIES):
+        try:
+            resend.Emails.send(payload)
+            return True
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                delay = RETRY_DELAYS[attempt]
+                logger.warning(
+                    "newsletter_emailer: attempt {}/{} failed for {}, retrying in {}s: {}",
+                    attempt + 1, MAX_RETRIES, payload["to"], delay, e,
+                )
+                time.sleep(delay)
+            else:
+                raise
+    return False
+
+
+def _already_sent_today() -> set[str]:
+    today = date.today().isoformat()
+    try:
+        result = (
+            supabase.table("newsletter_sends")
+            .select("email")
+            .eq("send_date", today)
+            .execute()
+        )
+        return {r["email"] for r in (result.data or [])}
+    except Exception:
+        return set()
+
+
+def _record_send(email: str) -> None:
+    today = date.today().isoformat()
+    try:
+        supabase.table("newsletter_sends").upsert(
+            {"email": email, "send_date": today},
+            on_conflict="email,send_date",
+        ).execute()
+    except Exception as e:
+        logger.warning("newsletter_emailer: failed to record send for {}: {}", email, e)
+
+
 def send_newsletter() -> str:
     briefing = _get_todays_newsletter()
     if not briefing:
-        logger.warning("newsletter_emailer: no briefing found for today — skipping")
+        logger.warning("newsletter_emailer: no briefing found for today, skipping")
+        sentry_sdk.capture_message("Newsletter send skipped: no briefing found for today")
         return "no briefing found"
 
     subscribers = _get_subscribers()
@@ -279,9 +327,11 @@ def send_newsletter() -> str:
         logger.info("newsletter_emailer: no subscribers")
         return "0 sent"
 
+    already_sent = _already_sent_today()
     subject   = briefing.get("headline", f"Plebs — {date.today().strftime('%b %-d')}")
     text_body = _render_text(briefing)
-    sent, failed = 0, 0
+    sent, skipped, failed = 0, 0, 0
+    failed_emails: list[str] = []
 
     for sub in subscribers:
         email   = sub.get("email")
@@ -291,21 +341,33 @@ def send_newsletter() -> str:
         if not email:
             continue
 
+        if email in already_sent:
+            skipped += 1
+            continue
+
         try:
             html_body = _render_html(briefing, tier, user_id)
-            resend.Emails.send({
+            _send_with_retry({
                 "from":    FROM_ADDRESS,
                 "to":      [email],
                 "subject": subject,
                 "html":    html_body,
                 "text":    text_body,
             })
+            _record_send(email)
             sent += 1
         except Exception as e:
-            logger.error("newsletter_emailer: failed to send to {} — {}", email, e)
+            logger.error("newsletter_emailer: all {} retries exhausted for {}: {}", MAX_RETRIES, email, e)
             sentry_sdk.capture_exception(e)
             failed += 1
+            failed_emails.append(email)
 
-    summary = f"{sent} sent, {failed} failed"
-    logger.info("newsletter_emailer complete — {}", summary)
+    if failed > 0:
+        sentry_sdk.capture_message(
+            f"Newsletter send partially failed: {failed} of {sent + failed} emails failed. "
+            f"Failed addresses: {', '.join(failed_emails)}"
+        )
+
+    summary = f"{sent} sent, {skipped} already sent, {failed} failed"
+    logger.info("newsletter_emailer complete: {}", summary)
     return summary
