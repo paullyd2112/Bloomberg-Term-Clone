@@ -29,7 +29,7 @@ export default async function DashboardLayout({
 
       <div className="flex flex-col flex-1 min-w-0 relative z-10">
         <TopBar user={user} tier={tier} trialEndsAt={profile?.trial_ends_at ?? null} />
-        <TickerBar />
+        <TickerBar showStatus={false} />
         <div className="px-4 py-1 border-b border-white/[0.06] text-center flex-shrink-0">
           <p className="text-[10px] text-zinc-600">
             For informational purposes only. Not financial advice. Past performance is not indicative of future results.
