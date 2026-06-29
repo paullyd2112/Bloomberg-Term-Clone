@@ -954,6 +954,108 @@ def claude_backtest_status():
     return jsonify(state)
 
 
+@app.route("/backfill-alpaca", methods=["GET", "POST"])
+def backfill_alpaca():
+    """
+    Backfill 60 days of daily bars from Alpaca for all watchlist tickers.
+    Writes to raw_prices. Idempotent (duplicates are fine, latest row wins).
+    """
+    from flask import request as flask_request
+    import threading
+
+    body = flask_request.get_json(silent=True) or {}
+    days = int(body.get("days", 60))
+    asset_type = body.get("asset_type", "both")
+
+    def _run():
+        from ingestion.alpaca_client import fetch_stock_bars, fetch_crypto_bars, _is_configured
+        from ingestion.stocks import get_default_watchlist, _compute_indicators
+        from ingestion.crypto import PRIORITY_SYMBOLS, _compute_crypto_indicators
+
+        if not _is_configured():
+            _job_state["backfill_alpaca"] = {
+                "status": "error",
+                "error": "ALPACA_API_KEY or ALPACA_API_SECRET not set",
+            }
+            return
+
+        _job_state["backfill_alpaca"] = {
+            "status": "running",
+            "started": datetime.now(timezone.utc).isoformat(),
+        }
+
+        results = {"stocks": {"success": 0, "failed": 0}, "crypto": {"success": 0, "failed": 0}}
+
+        if asset_type in ("both", "stocks"):
+            tickers = get_default_watchlist()
+            for ticker in tickers:
+                try:
+                    df = fetch_stock_bars(ticker, days=days)
+                    if df is None or df.empty:
+                        results["stocks"]["failed"] += 1
+                        continue
+                    indicators = _compute_indicators(df)
+                    supabase.table("raw_prices").insert({
+                        "asset_type": "stock",
+                        "identifier": ticker,
+                        "price": indicators["close"],
+                        "volume": indicators["volume"],
+                        "change_24h": indicators.get("change_1d_pct"),
+                        "metadata": {**indicators, "source": "alpaca_backfill"},
+                    }).execute()
+                    results["stocks"]["success"] += 1
+                except Exception as e:
+                    logger.warning("Backfill failed for {}: {}", ticker, e)
+                    results["stocks"]["failed"] += 1
+                import time
+                time.sleep(0.3)
+
+        if asset_type in ("both", "crypto"):
+            for symbol in PRIORITY_SYMBOLS:
+                try:
+                    df = fetch_crypto_bars(symbol, days=days)
+                    if df is None or df.empty:
+                        results["crypto"]["failed"] += 1
+                        continue
+                    indicators = _compute_crypto_indicators(df)
+                    supabase.table("raw_prices").insert({
+                        "asset_type": "crypto",
+                        "identifier": symbol,
+                        "price": indicators["close"],
+                        "volume": indicators.get("volume_24h"),
+                        "change_24h": None,
+                        "metadata": {**indicators, "source": "alpaca_backfill"},
+                    }).execute()
+                    results["crypto"]["success"] += 1
+                except Exception as e:
+                    logger.warning("Backfill failed for {}: {}", symbol, e)
+                    results["crypto"]["failed"] += 1
+                import time
+                time.sleep(0.3)
+
+        _job_state["backfill_alpaca"] = {
+            "status": "ok",
+            "finished": datetime.now(timezone.utc).isoformat(),
+            "results": results,
+        }
+        logger.info("Alpaca backfill complete: {}", results)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return jsonify({
+        "status": "started",
+        "days": days,
+        "asset_type": asset_type,
+        "check": "/backfill-alpaca/status",
+    })
+
+
+@app.route("/backfill-alpaca/status")
+def backfill_alpaca_status():
+    state = _job_state.get("backfill_alpaca", {"status": "never_run"})
+    return jsonify(state)
+
+
 @app.route("/scanner")
 def scanner_endpoint():
     """
@@ -1118,6 +1220,10 @@ if __name__ == "__main__":
     if os.environ.get("ENABLE_SCHEDULER", "false").lower() == "true":
         scheduler.start()
         logger.info("Scheduler started with {} jobs", len(scheduler.get_jobs()))
+
+        if os.environ.get("ALPACA_API_KEY"):
+            from streaming.alpaca_ws import start_streaming
+            start_streaming()
     else:
         logger.info("Scheduler DISABLED (set ENABLE_SCHEDULER=true to activate). Endpoints still available.")
     port = int(os.environ.get("PORT", 8080))

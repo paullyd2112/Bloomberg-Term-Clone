@@ -1,6 +1,6 @@
 """
-Stocks ingestion — yfinance (OHLCV) + FMP (fundamentals fallback) +
-Alpha Vantage (price fallback) + Finnhub (news) + Pandas-TA indicators.
+Stocks ingestion — Alpaca (primary OHLCV) + yfinance/Finnhub/FMP/AV fallbacks +
+Finnhub (news) + Pandas-TA indicators.
 Runs every 60 minutes weekdays 9am-5pm ET via scheduler.
 """
 
@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 
 from supabase_client import supabase
 from ingestion.trusted_sources import is_trusted_source
+from ingestion.alpaca_client import fetch_stock_bars
 
 load_dotenv()
 
@@ -293,9 +294,16 @@ def _fetch_ohlcv_massive(ticker: str) -> pd.DataFrame | None:
         return None
 
 
+def _fetch_ohlcv_alpaca(ticker: str) -> pd.DataFrame | None:
+    """Alpaca Data API — primary source, IEX feed."""
+    return fetch_stock_bars(ticker, days=90)
+
+
 def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
-    """Fetch from ALL 5 sources, merge into one DataFrame for best coverage."""
+    """Fetch from ALL sources, merge into one DataFrame for best coverage.
+    Alpaca is primary; others fill gaps."""
     sources = [
+        ("Alpaca",        _fetch_ohlcv_alpaca),
         ("yfinance",      _fetch_ohlcv_yfinance),
         ("Finnhub",       _fetch_ohlcv_finnhub),
         ("FMP",           _fetch_ohlcv_fmp),

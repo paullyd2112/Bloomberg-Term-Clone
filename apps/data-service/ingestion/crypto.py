@@ -1,6 +1,6 @@
 """
-Crypto ingestion — CoinGecko (primary) + Messari (enrichment/fallback) +
-CCXT/Binance (OHLCV indicators) + Fear & Greed index + Finnhub news.
+Crypto ingestion — Alpaca (primary OHLCV) + CoinGecko (market data + fallback) +
+Messari (enrichment) + CCXT/Binance (OHLCV fallback) + Fear & Greed + Finnhub news.
 Runs every 60 minutes all hours via scheduler.
 """
 
@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 
 from supabase_client import supabase
 from ingestion.trusted_sources import is_trusted_source
+from ingestion.alpaca_client import fetch_crypto_bars
 
 load_dotenv()
 
@@ -289,10 +290,20 @@ def _fetch_ohlcv_coingecko(symbol: str) -> pd.DataFrame | None:
         return None
 
 
+def _fetch_ohlcv_alpaca(symbol: str) -> pd.DataFrame | None:
+    """Alpaca crypto bars — primary source."""
+    df = fetch_crypto_bars(symbol, days=90)
+    if df is None:
+        return None
+    df.index = df.index.tz_localize(None) if df.index.tz is None else df.index.tz_convert("UTC").tz_localize(None)
+    return df
+
+
 def _fetch_ohlcv(symbol: str) -> pd.DataFrame | None:
     """Fetch from ALL sources, merge into one DataFrame for best coverage.
-    Same pattern as stocks — try every source and fill gaps."""
+    Alpaca is primary; exchanges and CoinGecko fill gaps."""
     sources = [
+        ("Alpaca",        _fetch_ohlcv_alpaca),
         ("Binance",       _fetch_ohlcv_binance),
         ("Kraken",        _fetch_ohlcv_kraken),
         ("Finnhub",       _fetch_ohlcv_finnhub_crypto),
