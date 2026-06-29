@@ -52,6 +52,7 @@ async function fetchWatchlist(userId: string): Promise<WatchlistItem[]> {
           .eq("asset_type", row.asset_type)
           .eq("identifier", row.identifier)
           .eq("is_backtest", false)
+          .gte("confidence", 70)
           .order("created_at", { ascending: false })
           .limit(1)
           .single(),

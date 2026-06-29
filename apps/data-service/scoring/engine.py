@@ -563,9 +563,9 @@ def score_asset(asset_type: str, identifier: str, model_override: str | None = N
         except (TypeError, ValueError):
             pass
 
-    # Skip low-value signals: HOLD with low confidence adds noise
-    if signal.direction == "HOLD" and signal.confidence < 50:
-        logger.debug("{}/{}: skipping low-confidence HOLD ({}%)", asset_type, identifier, signal.confidence)
+    # Skip HOLD signals entirely — users want actionable BUY/SELL only
+    if signal.direction == "HOLD":
+        logger.debug("{}/{}: skipping HOLD signal ({}%)", asset_type, identifier, signal.confidence)
         return None
 
     # Write to Supabase
@@ -577,6 +577,14 @@ def score_asset(asset_type: str, identifier: str, model_override: str | None = N
             signal.direction, signal.confidence,
             signal.reasoning[:80],
         )
+
+        # Fire email alert for high-confidence BUY/SELL signals
+        try:
+            from briefing.signal_alerts import notify_high_confidence_signal
+            notify_high_confidence_signal(record)
+        except Exception as e:
+            logger.debug("signal_alerts dispatch failed: {}", e)
+
         return record
     except Exception as e:
         logger.error("{}/{}: signal write failed — {}", asset_type, identifier, e)

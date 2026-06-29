@@ -47,6 +47,7 @@ export default function ScreenerClient() {
           .select("id, asset_type, identifier, direction, confidence, reasoning, time_horizon, price_at_signal, news_context, created_at, outcome")
           .eq("is_backtest", false)
           .neq("asset_type", "prediction")
+          .gte("confidence", 70)
           .order("created_at", { ascending: false })
           .limit(500),
         // Tickers with insider BUYs in the last 90 days, for the insider filter.

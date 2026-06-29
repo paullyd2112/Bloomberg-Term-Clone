@@ -254,9 +254,8 @@ def _run_stock_job(name: str, fn):
 # Prediction markets — every 2 hours (was every 30 min)
 scheduler.add_job(lambda: _run_job("ingest_prediction_markets", job_ingest_prediction_markets),
                   IntervalTrigger(minutes=30), id="ingest_prediction_markets")
-# Prediction scoring disabled until data matures (~3 weeks of ingestion)
-# scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
-#                   CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
+scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
+                  CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
 
 # Stocks — full scoring at open + close, event-only midday, weekdays only
 scheduler.add_job(lambda: _run_stock_job("ingest_stocks", job_ingest_stocks),
@@ -565,6 +564,7 @@ def run_job_manual(job_name: str):
         "ingest_crypto": job_ingest_crypto,
         "score_stocks": job_score_stocks,
         "score_crypto": job_score_crypto,
+        "score_prediction_markets": job_score_prediction_markets,
         "crypto_momentum": job_crypto_momentum,
         "generate_newsletter": job_generate_newsletter,
         "send_newsletter": job_send_newsletter,
@@ -968,6 +968,7 @@ def backfill_alpaca():
     asset_type = body.get("asset_type", "both")
 
     def _run():
+        from supabase_client import supabase
         from ingestion.alpaca_client import fetch_stock_bars, fetch_crypto_bars, _is_configured
         from ingestion.stocks import get_default_watchlist, _compute_indicators
         from ingestion.crypto import PRIORITY_SYMBOLS, _compute_crypto_indicators
@@ -984,7 +985,7 @@ def backfill_alpaca():
             "started": datetime.now(timezone.utc).isoformat(),
         }
 
-        results = {"stocks": {"success": 0, "failed": 0}, "crypto": {"success": 0, "failed": 0}}
+        results = {"stocks": {"success": 0, "failed": 0, "errors": []}, "crypto": {"success": 0, "failed": 0, "errors": []}}
 
         if asset_type in ("both", "stocks"):
             tickers = get_default_watchlist()
@@ -993,6 +994,7 @@ def backfill_alpaca():
                     df = fetch_stock_bars(ticker, days=days)
                     if df is None or df.empty:
                         results["stocks"]["failed"] += 1
+                        results["stocks"]["errors"].append(f"{ticker}: no data returned")
                         continue
                     indicators = _compute_indicators(df)
                     supabase.table("raw_prices").insert({
@@ -1007,6 +1009,7 @@ def backfill_alpaca():
                 except Exception as e:
                     logger.warning("Backfill failed for {}: {}", ticker, e)
                     results["stocks"]["failed"] += 1
+                    results["stocks"]["errors"].append(f"{ticker}: {e}")
                 import time
                 time.sleep(0.3)
 
@@ -1016,6 +1019,7 @@ def backfill_alpaca():
                     df = fetch_crypto_bars(symbol, days=days)
                     if df is None or df.empty:
                         results["crypto"]["failed"] += 1
+                        results["crypto"]["errors"].append(f"{symbol}: no data returned")
                         continue
                     indicators = _compute_crypto_indicators(df)
                     supabase.table("raw_prices").insert({
@@ -1030,8 +1034,13 @@ def backfill_alpaca():
                 except Exception as e:
                     logger.warning("Backfill failed for {}: {}", symbol, e)
                     results["crypto"]["failed"] += 1
+                    results["crypto"]["errors"].append(f"{symbol}: {e}")
                 import time
                 time.sleep(0.3)
+
+        # Keep only first 5 errors per category to avoid huge status responses
+        for cat in ("stocks", "crypto"):
+            results[cat]["errors"] = results[cat]["errors"][:5]
 
         _job_state["backfill_alpaca"] = {
             "status": "ok",
@@ -1054,6 +1063,47 @@ def backfill_alpaca():
 def backfill_alpaca_status():
     state = _job_state.get("backfill_alpaca", {"status": "never_run"})
     return jsonify(state)
+
+
+@app.route("/alpaca-test")
+def alpaca_test():
+    """Quick diagnostic: test Alpaca API with a single stock + crypto call."""
+    import httpx
+    key = os.environ.get("ALPACA_API_KEY", "")
+    secret = os.environ.get("ALPACA_API_SECRET", "")
+    results = {
+        "key_set": bool(key),
+        "secret_set": bool(secret),
+        "key_prefix": key[:8] + "..." if len(key) > 8 else "(short)",
+    }
+    headers = {"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret}
+    try:
+        resp = httpx.get(
+            "https://data.alpaca.markets/v2/stocks/AAPL/bars",
+            params={"timeframe": "1Day", "limit": 1, "feed": "iex"},
+            headers=headers,
+            timeout=10,
+        )
+        results["stock_test"] = {
+            "status": resp.status_code,
+            "body": resp.text[:300] if resp.status_code != 200 else f"{len(resp.json().get('bars', []))} bars",
+        }
+    except Exception as e:
+        results["stock_test"] = {"error": str(e)}
+    try:
+        resp = httpx.get(
+            "https://data.alpaca.markets/v1beta3/crypto/us/bars",
+            params={"symbols": "BTC/USD", "timeframe": "1Day", "limit": 1},
+            headers=headers,
+            timeout=10,
+        )
+        results["crypto_test"] = {
+            "status": resp.status_code,
+            "body": resp.text[:300] if resp.status_code != 200 else f"{len(resp.json().get('bars', {}).get('BTC/USD', []))} bars",
+        }
+    except Exception as e:
+        results["crypto_test"] = {"error": str(e)}
+    return jsonify(results)
 
 
 @app.route("/scanner")
@@ -1115,11 +1165,11 @@ def pipeline_check():
     cutoff_7d = (datetime.now(timezone.utc) - _td(days=7)).isoformat()
     cutoff_30d = (datetime.now(timezone.utc) - _td(days=30)).isoformat()
 
-    def _count(table, since=None, extra_filters=None):
+    def _count(table, since=None, extra_filters=None, date_column="created_at"):
         try:
             q = supabase.table(table).select("id", count="exact")
             if since:
-                q = q.gte("created_at", since)
+                q = q.gte(date_column, since)
             if extra_filters:
                 for k, v in extra_filters.items():
                     q = q.eq(k, v)
@@ -1190,15 +1240,15 @@ def pipeline_check():
     }
 
     checks["prediction_markets"] = {
-        "total_raw_prices": _count("raw_prices", extra_filters={"asset_type": "prediction"}),
-        "last_7d": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "prediction"}),
-        "scoring_enabled": False,
-        "note": "Ingestion running every 30min. Scoring disabled until data matures.",
+        "total_raw_prices": _count("raw_prices", extra_filters={"asset_type": "prediction"}, date_column="captured_at"),
+        "last_7d": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "prediction"}, date_column="captured_at"),
+        "scoring_enabled": True,
+        "note": "Ingestion every 30min, scoring every 2h.",
     }
 
     checks["raw_prices_7d"] = {
-        "stocks": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "stock"}),
-        "crypto": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "crypto"}),
+        "stocks": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "stock"}, date_column="captured_at"),
+        "crypto": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "crypto"}, date_column="captured_at"),
     }
 
     checks["news_items_7d"] = _count("news_items", since=cutoff_7d)
@@ -1206,6 +1256,8 @@ def pipeline_check():
     checks["env_keys"] = {
         "FMP_API_KEY": "set" if os.environ.get("FMP_API_KEY") else "MISSING",
         "ANTHROPIC_API_KEY": "set" if os.environ.get("ANTHROPIC_API_KEY") else "MISSING",
+        "ALPACA_API_KEY": "set" if os.environ.get("ALPACA_API_KEY") else "MISSING",
+        "ALPACA_API_SECRET": "set" if os.environ.get("ALPACA_API_SECRET") else "MISSING",
         "ENABLE_SCHEDULER": os.environ.get("ENABLE_SCHEDULER", "false"),
     }
 

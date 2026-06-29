@@ -12,6 +12,7 @@ export async function GET() {
       .eq("is_backtest", false)
       .neq("direction", "HOLD")
       .neq("asset_type", "prediction")
+      .gte("confidence", 70)
       .order("created_at", { ascending: false })
       .limit(6);
 
