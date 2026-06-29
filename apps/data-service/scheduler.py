@@ -254,9 +254,8 @@ def _run_stock_job(name: str, fn):
 # Prediction markets — every 2 hours (was every 30 min)
 scheduler.add_job(lambda: _run_job("ingest_prediction_markets", job_ingest_prediction_markets),
                   IntervalTrigger(minutes=30), id="ingest_prediction_markets")
-# Prediction scoring disabled until data matures (~3 weeks of ingestion)
-# scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
-#                   CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
+scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
+                  CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
 
 # Stocks — full scoring at open + close, event-only midday, weekdays only
 scheduler.add_job(lambda: _run_stock_job("ingest_stocks", job_ingest_stocks),
@@ -565,6 +564,7 @@ def run_job_manual(job_name: str):
         "ingest_crypto": job_ingest_crypto,
         "score_stocks": job_score_stocks,
         "score_crypto": job_score_crypto,
+        "score_prediction_markets": job_score_prediction_markets,
         "crypto_momentum": job_crypto_momentum,
         "generate_newsletter": job_generate_newsletter,
         "send_newsletter": job_send_newsletter,
@@ -1241,8 +1241,8 @@ def pipeline_check():
     checks["prediction_markets"] = {
         "total_raw_prices": _count("raw_prices", extra_filters={"asset_type": "prediction"}, date_column="captured_at"),
         "last_7d": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "prediction"}, date_column="captured_at"),
-        "scoring_enabled": False,
-        "note": "Ingestion running every 30min. Scoring disabled until data matures.",
+        "scoring_enabled": True,
+        "note": "Ingestion every 30min, scoring every 2h.",
     }
 
     checks["raw_prices_7d"] = {
