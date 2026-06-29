@@ -968,6 +968,7 @@ def backfill_alpaca():
     asset_type = body.get("asset_type", "both")
 
     def _run():
+        from supabase_client import supabase
         from ingestion.alpaca_client import fetch_stock_bars, fetch_crypto_bars, _is_configured
         from ingestion.stocks import get_default_watchlist, _compute_indicators
         from ingestion.crypto import PRIORITY_SYMBOLS, _compute_crypto_indicators
