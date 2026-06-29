@@ -49,6 +49,7 @@ async function fetchAssetData(assetType: AssetType, identifier: string, userId: 
         .eq("asset_type", assetType)
         .eq("identifier", identifier)
         .eq("is_backtest", false)
+        .gte("confidence", 70)
         .order("created_at", { ascending: false })
         .limit(20),
 

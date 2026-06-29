@@ -121,6 +121,7 @@ export default async function HistoryPage({
     )
     .neq("outcome", "PENDING")
     .gte("created_at", ENGINE_CUTOFF)
+    .gte("confidence", 70)
     .order("created_at", { ascending: false })
     .limit(1000);
 
