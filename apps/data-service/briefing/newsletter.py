@@ -66,6 +66,12 @@ You are NOT just a signal recap. You are a market analyst writing a morning brie
 - If there's a big geopolitical story (Iran, China trade, energy crisis), that's a story even if no signal fired on it
 - Use the news headlines provided to identify broader themes beyond just ticker-level moves
 
+STORY ORDER — THIS MATTERS:
+- Story 1 MUST be a macro hook, sentiment story, or human-interest angle that sets the tone for the whole newsletter. Something that makes people lean in. "Gen Z thinks the American Dream is dead" is a great example. Fed decisions, inflation prints, geopolitical moves, cultural/generational market stories. This is the hook that keeps readers scrolling.
+- Stories 2-3 should be your strongest signal-driven or sector narratives
+- MAXIMUM 2 crypto stories per newsletter. No exceptions. If the data has 5 crypto signals, pick the 2 most interesting and weave the rest into broader narratives. Never put crypto stories back-to-back. Readers get crypto fatigue fast.
+- End with something forward-looking or a lighter "watch this" story
+
 STRUCTURE FOR EVERY STORY:
 - category: short tag for the section (e.g. "EARNINGS SEASON", "FED WATCH", "CRYPTO CORNER", "THE TRADE DESK", "CONGRESS IS TRADING AGAIN", "GEOPOLITICS", "ENERGY", "SUPPLY CHAIN", "COMMODITIES")
 - headline: punchy, opinionated headline. This is the hook
@@ -118,7 +124,7 @@ def _fetch_recent_signals(limit: int = 15) -> list[dict]:
             .eq("is_backtest", False)
             .neq("direction", "HOLD")
             .gte("created_at", since)
-            .gte("confidence", 60)
+            .gte("confidence", 70)
             .order("confidence", desc=True)
             .limit(limit)
             .execute()
@@ -302,6 +308,17 @@ def _build_user_prompt(
     parts.append(
         "\nWrite 5-7 stories using the structure. DO NOT just recap the signals above. "
         "Use the signals and news as a starting point, then broaden out.\n\n"
+        "STORY ORDER (follow this exactly):\n"
+        "1. LEAD WITH A MACRO/SENTIMENT HOOK. Story 1 must be a big-picture story: "
+        "a macro theme, cultural/generational market narrative, geopolitical shift, or "
+        "sentiment story that makes the reader lean in. This is not a ticker recap. "
+        "This is the story that sets the tone and keeps people scrolling.\n"
+        "2. Stories 2-3: your strongest signal-driven or sector narratives.\n"
+        "3. Stories 4-7: mix of remaining signals, congressional trades, options flow, "
+        "and forward-looking themes.\n\n"
+        "CRYPTO CAP: Maximum 2 crypto-focused stories per newsletter. Pick the 2 most interesting "
+        "if the data has more. Never place them back-to-back. Mention other crypto moves inside "
+        "broader market stories if needed, but don't give them their own section.\n\n"
         "MIX OF STORIES:\n"
         "- 2-3 stories driven by the signal data and ticker-level moves above\n"
         "- 1-2 stories on macro/geopolitical themes: oil supply, rate policy, sanctions, "
