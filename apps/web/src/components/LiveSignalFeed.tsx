@@ -163,7 +163,7 @@ export default function LiveSignalFeed() {
 
                 <div className="flex flex-col items-end">
                   <span className="font-mono text-sm text-white tabular-nums">
-                    {live ? `$${formatPrice(live.price)}` : "—"}
+                    {live ? `$${formatPrice(live.price)}` : "··"}
                   </span>
                   <span
                     className={`font-mono text-[11px] tabular-nums ${

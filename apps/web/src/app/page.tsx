@@ -16,9 +16,9 @@ import TickerBar from "@/components/TickerBar";
 import LiveSignalFeed from "@/components/LiveSignalFeed";
 
 export const metadata: Metadata = {
-  title: "Plebs — Hedge fund tools. Retail prices.",
+  title: "Plebs · Hedge fund tools. Retail prices.",
   description:
-    "Real-time AI signals for stocks, crypto, and prediction markets. Congressional trade tracker, options flow, morning briefing — Wall Street's toolkit, finally for everyone.",
+    "Real-time AI signals for stocks, crypto, and prediction markets. Congressional trade tracker, options flow, morning briefing. Wall Street's toolkit, finally for everyone.",
 };
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ function Hero() {
             </h1>
 
             <p className="mt-6 text-lg text-zinc-400 max-w-md leading-relaxed text-pretty">
-              Real-time AI signals across stocks, crypto, and prediction markets —
+              Real-time AI signals across stocks, crypto, and prediction markets,
               plus options flow, congressional trades, and a morning briefing. One terminal.
             </p>
 
@@ -150,9 +150,9 @@ function Stats() {
 
   return (
     <section className="px-5 sm:px-8">
-      <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 divide-x divide-white/[0.06]">
+      <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 border-t border-l border-white/[0.06]">
         {items.map((item) => (
-          <div key={item.label} className="py-10 px-6 first:pl-0">
+          <div key={item.label} className="py-10 px-6 border-b border-r border-white/[0.06]">
             <div className="font-mono text-3xl sm:text-4xl font-semibold text-white tracking-tight tabular-nums">
               {item.value}
             </div>
@@ -170,13 +170,13 @@ const FEATURES = [
   {
     icon: Zap,
     title: "Real-time AI signals",
-    desc: "Model-driven analysis across stocks, crypto, and Polymarket / Kalshi contracts. BUY, SELL, YES, NO — each with a confidence score and the reasoning behind it.",
+    desc: "Model-driven analysis across stocks, crypto, and Polymarket / Kalshi contracts. BUY, SELL, YES, NO, each with a confidence score and the reasoning behind it.",
     wide: true,
   },
   {
     icon: Landmark,
     title: "Congressional trades",
-    desc: "STOCK Act disclosures for every House and Senate member — surfaced before the headlines.",
+    desc: "STOCK Act disclosures for every House and Senate member, surfaced before the headlines.",
   },
   {
     icon: Waves,
@@ -186,7 +186,7 @@ const FEATURES = [
   {
     icon: Sunrise,
     title: "Morning briefing",
-    desc: "An AI-written market brief in your inbox at 8:45a ET — top signals, macro, and risk.",
+    desc: "An AI-written market brief in your inbox at 8:45a ET. Top signals, macro, and risk.",
   },
   {
     icon: Wallet,
@@ -196,7 +196,7 @@ const FEATURES = [
   {
     icon: Target,
     title: "Accuracy per asset",
-    desc: "Every signal is tracked to outcome, so you see real win rates per ticker — not vibes.",
+    desc: "Every signal is tracked to outcome, so you see real win rates per ticker, not vibes.",
   },
 ];
 
@@ -210,7 +210,7 @@ function Features() {
             The institutional stack, in one tab
           </h2>
           <p className="text-zinc-500 mt-4 leading-relaxed">
-            Stop juggling six subscriptions. Signals, flow, filings, and briefings —
+            Stop juggling six subscriptions. Signals, flow, filings, and briefings:
             the full toolkit, priced for retail.
           </p>
         </div>
@@ -314,7 +314,7 @@ const PLANS = [
     cta:       "Start 14-day trial",
     href:      "/signup",
     features: [
-      "Real-time AI signals — stocks & crypto",
+      "Real-time AI signals for stocks & crypto",
       "Unlimited watchlist",
       "Full options flow + dark pool",
       "Congressional trade tracker",
@@ -327,7 +327,7 @@ const PLANS = [
     name:      "Elite",
     price:     "$80",
     period:    "/mo",
-    blurb:     "The real alpha — prediction markets and your own AI analyst.",
+    blurb:     "The real alpha: prediction markets and your own AI analyst.",
     highlight: true,
     cta:       "Start 14-day trial",
     href:      "/signup",
@@ -335,7 +335,7 @@ const PLANS = [
       "Everything in Pro",
       "Prediction-market signals (Kalshi + Polymarket)",
       "AI finds mispriced contracts",
-      "Pleby — your AI trading analyst, on call",
+      "Pleby, your AI trading analyst, on call",
       "Personalised morning briefing",
       "Priority signal delivery",
     ],
@@ -440,7 +440,7 @@ function CTAStrip() {
 
           <div className="mt-12 pt-10 border-t border-white/[0.06] max-w-md mx-auto">
             <p className="text-zinc-500 text-sm mb-4 leading-relaxed">
-              Not ready? Get the free daily newsletter — markets in plain English,
+              Not ready? Get the free daily newsletter. Markets in plain English,
               every weekday at 7a ET.
             </p>
             <NewsletterSignup />
