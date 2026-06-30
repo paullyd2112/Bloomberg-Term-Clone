@@ -904,7 +904,7 @@ def _options_signal_exists_recently(ticker: str) -> bool:
             .select("id")
             .eq("asset_type", "stock")
             .eq("identifier", ticker)
-            .eq("is_backtest", True)
+            .eq("is_backtest", False)
             .gte("created_at", cutoff)
             .limit(1)
             .execute()
@@ -927,7 +927,7 @@ def _write_options_signal(ticker: str, price: float | None, signal: OptionsFlowS
         "time_horizon":    signal.time_horizon,
         "price_at_signal": price,
         "news_context":    signal.news_context,
-        "is_backtest":     True,
+        "is_backtest":     False,
         "outcome":         "PENDING",
     }
     result = supabase.table("signals").insert(record).execute()

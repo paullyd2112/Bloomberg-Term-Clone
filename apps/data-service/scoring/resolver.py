@@ -28,14 +28,14 @@ REQUEST_TIMEOUT = 10.0
 # loss_threshold = % move against signal direction to count as LOSS
 
 RESOLUTION_CONFIG: dict[tuple[str, str], tuple[float, float, float]] = {
-    # Stocks
-    ("stock", "intraday"):  (6,    0.005, 0.015),   # 6h,  0.5% win / 1.5% loss
-    ("stock", "swing"):     (120,  0.02,  0.05),     # 5 trading days, 2% win / 5% loss
-    ("stock", "longterm"):  (360,  0.05,  0.10),     # 15 trading days, 5% win / 10% loss
+    # Stocks — swing-trading focus, realistic move thresholds
+    ("stock", "intraday"):  (6,    0.004, 0.012),   # 6h,  0.4% win / 1.2% loss
+    ("stock", "swing"):     (120,  0.015, 0.04),     # 5 trading days, 1.5% win / 4% loss
+    ("stock", "longterm"):  (360,  0.04,  0.08),     # 15 trading days, 4% win / 8% loss
     # Crypto — wider thresholds due to higher volatility
-    ("crypto", "intraday"): (6,    0.015, 0.03),     # 6h,  1.5% win / 3% loss
-    ("crypto", "swing"):    (120,  0.05,  0.10),     # 5 days, 5% win / 10% loss
-    ("crypto", "longterm"): (360,  0.10,  0.20),     # 15 days, 10% win / 20% loss
+    ("crypto", "intraday"): (6,    0.012, 0.025),    # 6h,  1.2% win / 2.5% loss
+    ("crypto", "swing"):    (120,  0.04,  0.08),     # 5 days, 4% win / 8% loss
+    ("crypto", "longterm"): (360,  0.08,  0.16),     # 15 days, 8% win / 16% loss
 }
 
 # Fallback for signals with missing/unknown time_horizon
@@ -78,7 +78,14 @@ def _score_outcome(
     current: float,
     win_threshold: float,
     loss_threshold: float,
+    is_expired: bool = False,
 ) -> str:
+    """Score a signal outcome.
+
+    When is_expired=True (signal is past its full horizon), use binary resolution:
+    any move in the right direction = WIN, any move against = LOSS. No more NEUTRAL
+    for expired signals — a swing call that went sideways is a LOSS of opportunity.
+    """
     if direction == "HOLD":
         return "NEUTRAL"
 
@@ -92,6 +99,8 @@ def _score_outcome(
             return "WIN"
         if pct_change <= -loss_threshold:
             return "LOSS"
+        if is_expired:
+            return "WIN" if pct_change > 0 else "LOSS"
         return "NEUTRAL"
 
     if direction in ("SELL", "NO"):
@@ -99,6 +108,8 @@ def _score_outcome(
             return "WIN"
         if pct_change >= loss_threshold:
             return "LOSS"
+        if is_expired:
+            return "WIN" if pct_change < 0 else "LOSS"
         return "NEUTRAL"
 
     return "NEUTRAL"
@@ -248,12 +259,16 @@ def resolve_outcomes() -> str:
             if current_price is None:
                 continue
 
+            # Force binary resolution once signal is past 2x its intended horizon
+            is_expired = age_hours >= (min_age_h * 2)
+
             outcome = _score_outcome(
                 signal["direction"],
                 float(entry_price),
                 current_price,
                 win_thresh,
                 loss_thresh,
+                is_expired=is_expired,
             )
 
             supabase.table("signals").update({
