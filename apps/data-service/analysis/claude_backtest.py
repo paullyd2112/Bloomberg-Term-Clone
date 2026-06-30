@@ -35,6 +35,7 @@ from dotenv import load_dotenv
 
 from prompts import stocks as stocks_prompt
 from prompts import crypto as crypto_prompt
+from ingestion.alpaca_client import fetch_stock_bars, fetch_crypto_bars
 
 load_dotenv()
 
@@ -175,6 +176,22 @@ def _normalize_ohlcv(df: pd.DataFrame | None) -> pd.DataFrame | None:
     return df[list(_NEEDED_COLS)].astype(float)
 
 
+def _days_needed() -> int:
+    return (datetime.now(timezone.utc).date()
+            - datetime.strptime(DATE_FROM, "%Y-%m-%d").date()).days + 5
+
+
+MIN_ROWS_FOR_SOLE_SOURCE = 80  # ~ full Feb-Jun trading-day range; below this we merge fallbacks
+
+
+def _stock_alpaca(ticker: str) -> pd.DataFrame | None:
+    return _normalize_ohlcv(fetch_stock_bars(ticker, days=_days_needed()))
+
+
+def _crypto_alpaca(symbol: str) -> pd.DataFrame | None:
+    return _normalize_ohlcv(fetch_crypto_bars(symbol, days=_days_needed()))
+
+
 def _stock_yfinance(ticker: str) -> pd.DataFrame | None:
     try:
         import yfinance as yf
@@ -291,7 +308,17 @@ def _stock_massive(ticker: str) -> pd.DataFrame | None:
 
 
 def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
-    """Fetch from ALL 5 sources, merge for best date coverage."""
+    """Alpaca primary — used alone if it covers the full range. Other sources
+    are fallbacks only, merged in if Alpaca is missing or insufficient."""
+    alpaca_df = _stock_alpaca(ticker)
+    if alpaca_df is not None and len(alpaca_df) >= MIN_ROWS_FOR_SOLE_SOURCE:
+        logger.info("[claude_backtest] {} — Alpaca returned {} rows, using as sole source", ticker, len(alpaca_df))
+        return alpaca_df
+
+    logger.warning(
+        "[claude_backtest] {} — Alpaca insufficient ({} rows) — falling back to other sources",
+        ticker, len(alpaca_df) if alpaca_df is not None else 0,
+    )
     sources = [
         ("yfinance",      _stock_yfinance),
         ("Finnhub",       _stock_finnhub),
@@ -299,7 +326,7 @@ def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
         ("Massive",       _stock_massive),
         ("Alpha Vantage", _stock_alphavantage),
     ]
-    frames: list[pd.DataFrame] = []
+    frames: list[pd.DataFrame] = [alpaca_df] if alpaca_df is not None and not alpaca_df.empty else []
     for name, fn in sources:
         try:
             df = fn(ticker)
@@ -337,6 +364,7 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
     """
     tickers = tickers or SAMPLE_STOCKS[:3]
     sources = [
+        ("alpaca",        _stock_alpaca),
         ("yfinance",      _stock_yfinance),
         ("finnhub",       _stock_finnhub),
         ("fmp",           _stock_fmp),
@@ -346,18 +374,28 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
 
     report: dict = {
         "date_range": f"{DATE_FROM} → {DATE_TO}",
+        "primary_source": "alpaca",
         "keys_present": {
+            "alpaca":        bool(os.environ.get("ALPACA_API_KEY")),
             "finnhub":       bool(FINNHUB_KEY),
             "fmp":           bool(FMP_KEY),
             "massive":       bool(MASSIVE_KEY),
             "alpha_vantage": bool(AV_KEY),
-            "massive":       bool(MASSIVE_KEY),
         },
         "tickers": {},
     }
 
     ticker_0 = tickers[0]
     raw_tests: dict = {}
+
+    try:
+        df = _stock_alpaca(ticker_0)
+        raw_tests["alpaca"] = (
+            f"OK — {len(df)} rows ({df.index[0].date()} → {df.index[-1].date()})"
+            if df is not None and not df.empty else "no data (None/empty)"
+        )
+    except Exception as e:
+        raw_tests["alpaca"] = f"ERROR: {type(e).__name__}: {str(e)[:200]}"
 
     try:
         import yfinance as yf
@@ -438,7 +476,7 @@ def diagnose_stock_sources(tickers: list[str] | None = None) -> dict:
     return report
 
 
-def _fetch_crypto_ohlcv(cg_id: str) -> pd.DataFrame | None:
+def _fetch_crypto_ohlcv_coingecko(cg_id: str) -> pd.DataFrame | None:
     start_ts = int(datetime.strptime(DATE_FROM, "%Y-%m-%d").timestamp())
     end_ts   = int(datetime.strptime(DATE_TO,   "%Y-%m-%d").timestamp())
     url = (
@@ -1103,16 +1141,30 @@ def run_claude_backtest(
     crypto_hl: dict[str, pd.DataFrame] = {}
     for symbol, cg_id in crypto:
         logger.info("[claude_backtest] Fetching crypto data: {}", symbol)
-        df = _fetch_crypto_ohlcv(cg_id)
+        df = _crypto_alpaca(symbol)
+        used_alpaca = df is not None and len(df) >= MIN_ROWS_FOR_SOLE_SOURCE
+        if not used_alpaca:
+            logger.warning(
+                "[claude_backtest] {} — Alpaca insufficient ({} rows), falling back to CoinGecko",
+                symbol, len(df) if df is not None else 0,
+            )
+            df = _fetch_crypto_ohlcv_coingecko(cg_id)
+
         if df is not None and not df.empty:
             crypto_data[symbol] = _compute_indicators(df)
-            hl = _fetch_crypto_ohlc_candles(cg_id)
-            if hl is not None and not hl.empty:
-                crypto_hl[symbol] = hl
-                logger.info("[claude_backtest] {} — real OHLC candles: {} rows ({} to {})",
-                            symbol, len(hl), hl.index[0].date(), hl.index[-1].date())
+            if used_alpaca:
+                # Alpaca bars are genuine daily OHLC — use directly as the hl
+                # overlay instead of CoinGecko's coarser 4-day /ohlc candles.
+                crypto_hl[symbol] = df[["open", "high", "low", "close"]]
+                logger.info("[claude_backtest] {} — Alpaca real OHLC ({} rows) used as hl overlay", symbol, len(df))
             else:
-                logger.info("[claude_backtest] {} — no real OHLC candles (using close-only fallback)", symbol)
+                hl = _fetch_crypto_ohlc_candles(cg_id)
+                if hl is not None and not hl.empty:
+                    crypto_hl[symbol] = hl
+                    logger.info("[claude_backtest] {} — real OHLC candles: {} rows ({} to {})",
+                                symbol, len(hl), hl.index[0].date(), hl.index[-1].date())
+                else:
+                    logger.info("[claude_backtest] {} — no real OHLC candles (using close-only fallback)", symbol)
 
     fg_history = _fetch_fear_greed_history() if crypto_data else {}
 
