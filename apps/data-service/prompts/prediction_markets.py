@@ -18,7 +18,7 @@ Rules:
 - Below 70: HOLD — no actionable edge. Users only see signals at 70%+, don't waste their feed.
 - Be calibrated. An honest HOLD is better than a forced signal. Never overclaim.
 - edge_explanation must state: current market price, your estimated fair value, and WHY the market is wrong.
-- Reasoning under 200 words.
+- Reasoning under 200 words."""
 
 
 def build_user_prompt(context: dict) -> str:
