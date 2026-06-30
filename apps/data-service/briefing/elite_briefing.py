@@ -244,6 +244,7 @@ def send_elite_briefings() -> str:
         return "0 elite subscribers"
 
     sent, failed, skipped = 0, 0, 0
+    last_error: str = ""
 
     for sub in subscribers:
         email   = sub.get("email")
@@ -284,10 +285,13 @@ def send_elite_briefings() -> str:
             sent += 1
             logger.debug("elite_briefing: sent to {} ({} tickers)", email, len(tickers))
         except Exception as e:
-            logger.error("elite_briefing: send failed for {} — {}", email, e)
+            last_error = f"{type(e).__name__}: {e}"
+            logger.error("elite_briefing: send failed for {} — {}", email, last_error)
             sentry_sdk.capture_exception(e)
             failed += 1
 
     summary = f"{sent} sent, {failed} failed, {skipped} skipped"
+    if last_error:
+        summary += f" | last_error: {last_error}"
     logger.info("elite_briefing complete — {}", summary)
     return summary
