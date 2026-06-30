@@ -6,6 +6,7 @@ import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
 import SubscribeGate from "@/components/ui/SubscribeGate";
 import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
+import SectionHeader from "@/components/ui/SectionHeader";
 
 export const revalidate = 60;
 
@@ -184,7 +185,7 @@ export default async function DashboardPage() {
       {/* Platform accuracy */}
       {accuracy && (
         <section>
-          <SectionHeader>Signal track record</SectionHeader>
+          <SectionHeader divider className="mb-4">Signal track record</SectionHeader>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {/* Overall */}
             <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4">
@@ -258,7 +259,7 @@ export default async function DashboardPage() {
       {/* Top movers */}
       {movers.length > 0 && (
         <section>
-          <SectionHeader>Top movers (24h)</SectionHeader>
+          <SectionHeader divider className="mb-4">Top movers (24h)</SectionHeader>
           <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
             {movers.map((m) => {
               const up = (m.change_24h ?? 0) >= 0;
@@ -290,7 +291,13 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      {/* Sector heatmap */}
+      {/* Signal feed — the product, surfaced above supporting analytics */}
+      <section>
+        <SectionHeader divider className="mb-4">Latest signals</SectionHeader>
+        <SignalFeed signals={signals} />
+      </section>
+
+      {/* Sector heatmap (supporting context, below the feed) */}
       <Suspense
         fallback={
           <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-6 h-40 animate-pulse" />
@@ -298,12 +305,6 @@ export default async function DashboardPage() {
       >
         <SectorHeatmap />
       </Suspense>
-
-      {/* Signal feed */}
-      <section>
-        <SectionHeader>Latest signals</SectionHeader>
-        <SignalFeed signals={signals} />
-      </section>
     </div>
   );
 }
@@ -312,16 +313,6 @@ function rateColor(rate: number): string {
   if (rate >= 0.6) return "text-emerald-400";
   if (rate >= 0.45) return "text-amber-400";
   return "text-red-400";
-}
-
-function SectionHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.2em] text-zinc-500 mb-4">
-      <span className="text-emerald-400">●</span>
-      <span className="h-px w-8 bg-white/15" />
-      <span>{children}</span>
-    </h2>
-  );
 }
 
 function StatCard({

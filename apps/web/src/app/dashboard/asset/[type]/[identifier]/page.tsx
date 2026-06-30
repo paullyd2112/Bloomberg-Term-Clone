@@ -11,6 +11,7 @@ import OptionsFlowTable from "@/components/asset/OptionsFlowTable";
 import PriceHeader from "@/components/asset/PriceHeader";
 import PriceChart, { type PricePoint } from "@/components/asset/PriceChart";
 import OnDemandScore from "@/components/asset/OnDemandScore";
+import SectionHeader from "@/components/ui/SectionHeader";
 
 export const revalidate = 60;
 
@@ -210,7 +211,7 @@ export default async function AssetPage({ params }: PageProps) {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left: signals */}
         <div className="lg:col-span-2 space-y-4">
-          <SectionHeader label="Signal history" count={signals.length} />
+          <SectionHeader count={signals.length}>Signal history</SectionHeader>
           {signals.length === 0 ? (
             canScoreOnDemand ? (
               <OnDemandScore assetType={type} identifier={identifier} />
@@ -246,7 +247,7 @@ export default async function AssetPage({ params }: PageProps) {
           {/* News */}
           {news.length > 0 && (
             <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
-              <SectionHeader label="News" />
+              <SectionHeader>News</SectionHeader>
               <div className="space-y-2">
                 {news.map((item) => (
                   <a
@@ -273,7 +274,7 @@ export default async function AssetPage({ params }: PageProps) {
           {/* Options flow (stocks only, pro/elite) */}
           {type === "stock" && (
             <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
-              <SectionHeader label="Options flow" />
+              <SectionHeader>Options flow</SectionHeader>
               {canSeeOptions ? (
                 options.length > 0 ? (
                   <OptionsFlowTable rows={options} />
@@ -298,7 +299,7 @@ export default async function AssetPage({ params }: PageProps) {
           {/* Accuracy stats */}
           {accuracy && (
             <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
-              <SectionHeader label="AI accuracy" />
+              <SectionHeader>AI accuracy</SectionHeader>
               <div className="space-y-2">
                 <StatRow label="Total signals" value={accuracy.total_signals} />
                 <StatRow label="Win rate" value={`${((accuracy.win_rate ?? 0) * 100).toFixed(1)}%`} highlight />
@@ -314,18 +315,6 @@ export default async function AssetPage({ params }: PageProps) {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function SectionHeader({ label, count }: { label: string; count?: number }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="text-emerald-400 text-[10px] leading-none">●</span>
-      <h2 className="font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em]">{label}</h2>
-      {count !== undefined && (
-        <span className="text-[11px] text-zinc-600 tabular-nums">{count}</span>
-      )}
     </div>
   );
 }
@@ -349,7 +338,7 @@ function EarningsBadge({ reportDate, reportTime }: { reportDate: string; reportT
     reportTime === "AMC" ? "AMC" : reportTime === "BMO" ? "BMO" : reportTime ?? "";
 
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded">
+    <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-700/40 px-2 py-0.5 rounded-md">
       Earnings: {formatted} {timeLabel}
     </span>
   );
@@ -395,7 +384,7 @@ function KeyStatsGrid({
       {volumeRatio != null && (
         <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-3 text-center">
           <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Vol Ratio</p>
-          <p className={`text-lg font-bold font-mono tabular-nums ${volumeRatio > 2 ? "text-yellow-400" : "text-white"}`}>
+              <p className={`text-lg font-bold font-mono tabular-nums ${volumeRatio > 2 ? "text-amber-400" : "text-white"}`}>
             {volumeRatio.toFixed(2)}x
           </p>
           <p className="text-[10px] text-zinc-600 mt-0.5">vs avg</p>
@@ -434,9 +423,9 @@ function ShortInterestCard({
   return (
     <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <SectionHeader label="Short interest" />
+        <SectionHeader>Short interest</SectionHeader>
         {data.is_high_short && (
-          <span className="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded uppercase tracking-wider">
+          <span className="text-[10px] font-bold bg-red-500/15 text-red-400 border border-red-700/40 px-1.5 py-0.5 rounded-md uppercase tracking-wider">
             High
           </span>
         )}
@@ -481,7 +470,7 @@ function FearGreedBadge({ metadata }: { metadata: Record<string, unknown> }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1 text-[11px] font-semibold border px-2 py-0.5 rounded ${colorClasses}`}
+      className={`inline-flex items-center gap-1 text-[11px] font-semibold border px-2 py-0.5 rounded-md ${colorClasses}`}
     >
       Fear &amp; Greed: {value} {classification}
     </span>
@@ -506,7 +495,7 @@ function MarketStatsCard({ metadata }: { metadata: Record<string, unknown> }) {
 
   return (
     <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
-      <SectionHeader label="Market stats" />
+      <SectionHeader>Market stats</SectionHeader>
       <div className="space-y-2">
         {marketCapRank != null && (
           <StatRow label="Rank" value={`#${marketCapRank}`} />

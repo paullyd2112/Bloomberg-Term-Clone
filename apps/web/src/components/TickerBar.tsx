@@ -18,19 +18,23 @@ function fmt(price: number): string {
 function Item({ item }: { item: TickerItem }) {
   const change = item.change_24h;
   const positive = change != null && change >= 0;
-  const changeColor = positive ? "text-emerald-400" : "text-red-400";
-  const bgColor = positive ? "bg-emerald-500/10" : "bg-red-500/10";
 
   return (
-    <div className="inline-flex items-center gap-2 px-5 sm:px-6 whitespace-nowrap">
-      <span className="font-mono text-[12px] font-semibold text-zinc-300 tracking-wide">{item.identifier}</span>
-      <span className="font-mono text-[12px] text-zinc-400 tabular-nums">${fmt(item.price)}</span>
+    <div className="inline-flex items-center gap-2.5 pl-5 whitespace-nowrap">
+      <span className="font-mono text-[12px] font-semibold text-zinc-200 tracking-wide">{item.identifier}</span>
+      <span className="font-mono text-[12px] text-zinc-500 tabular-nums">${fmt(item.price)}</span>
       {change != null && (
-        <span className={`font-mono text-[10px] font-medium tabular-nums ${changeColor}`}>
-          {positive ? "+" : ""}{Math.abs(change).toFixed(2)}%
+        <span
+          className={`inline-flex items-center font-mono text-[10px] font-semibold tabular-nums rounded px-1.5 py-0.5 ${
+            positive
+              ? "text-emerald-400 bg-emerald-500/10"
+              : "text-red-400 bg-red-500/10"
+          }`}
+        >
+          {positive ? "+" : "\u2212"}{Math.abs(change).toFixed(2)}%
         </span>
       )}
-      <span className="text-white/[0.06] ml-1">|</span>
+      <span className="ml-3 h-3.5 w-px bg-white/[0.08]" />
     </div>
   );
 }
@@ -105,7 +109,16 @@ export default function TickerBar() {
 
   return (
     <div className="relative bg-black/60 backdrop-blur-sm border-b border-white/[0.06] h-10 flex items-center overflow-hidden select-none">
-      <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-20 z-10 bg-gradient-to-r from-black to-transparent" />
+      {/* Fixed LIVE marker — items emerge from behind it */}
+      <div className="absolute left-0 top-0 bottom-0 z-20 flex items-center gap-1.5 bg-black/85 backdrop-blur-sm pl-4 pr-3.5 border-r border-white/[0.08]">
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+        </span>
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">Live</span>
+      </div>
+
+      {/* Right fade */}
       <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 z-10 bg-gradient-to-l from-black to-transparent" />
 
       <div className="flex animate-marquee">
