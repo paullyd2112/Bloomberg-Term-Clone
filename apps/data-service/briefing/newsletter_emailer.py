@@ -332,6 +332,7 @@ def send_newsletter() -> str:
     text_body = _render_text(briefing)
     sent, skipped, failed = 0, 0, 0
     failed_emails: list[str] = []
+    last_error: str = ""
 
     for sub in subscribers:
         email   = sub.get("email")
@@ -357,7 +358,8 @@ def send_newsletter() -> str:
             _record_send(email)
             sent += 1
         except Exception as e:
-            logger.error("newsletter_emailer: all {} retries exhausted for {}: {}", MAX_RETRIES, email, e)
+            last_error = f"{type(e).__name__}: {e}"
+            logger.error("newsletter_emailer: all {} retries exhausted for {}: {}", MAX_RETRIES, email, last_error)
             sentry_sdk.capture_exception(e)
             failed += 1
             failed_emails.append(email)
@@ -369,5 +371,7 @@ def send_newsletter() -> str:
         )
 
     summary = f"{sent} sent, {skipped} already sent, {failed} failed"
+    if last_error:
+        summary += f" | last_error: {last_error}"
     logger.info("newsletter_emailer complete: {}", summary)
     return summary
