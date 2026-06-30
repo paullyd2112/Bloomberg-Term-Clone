@@ -8,6 +8,7 @@ Env vars:
 """
 
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -260,4 +261,74 @@ def fetch_multi_stock_snapshots(tickers: list[str]) -> dict:
         return resp.json()
     except Exception as e:
         logger.debug("Alpaca multi-snapshot failed — {}", e)
+        return {}
+
+
+_OCC_EXPIRY_RE = re.compile(r"(\d{6})[CP]\d{8}$")
+
+
+def parse_occ_symbol(contract_symbol: str) -> dict | None:
+    """Parse an OCC-style option contract symbol, e.g. AAPL260629C00220000."""
+    m = re.match(r"^([A-Z]+)(\d{6})([CP])(\d{8})$", contract_symbol)
+    if not m:
+        return None
+    root, exp_raw, cp, strike_raw = m.groups()
+    return {
+        "root":          root,
+        "expiry":        f"20{exp_raw[0:2]}-{exp_raw[2:4]}-{exp_raw[4:6]}",
+        "contract_type": "call" if cp == "C" else "put",
+        "strike":        int(strike_raw) / 1000.0,
+    }
+
+
+def fetch_options_snapshots(underlying: str, max_expiries: int = 3, feed: str = "indicative") -> dict:
+    """Fetch options snapshots for an underlying, limited to its nearest N expiries.
+    Returns {contract_symbol: snapshot_dict} (latestTrade, latestQuote, dailyBar, greeks, openInterest)."""
+    if not _is_configured():
+        return {}
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    all_snapshots: dict = {}
+    next_page_token = None
+
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT, headers=_headers()) as client:
+            while True:
+                params: dict = {
+                    "feed": feed,
+                    "limit": 1000,
+                    "expiration_date_gte": today,
+                }
+                if next_page_token:
+                    params["page_token"] = next_page_token
+
+                resp = client.get(
+                    f"{DATA_BASE}/v1beta1/options/snapshots/{underlying}",
+                    params=params,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                all_snapshots.update(data.get("snapshots") or {})
+
+                next_page_token = data.get("next_page_token")
+                if not next_page_token:
+                    break
+
+                # Stop once we've collected contracts spanning enough distinct expiries —
+                # avoids paginating through an underlying's full chain (LEAPS etc).
+                expiries = {m.group(1) for sym in all_snapshots if (m := _OCC_EXPIRY_RE.search(sym))}
+                if len(expiries) >= max_expiries and len(all_snapshots) > 200:
+                    break
+
+        return all_snapshots
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code in (401, 403):
+            logger.warning("{}: Alpaca options auth failed ({})", underlying, e.response.status_code)
+        else:
+            logger.debug("{}: Alpaca options snapshots failed — {}", underlying, e)
+        return {}
+    except Exception as e:
+        logger.debug("{}: Alpaca options snapshots failed — {}", underlying, e)
         return {}
