@@ -3,9 +3,8 @@ High-confidence signal email alerts — automatic notifications for BUY/SELL sig
 
 Called from scoring/engine.py after a signal is written. Only fires for:
   - Direction: BUY or SELL (never HOLD)
-  - Confidence: >= MIN_CONFIDENCE (85% default, after accuracy penalty)
-
-Sends to all active newsletter subscribers. Respects unsubscribed flag.
+  - Confidence: >= MIN_CONFIDENCE (70% default)
+  - Tier: pro or elite subscribers only (free users get the newsletter CTA instead)
 """
 
 import os
@@ -22,8 +21,9 @@ resend.api_key = os.environ.get("RESEND_API_KEY", "") or os.environ.get("RESEND_
 FROM_ADDRESS = "Plebs Signals <signals@plebs.finance>"
 APP_URL = os.environ.get("NEXT_PUBLIC_APP_URL", "https://plebs.finance")
 
-MIN_CONFIDENCE = 85
+MIN_CONFIDENCE = 70
 ACTIONABLE_DIRECTIONS = {"BUY", "SELL"}
+PAID_TIERS = {"pro", "elite"}
 
 # Rate-limit: don't spam the same ticker within 6 hours
 _recent_alerts: dict[str, datetime] = {}
@@ -53,11 +53,13 @@ def _should_alert(signal: dict) -> bool:
 
 
 def _get_subscribers() -> list[dict]:
+    """Returns only pro/elite subscribers — free users don't get real-time signal alerts."""
     try:
         result = (
             supabase.table("newsletter_subscribers")
-            .select("email, user_id")
+            .select("email, user_id, tier")
             .eq("unsubscribed", False)
+            .in_("tier", list(PAID_TIERS))
             .execute()
         )
         return result.data or []
