@@ -265,11 +265,11 @@ scheduler.add_job(lambda: _run_stock_job("score_stocks", job_score_stocks),
 scheduler.add_job(lambda: _run_stock_job("score_stocks_event", job_score_stocks_event_only),
                   CronTrigger(minute=20, hour="11,13", day_of_week="mon-fri"), id="score_stocks_event")
 
-# Crypto — every hour
+# Crypto — 6x/day (3 market-hours windows + 3 overnight) to balance signal volume with stocks
 scheduler.add_job(lambda: _run_job("ingest_crypto", job_ingest_crypto),
-                  IntervalTrigger(hours=1), id="ingest_crypto")
+                  CronTrigger(minute=0, hour="0,4,8,12,16,20"), id="ingest_crypto")
 scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
-                  CronTrigger(minute=20, hour="*"), id="score_crypto")
+                  CronTrigger(minute=20, hour="0,4,8,12,16,20"), id="score_crypto")
 
 # Crypto momentum screener — every 2 hours, catches pumps/breakouts outside watchlist
 scheduler.add_job(lambda: _run_job("crypto_momentum", job_crypto_momentum),
