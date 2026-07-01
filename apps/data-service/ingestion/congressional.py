@@ -74,33 +74,42 @@ def _normalize_transaction(raw: str) -> str | None:
 
 # ── efdsearch.senate.gov scraper (primary, free, official source) ──────────
 
-def _efd_get_csrf_and_agree(client: httpx.Client) -> bool:
+def _efd_get_csrf_and_agree(client: httpx.Client) -> str | None:
     """Load the landing page, extract the CSRF token, and accept the required
     legal agreement — efdsearch.senate.gov blocks all search requests for a
-    session until this is done."""
+    session until this is done. Returns None on success, or a diagnostic
+    string identifying exactly which step failed."""
     try:
         resp = client.get(EFD_LANDING_URL)
         resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        token_input = soup.find(attrs={"name": "csrfmiddlewaretoken"})
-        if not token_input or not token_input.get("value"):
-            return False
-        csrf_token = token_input["value"]
+    except Exception as e:
+        return f"landing page fetch failed: {type(e).__name__}: {e}"
 
+    soup = BeautifulSoup(resp.text, "html.parser")
+    token_input = soup.find(attrs={"name": "csrfmiddlewaretoken"})
+    if not token_input or not token_input.get("value"):
+        return f"csrfmiddlewaretoken not found in landing page HTML (status {resp.status_code}, {len(resp.text)} bytes)"
+    csrf_token = token_input["value"]
+
+    try:
         agree_resp = client.post(
             EFD_LANDING_URL,
             data={"csrfmiddlewaretoken": csrf_token, "prohibition_agreement": "1"},
         )
         agree_resp.raise_for_status()
-        return "csrftoken" in client.cookies
     except Exception as e:
-        logger.warning("congressional: EFD session bootstrap failed — {}", e)
-        return False
+        return f"agreement POST failed: {type(e).__name__}: {e}"
+
+    if "csrftoken" not in client.cookies:
+        return f"agreement POST succeeded (status {agree_resp.status_code}) but no csrftoken cookie was set — cookies present: {list(client.cookies.keys())}"
+
+    return None
 
 
-def _efd_search_ptrs(client: httpx.Client, start_date: date) -> list[list]:
+def _efd_search_ptrs(client: httpx.Client, start_date: date) -> tuple[list[list], str | None]:
     """Page through Periodic Transaction Report filings since start_date.
-    Returns raw DataTables rows: [first, last, _, link_html, date_received]."""
+    Returns (raw DataTables rows [first, last, _, link_html, date_received], diagnostic).
+    diagnostic is None on a clean run (including a legitimate zero-results page)."""
     rows: list[list] = []
     offset = 0
     csrf_token = client.cookies.get("csrftoken", "")
@@ -119,17 +128,32 @@ def _efd_search_ptrs(client: httpx.Client, start_date: date) -> list[list]:
                 },
             )
             resp.raise_for_status()
-            batch = resp.json().get("data") or []
         except Exception as e:
-            logger.warning("congressional: EFD search page at offset {} failed — {}", offset, e)
-            break
+            body_snippet = getattr(e, "response", None)
+            body_snippet = body_snippet.text[:300] if body_snippet is not None else ""
+            diag = f"search POST at offset {offset} failed: {type(e).__name__}: {e} — body: {body_snippet!r}"
+            logger.warning("congressional: EFD {}", diag)
+            return rows, diag
+
+        try:
+            payload = resp.json()
+        except Exception as e:
+            diag = f"search response at offset {offset} wasn't JSON (status {resp.status_code}): {resp.text[:300]!r}"
+            logger.warning("congressional: EFD {}", diag)
+            return rows, diag
+
+        batch = payload.get("data")
+        if batch is None:
+            diag = f"search response JSON at offset {offset} had no 'data' key — keys present: {list(payload.keys())}"
+            logger.warning("congressional: EFD {}", diag)
+            return rows, diag
 
         rows.extend(batch)
         if len(batch) < EFD_BATCH_SIZE:
             break
         offset += EFD_BATCH_SIZE
 
-    return rows
+    return rows, None
 
 
 def _efd_parse_report_link(link_html: str) -> str | None:
@@ -163,27 +187,37 @@ def _efd_fetch_report_transactions(client: httpx.Client, report_url: str) -> lis
     return txs
 
 
-def _fetch_senate_efd() -> list[dict]:
+def _fetch_senate_efd() -> tuple[list[dict], str]:
     """Scrape efdsearch.senate.gov directly for Periodic Transaction Reports —
     the official, always-current source now that Senate Stock Watcher's static
     feed has gone stale. Paper-filed (scanned PDF) reports are skipped, matching
-    the same tradeoff every open-source scraper for this site makes."""
+    the same tradeoff every open-source scraper for this site makes.
+
+    Returns (rows, diagnostic) — diagnostic explains exactly where the funnel
+    stopped when rows is empty, since "0 rows" alone doesn't distinguish a
+    broken session bootstrap from a search-format mismatch from a genuinely
+    quiet reporting period."""
     cutoff = date.today() - timedelta(days=LOOKBACK_DAYS)
     rows: list[dict] = []
     start = datetime.now(timezone.utc)
+    reports_parsed, reports_failed, skipped_pdf, txs_seen, txs_filtered_out = 0, 0, 0, 0, 0
 
     try:
         with httpx.Client(
             timeout=30, headers={"User-Agent": EFD_USER_AGENT}, follow_redirects=True,
         ) as client:
-            if not _efd_get_csrf_and_agree(client):
-                logger.warning("congressional: EFD session bootstrap failed — skipping EFD source")
-                return []
+            bootstrap_error = _efd_get_csrf_and_agree(client)
+            if bootstrap_error:
+                diag = f"session bootstrap failed — {bootstrap_error}"
+                logger.warning("congressional: EFD {}", diag)
+                return [], diag
 
-            search_rows = _efd_search_ptrs(client, cutoff)
-            logger.info("congressional: EFD search returned {} PTR filings", len(search_rows))
+            search_rows, search_error = _efd_search_ptrs(client, cutoff)
+            if search_error:
+                return [], f"search failed after {len(search_rows)} rows — {search_error}"
+            if not search_rows:
+                return [], f"session bootstrap OK, search returned 0 PTR filings since {cutoff.isoformat()} (report_types={EFD_PTR_TYPE})"
 
-            skipped_pdf = 0
             for row in search_rows:
                 if (datetime.now(timezone.utc) - start).total_seconds() > EFD_MAX_RUNTIME_S:
                     logger.warning(
@@ -208,19 +242,25 @@ def _fetch_senate_efd() -> list[dict]:
 
                 try:
                     txs = _efd_fetch_report_transactions(client, f"{EFD_ROOT}{href}")
+                    reports_parsed += 1
                 except Exception as e:
+                    reports_failed += 1
                     logger.debug("congressional: EFD report parse failed for {} — {}", politician, e)
                     continue
 
                 for tx in txs:
+                    txs_seen += 1
                     ticker = (tx["ticker"] or "").strip().upper()
                     if not ticker or ticker in ("--", "N/A"):
+                        txs_filtered_out += 1
                         continue
                     txn = _normalize_transaction(tx["order_type"])
                     if txn is None:
+                        txs_filtered_out += 1
                         continue
                     trade_date = _parse_watcher_date(tx["tx_date"])
                     if not trade_date or trade_date < cutoff:
+                        txs_filtered_out += 1
                         continue
 
                     rows.append({
@@ -235,16 +275,23 @@ def _fetch_senate_efd() -> list[dict]:
 
                 time.sleep(0.5)
 
-            if skipped_pdf:
-                logger.info("congressional: EFD skipped {} paper-filed (PDF) reports", skipped_pdf)
+            funnel = (
+                f"{len(search_rows)} filings found, {skipped_pdf} paper-filed (skipped), "
+                f"{reports_parsed} parsed ({reports_failed} failed to parse), "
+                f"{txs_seen} transaction rows seen ({txs_filtered_out} filtered out)"
+            )
+
+            if not rows:
+                return [], f"funnel produced 0 final rows — {funnel}"
 
     except Exception as e:
-        logger.error("congressional: EFD scraper failed — {}", e)
+        diag = f"unhandled exception: {type(e).__name__}: {e}"
+        logger.error("congressional: EFD scraper failed — {}", diag)
         sentry_sdk.capture_exception(e)
-        return []
+        return [], diag
 
-    logger.info("congressional: EFD scraper parsed {} trades", len(rows))
-    return rows
+    logger.info("congressional: EFD scraper parsed {} trades — {}", len(rows), funnel)
+    return rows, funnel
 
 
 # ── Senate Stock Watcher source (secondary, free but stale) ─────────────────
@@ -520,14 +567,14 @@ def ingest_congressional() -> str:
     sources_tried = []
 
     # 1. efdsearch.senate.gov direct scraper (free, official, always-current)
-    all_rows = _fetch_senate_efd()
+    all_rows, efd_diag = _fetch_senate_efd()
     if all_rows:
         sources_tried.append(f"efd({len(all_rows)})")
 
     # 2. Senate Stock Watcher (free, but its static feed has been stale since
     #    ~Dec 2020 — kept only as a harmless zero-cost fallback)
     if not all_rows:
-        sources_tried.append("efd(0)")
+        sources_tried.append(f"efd(0: {efd_diag})")
         all_rows = _fetch_senate_watcher()
         if all_rows:
             sources_tried.append(f"senate_watcher({len(all_rows)})")
