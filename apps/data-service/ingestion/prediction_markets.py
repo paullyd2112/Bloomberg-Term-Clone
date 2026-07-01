@@ -24,7 +24,7 @@ NEWS_API_KEY       = os.environ.get("NEWS_API_KEY", "")
 KALSHI_API_KEY     = os.environ.get("KALSHI_API_KEY", "")
 KALSHI_PRIVATE_KEY = os.environ.get("KALSHI_PRIVATE_KEY", "")
 
-KALSHI_BASE        = "https://trading-api.kalshi.com/trade-api/v2"
+KALSHI_BASE        = "https://api.elections.kalshi.com/trade-api/v2"
 KALSHI_MARKETS_PATH = "/trade-api/v2/markets"
 POLYMARKET_URL     = "https://clob.polymarket.com/markets"
 NEWSAPI_URL        = "https://newsapi.org/v2/everything"
