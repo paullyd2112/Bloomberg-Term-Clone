@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
  * Static, presentational only — used to frame the terminal mockups.
  */
 export default function BrowserFrame({
-  url = "app.plebs.io/dashboard",
+  url = "app.plebs.finance/dashboard",
   children,
   className = "",
 }: {

@@ -3,12 +3,14 @@
  * Presentational only — mirrors the real signal feed styling.
  */
 
-const NAV = [
-  { label: "Signals", active: true },
-  { label: "Congress", active: false },
-  { label: "Options", active: false },
-  { label: "Screener", active: false },
-  { label: "Briefing", active: false },
+import { Zap, Landmark, Waves, Search, Sunrise, type LucideIcon } from "lucide-react";
+
+const NAV: { label: string; icon: LucideIcon; active: boolean }[] = [
+  { label: "Signals", icon: Zap, active: true },
+  { label: "Congress", icon: Landmark, active: false },
+  { label: "Options", icon: Waves, active: false },
+  { label: "Screener", icon: Search, active: false },
+  { label: "Briefing", icon: Sunrise, active: false },
 ];
 
 const STATS = [
@@ -83,22 +85,30 @@ export default function DashboardShot() {
           <span className="h-4 w-4 rounded bg-emerald-500" />
           <span className="font-semibold text-sm text-white">Plebs</span>
         </div>
-        {NAV.map((item) => (
-          <div
-            key={item.label}
-            className={`relative flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[12px] ${
-              item.active
-                ? "bg-white/[0.05] text-white"
-                : "text-zinc-500"
-            }`}
-          >
-            {item.active && (
-              <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-emerald-400" />
-            )}
-            <span className="h-3 w-3 rounded-sm bg-white/10" />
-            {item.label}
-          </div>
-        ))}
+        {NAV.map((item) => {
+          const Icon = item.icon;
+          return (
+            <div
+              key={item.label}
+              className={`relative flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[12px] ${
+                item.active
+                  ? "bg-white/[0.05] text-white"
+                  : "text-zinc-500"
+              }`}
+            >
+              {item.active && (
+                <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-emerald-400" />
+              )}
+              <Icon
+                className={`h-3.5 w-3.5 flex-shrink-0 ${
+                  item.active ? "text-emerald-400" : "text-zinc-500"
+                }`}
+                strokeWidth={2}
+              />
+              {item.label}
+            </div>
+          );
+        })}
       </aside>
 
       {/* Main column */}
