@@ -37,8 +37,8 @@ export default function Reveal({
   }, []);
 
   return (
-    // @ts-expect-error — polymorphic ref across a small union of tags
     <Tag
+      // @ts-expect-error — polymorphic ref across a small union of tags
       ref={ref}
       className={`reveal ${visible ? "is-visible" : ""} ${className}`}
       style={{ transitionDelay: `${delay}ms` }}
