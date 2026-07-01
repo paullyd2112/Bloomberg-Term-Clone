@@ -10,15 +10,15 @@ import os
 from loguru import logger
 import httpx
 
-FMP_KEY = os.environ.get("FMP_API_KEY", "")
 FMP_STABLE = "https://financialmodelingprep.com/stable"
 
 
 def _fmp_get(endpoint: str) -> list[dict]:
-    if not FMP_KEY:
+    fmp_key = os.environ.get("FMP_API_KEY", "")
+    if not fmp_key:
         return []
     try:
-        url = f"{FMP_STABLE}/{endpoint}?apikey={FMP_KEY}"
+        url = f"{FMP_STABLE}/{endpoint}?apikey={fmp_key}"
         resp = httpx.get(url, timeout=15.0)
         resp.raise_for_status()
         data = resp.json()

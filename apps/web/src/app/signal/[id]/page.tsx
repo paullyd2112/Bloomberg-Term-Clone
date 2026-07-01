@@ -8,7 +8,7 @@ type Signal = {
   id:              number;
   asset_type:      string;
   identifier:      string;
-  direction:       "BUY" | "SELL" | "HOLD" | "YES" | "NO";
+  direction:       "BUY" | "SELL" | "HOLD";
   confidence:      number;
   reasoning:       string;
   time_horizon:    string;
@@ -20,9 +20,7 @@ type Signal = {
 
 const DIRECTION_STYLE: Record<string, string> = {
   BUY:  "bg-green-500/20 text-green-400 border-green-700",
-  YES:  "bg-green-500/20 text-green-400 border-green-700",
   SELL: "bg-red-500/20 text-red-400 border-red-700",
-  NO:   "bg-red-500/20 text-red-400 border-red-700",
   HOLD: "bg-zinc-700/40 text-zinc-400 border-zinc-600",
 };
 
@@ -52,9 +50,15 @@ export async function generateMetadata({
     .eq("id", params.id)
     .single();
 
+<<<<<<< HEAD
   if (!data) return { title: "Signal — Plebs.Finance" };
 
   const title = `${data.direction} ${data.identifier} (${data.confidence}%) — Plebs.Finance`;
+=======
+  if (!data) return { title: "Signal — Plebs.finance" };
+
+  const title = `${data.direction} ${data.identifier} (${data.confidence}%) — Plebs.finance`;
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
   const desc  = (data.reasoning as string).slice(0, 160);
 
   return {
@@ -63,7 +67,11 @@ export async function generateMetadata({
     openGraph: {
       title,
       description: desc,
+<<<<<<< HEAD
       siteName:    "Plebs.Finance",
+=======
+      siteName:    "Plebs.finance",
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
       type:        "website",
     },
     twitter: {
@@ -80,19 +88,18 @@ export default async function SharedSignalPage({
   params: { id: string };
 }) {
   const supabase = createClient();
-  const { data: signal } = await supabase
-    .from("signals")
-    .select("*")
-    .eq("id", params.id)
-    .single();
+  const [{ data: signal }, { data: { user } }] = await Promise.all([
+    supabase.from("signals").select("*").eq("id", params.id).single(),
+    supabase.auth.getUser(),
+  ]);
 
   if (!signal) notFound();
 
   const s         = signal as Signal;
+  const isLoggedIn = !!user;
   const dirStyle  = DIRECTION_STYLE[s.direction] ?? DIRECTION_STYLE.HOLD;
   const outcome   = OUTCOME_STYLE[s.outcome];
   const timeAgo   = formatDistanceToNow(new Date(s.created_at), { addSuffix: true });
-  const isPredict = s.asset_type === "prediction";
 
   return (
     <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center px-4 py-16">
@@ -132,7 +139,12 @@ export default async function SharedSignalPage({
         <div>
           <div className="flex justify-between text-xs text-zinc-500 mb-1.5">
             <span>Confidence</span>
-            <span className="tabular-nums font-medium text-zinc-300">{s.confidence}%</span>
+            <div className="group relative inline-block">
+              <span className="tabular-nums font-medium text-zinc-300 cursor-help">{s.confidence}%</span>
+              <div className="hidden group-hover:block absolute bottom-full right-0 mb-1.5 w-52 bg-zinc-800 border border-white/10 text-zinc-300 text-[11px] rounded-lg px-3 py-2 shadow-xl z-50">
+                Model certainty in this signal direction, based on technical indicators, sentiment, and market context.
+              </div>
+            </div>
           </div>
           <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
             <div
@@ -163,9 +175,7 @@ export default async function SharedSignalPage({
             <span>
               Entry:{" "}
               <span className="font-mono text-zinc-300">
-                {isPredict
-                  ? `${(Number(s.price_at_signal) * 100).toFixed(1)}%`
-                  : `$${Number(s.price_at_signal).toLocaleString()}`}
+                ${Number(s.price_at_signal).toLocaleString()}
               </span>
             </span>
           )}
@@ -173,28 +183,52 @@ export default async function SharedSignalPage({
             <span>{s.news_context.length} news items</span>
           )}
         </div>
+        {/* News context with links */}
+        {s.news_context && s.news_context.length > 0 && (
+          <div className="space-y-1.5 pt-1 border-t border-zinc-800">
+            <div className="text-[10px] uppercase tracking-widest text-zinc-600 mb-1">Related news</div>
+            {s.news_context.map((item, i) => (
+              <p key={i} className="text-xs text-zinc-500 leading-snug truncate">
+                • {item}
+              </p>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* CTA */}
       <div className="mt-8 text-center space-y-3">
-        <p className="text-zinc-400 text-sm">
-          Get live signals for stocks, crypto &amp; prediction markets.
-        </p>
-        <div className="flex gap-3 justify-center">
-          <Link
-            href="/signup"
-            className="inline-block bg-green-500 hover:bg-green-400 text-black font-bold text-sm px-6 py-2.5 rounded-lg transition-colors"
-          >
-            Start free trial →
-          </Link>
-          <Link
-            href="/login"
-            className="inline-block border border-zinc-700 hover:border-zinc-500 text-zinc-300 text-sm px-6 py-2.5 rounded-lg transition-colors"
-          >
-            Log in
-          </Link>
-        </div>
-        <p className="text-zinc-600 text-xs">14-day free trial · Credit card required</p>
+        {isLoggedIn ? (
+          <>
+            <Link
+              href="/dashboard"
+              className="inline-block bg-green-500 hover:bg-green-400 text-black font-bold text-sm px-6 py-2.5 rounded-lg transition-colors"
+            >
+              ← Back to Dashboard
+            </Link>
+          </>
+        ) : (
+          <>
+            <p className="text-zinc-400 text-sm">
+              Get live signals for stocks and crypto.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Link
+                href="/signup"
+                className="inline-block bg-green-500 hover:bg-green-400 text-black font-bold text-sm px-6 py-2.5 rounded-lg transition-colors"
+              >
+                Start trial →
+              </Link>
+              <Link
+                href="/login"
+                className="inline-block border border-zinc-700 hover:border-zinc-500 text-zinc-300 text-sm px-6 py-2.5 rounded-lg transition-colors"
+              >
+                Log in
+              </Link>
+            </div>
+            <p className="text-zinc-600 text-xs">14-day trial · Credit card required</p>
+          </>
+        )}
       </div>
 
       <p className="mt-6 text-[11px] text-zinc-700 text-center max-w-md mx-auto leading-relaxed">

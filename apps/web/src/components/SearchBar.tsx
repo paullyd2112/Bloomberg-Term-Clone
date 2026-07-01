@@ -77,7 +77,7 @@ export default function SearchBar() {
     if (result.tracked === false) {
       setIngesting(result.identifier);
       try {
-        const res = await fetch("/api/ingest-on-demand", {
+        await fetch("/api/ingest-on-demand", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -85,13 +85,8 @@ export default function SearchBar() {
             identifier: result.identifier,
           }),
         });
-        if (!res.ok) {
-          setIngesting(null);
-          return;
-        }
       } catch {
-        setIngesting(null);
-        return;
+        // best-effort — still navigate
       }
       setIngesting(null);
     }

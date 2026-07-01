@@ -9,6 +9,72 @@ type TickerItem = {
   asset_type: string;
 };
 
+type MarketStatus = "open" | "closed" | "weekend";
+
+function getMarketStatus(): MarketStatus {
+  const now = new Date();
+  const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const day = et.getDay();
+  if (day === 0 || day === 6) return "weekend";
+  const yyyy = et.getFullYear();
+  const mm = String(et.getMonth() + 1).padStart(2, "0");
+  const dd = String(et.getDate()).padStart(2, "0");
+  if (NYSE_HOLIDAYS.has(`${yyyy}-${mm}-${dd}`)) return "weekend"; // holidays treated like weekends
+  const mins = et.getHours() * 60 + et.getMinutes();
+  if (mins >= 570 && mins < 960) return "open"; // 9:30am – 4:00pm ET
+  return "closed";
+}
+
+const STATUS_CONFIG: Record<MarketStatus, { dot: string; ping: string; label: string; bg: string; border: string; text: string }> = {
+  open: {
+    dot: "bg-emerald-400",
+    ping: "bg-emerald-400",
+    label: "Markets Open",
+    bg: "bg-emerald-500/10",
+    border: "border-emerald-500/20",
+    text: "text-emerald-400",
+  },
+  closed: {
+    dot: "bg-amber-400",
+    ping: "bg-amber-400",
+    label: "Stocks Closed · Crypto 24/7",
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/20",
+    text: "text-amber-400",
+  },
+  weekend: {
+    dot: "bg-blue-400",
+    ping: "bg-blue-400",
+    label: "Crypto 24/7",
+    bg: "bg-blue-500/10",
+    border: "border-blue-500/20",
+    text: "text-blue-400",
+  },
+};
+
+export function MarketStatusBadge({ className = "" }: { className?: string }) {
+  const [status, setStatus] = useState<MarketStatus>(getMarketStatus);
+
+  useEffect(() => {
+    const id = setInterval(() => setStatus(getMarketStatus()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const cfg = STATUS_CONFIG[status];
+
+  return (
+    <div className={`inline-flex items-center gap-2 rounded-full border ${cfg.border} ${cfg.bg} px-3 py-1 ${className}`}>
+      <span className="relative flex h-1.5 w-1.5">
+        <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${cfg.ping} opacity-60`} />
+        <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+      </span>
+      <span className={`font-mono text-[10px] font-medium uppercase tracking-[0.15em] ${cfg.text} whitespace-nowrap`}>
+        {cfg.label}
+      </span>
+    </div>
+  );
+}
+
 function fmt(price: number): string {
   if (price >= 10_000) return price.toLocaleString("en-US", { maximumFractionDigits: 0 });
   if (price >= 1)      return price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -49,16 +115,7 @@ const NYSE_HOLIDAYS: Set<string> = new Set([
 ]);
 
 function isMarketOpen(): boolean {
-  const now = new Date();
-  const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  const day = et.getDay();
-  if (day === 0 || day === 6) return false;
-  const yyyy = et.getFullYear();
-  const mm = String(et.getMonth() + 1).padStart(2, "0");
-  const dd = String(et.getDate()).padStart(2, "0");
-  if (NYSE_HOLIDAYS.has(`${yyyy}-${mm}-${dd}`)) return false;
-  const mins = et.getHours() * 60 + et.getMinutes();
-  return mins >= 570 && mins < 960; // 9:30am – 4:00pm ET
+  return getMarketStatus() === "open";
 }
 
 function nudgePrice(base: number): number {
@@ -67,7 +124,7 @@ function nudgePrice(base: number): number {
   return Math.max(0.0001, base + delta);
 }
 
-export default function TickerBar() {
+export default function TickerBar({ showStatus = true }: { showStatus?: boolean } = {}) {
   const [items, setItems] = useState<TickerItem[]>([]);
   const baseItems = useRef<TickerItem[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -109,6 +166,7 @@ export default function TickerBar() {
 
   return (
     <div className="relative bg-black/60 backdrop-blur-sm border-b border-white/[0.06] h-10 flex items-center overflow-hidden select-none">
+<<<<<<< HEAD
       {/* Fixed LIVE marker — items emerge from behind it */}
       <div className="absolute left-0 top-0 bottom-0 z-20 flex items-center gap-1.5 bg-black/85 backdrop-blur-sm pl-4 pr-3.5 border-r border-white/[0.08]">
         <span className="relative flex h-1.5 w-1.5">
@@ -119,6 +177,15 @@ export default function TickerBar() {
       </div>
 
       {/* Right fade */}
+=======
+      {showStatus && (
+        <div className="relative z-20 flex-shrink-0 pl-3 pr-2">
+          <MarketStatusBadge />
+        </div>
+      )}
+
+      <div className={`pointer-events-none absolute top-0 bottom-0 w-12 z-10 bg-gradient-to-r from-black/60 to-transparent ${showStatus ? "left-[145px]" : "left-0"}`} />
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
       <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 z-10 bg-gradient-to-l from-black to-transparent" />
 
       <div className="flex animate-marquee">

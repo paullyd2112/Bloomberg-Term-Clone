@@ -1,5 +1,5 @@
 """
-Newsletter emailer — sends daily newsletter via Resend at 9:45am ET weekdays.
+Newsletter emailer — sends daily newsletter via Resend at 7:15am ET weekdays.
 Free subscribers get editorial + CTA.
 Pro/Elite subscribers get the same editorial + personalized signal data.
 """
@@ -7,6 +7,7 @@ Pro/Elite subscribers get the same editorial + personalized signal data.
 import html
 import os
 import re
+import time
 from datetime import date
 
 import resend
@@ -14,6 +15,9 @@ import sentry_sdk
 from loguru import logger
 
 from supabase_client import supabase
+
+MAX_RETRIES    = 3
+RETRY_DELAYS   = [2, 5, 12]
 
 resend.api_key   = os.environ.get("RESEND_API_KEY", "") or os.environ.get("RESEND_API_KEY_", "")
 FROM_ADDRESS     = "Pleby from Plebs <daily@plebs.finance>"
@@ -100,26 +104,26 @@ def _story_html(story: dict) -> str:
     watch         = _md_to_html(story.get("watch", ""))
 
     return f"""
-    <div style="margin-bottom:32px;">
+    <div style="margin-bottom:28px;background:#111113;border:1px solid #1e1e22;border-radius:10px;padding:20px 22px;">
       <div style="margin-bottom:8px;">
-        <span style="display:inline-block;background:#22c55e22;color:#22c55e;border:1px solid #22c55e55;border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">{category}</span>
+        <span style="display:inline-block;background:#22c55e18;color:#22c55e;border:1px solid #22c55e44;border-radius:4px;padding:3px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;">{category}</span>
       </div>
-      <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:14px;line-height:1.3;">{headline}</div>
-      <div style="margin-bottom:10px;">
-        <span style="font-size:10px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;">What happened</span>
-        <div style="color:#d4d4d8;font-size:14px;line-height:1.7;margin-top:4px;">{what_happened}</div>
+      <div style="font-size:19px;font-weight:700;color:#f4f4f5;margin-bottom:16px;line-height:1.35;">{headline}</div>
+      <div style="margin-bottom:12px;">
+        <span style="font-size:10px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:.08em;">What happened</span>
+        <div style="color:#d4d4d8;font-size:14px;line-height:1.75;margin-top:5px;">{what_happened}</div>
       </div>
-      <div style="margin-bottom:10px;">
-        <span style="font-size:10px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;">What we know</span>
-        <div style="color:#d4d4d8;font-size:14px;line-height:1.7;margin-top:4px;">{what_we_know}</div>
+      <div style="margin-bottom:12px;">
+        <span style="font-size:10px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:.08em;">What we know</span>
+        <div style="color:#d4d4d8;font-size:14px;line-height:1.75;margin-top:5px;">{what_we_know}</div>
       </div>
-      <div style="margin-bottom:10px;">
-        <span style="font-size:10px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;">What it could mean</span>
-        <div style="color:#d4d4d8;font-size:14px;line-height:1.7;margin-top:4px;">{could_mean}</div>
+      <div style="margin-bottom:12px;">
+        <span style="font-size:10px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:.08em;">What it could mean</span>
+        <div style="color:#d4d4d8;font-size:14px;line-height:1.75;margin-top:5px;">{could_mean}</div>
       </div>
       <div>
         <span style="font-size:10px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.08em;">What to watch</span>
-        <div style="color:#d4d4d8;font-size:14px;line-height:1.7;margin-top:4px;">{watch}</div>
+        <div style="color:#d4d4d8;font-size:14px;line-height:1.75;margin-top:5px;">{watch}</div>
       </div>
     </div>"""
 
@@ -138,18 +142,18 @@ def _signals_html(signals: list[dict]) -> str:
         asset_url  = f"{APP_URL}/dashboard/asset/{asset_type}/{identifier}"
         rows += f"""
         <tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #27272a;">
+          <td style="padding:8px 12px;border-bottom:1px solid #1e1e22;">
             <a href="{asset_url}" style="font-family:monospace;font-weight:700;color:#fff;text-decoration:none;">{identifier}</a>
             &nbsp;
             <span style="background:{dir_color}22;color:{dir_color};border:1px solid {dir_color}55;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">{direction}</span>
           </td>
-          <td style="padding:8px 12px;border-bottom:1px solid #27272a;color:#71717a;font-size:12px;">{confidence}% · {horizon}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #1e1e22;color:#71717a;font-size:12px;">{confidence}% · {horizon}</td>
         </tr>"""
     return f"""
-    <div style="margin:24px 0;padding:20px;background:#18181b;border-radius:10px;border:1px solid #27272a;">
-      <div style="font-size:11px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Your signals today</div>
+    <div style="margin:24px 0;padding:20px;background:#111113;border-radius:10px;border:1px solid #1e1e22;">
+      <div style="font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Your signals today</div>
       <table style="width:100%;border-collapse:collapse;">{rows}</table>
-      <a href="{APP_URL}/dashboard" style="display:inline-block;margin-top:12px;color:#22c55e;font-size:12px;font-weight:600;text-decoration:none;">Full signal feed →</a>
+      <a href="{APP_URL}/dashboard" style="display:inline-block;margin-top:12px;color:#22c55e;font-size:12px;font-weight:600;text-decoration:none;">Full signal feed &rarr;</a>
     </div>"""
 
 
@@ -164,14 +168,14 @@ def _options_html(options: list[dict]) -> str:
         oi          = o.get("open_interest", 0)
         color       = "#22c55e" if option_type == "CALL" else "#ef4444"
         items += f"""
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #27272a;">
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e1e22;">
           <span style="font-family:monospace;font-weight:700;color:#fff;">{ticker}</span>
           <span style="color:{color};font-size:12px;font-weight:700;">{option_type}</span>
           <span style="color:#71717a;font-size:12px;">vol {volume:,} / OI {oi:,}</span>
         </div>"""
     return f"""
-    <div style="margin:16px 0;padding:20px;background:#18181b;border-radius:10px;border:1px solid #27272a;">
-      <div style="font-size:11px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Unusual options flow</div>
+    <div style="margin:16px 0;padding:20px;background:#111113;border-radius:10px;border:1px solid #1e1e22;">
+      <div style="font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Unusual options flow</div>
       {items}
     </div>"""
 
@@ -194,34 +198,34 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
         paid_block  = _signals_html(top_signals) + _options_html(options)
 
     free_cta = "" if is_paid else f"""
-    <div style="margin:28px 0;padding:20px;background:#18181b;border:1px solid #27272a;border-radius:10px;text-align:center;">
-      <div style="color:#fff;font-weight:700;font-size:15px;margin-bottom:6px;">Want the full signal feed?</div>
-      <div style="color:#71717a;font-size:13px;margin-bottom:16px;">Real-time AI signals, options flow, congressional trades — 14-day free trial.</div>
-      <a href="{APP_URL}/signup" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:13px;padding:10px 22px;border-radius:8px;text-decoration:none;">Try Plebs free →</a>
+    <div style="margin:28px 0;padding:22px;background:#111113;border:1px solid #1e1e22;border-radius:10px;text-align:center;">
+      <div style="color:#f4f4f5;font-weight:700;font-size:15px;margin-bottom:6px;">Want the full signal feed?</div>
+      <div style="color:#a1a1aa;font-size:13px;margin-bottom:16px;">Real-time AI signals, options flow, congressional trades. Start your trial.</div>
+      <a href="{APP_URL}/signup" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:13px;padding:10px 24px;border-radius:8px;text-decoration:none;">Try Plebs free &rarr;</a>
     </div>"""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="max-width:600px;margin:0 auto;padding:32px 20px;">
-    <div style="margin-bottom:20px;">
-      <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;">
+<body style="margin:0;padding:0;background:#0a0a0c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:620px;margin:0 auto;padding:36px 20px;">
+    <div style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:22px;font-weight:800;color:#f4f4f5;letter-spacing:-0.02em;">
         plebs<span style="color:#22c55e;">.finance</span>
       </div>
-      <div style="font-size:11px;color:#52525b;margin-top:2px;">{today}</div>
+      <div style="font-size:11px;color:#71717a;font-weight:600;letter-spacing:.04em;">{today}</div>
     </div>
-    <h1 style="color:#fff;font-size:20px;font-weight:700;margin:0 0 16px;line-height:1.3;">{subject_line}</h1>
-    <p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:0 0 28px;border-left:3px solid #27272a;padding-left:12px;">{opening}</p>
-    <div style="border-top:1px solid #27272a;padding-top:24px;">
+    <h1 style="color:#f4f4f5;font-size:22px;font-weight:700;margin:0 0 16px;line-height:1.35;">{subject_line}</h1>
+    <p style="color:#a1a1aa;font-size:15px;line-height:1.7;margin:0 0 28px;border-left:3px solid #22c55e44;padding-left:14px;">{opening}</p>
+    <div style="padding-top:8px;">
       {stories_html}
     </div>
     {paid_block}
     {free_cta}
-    <p style="color:#71717a;font-size:14px;line-height:1.6;margin:24px 0;font-style:italic;">{closing}</p>
-    <div style="border-top:1px solid #27272a;padding-top:16px;text-align:center;font-size:11px;color:#3f3f46;">
+    <p style="color:#a1a1aa;font-size:14px;line-height:1.65;margin:28px 0;padding:16px 20px;background:#111113;border-radius:8px;border-left:3px solid #22c55e33;">{closing}</p>
+    <div style="border-top:1px solid #1e1e22;padding-top:18px;text-align:center;font-size:11px;color:#52525b;">
       Plebs.finance · Not financial advice ·
-      <a href="{APP_URL}/unsubscribe" style="color:#52525b;">Unsubscribe</a>
+      <a href="{APP_URL}/unsubscribe" style="color:#71717a;">Unsubscribe</a>
     </div>
   </div>
 </body>
@@ -268,10 +272,54 @@ def _render_text(briefing: dict) -> str:
 
 # ─── Main sender ──────────────────────────────────────────────────────────────
 
+def _send_with_retry(payload: dict) -> bool:
+    for attempt in range(MAX_RETRIES):
+        try:
+            resend.Emails.send(payload)
+            return True
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                delay = RETRY_DELAYS[attempt]
+                logger.warning(
+                    "newsletter_emailer: attempt {}/{} failed for {}, retrying in {}s: {}",
+                    attempt + 1, MAX_RETRIES, payload["to"], delay, e,
+                )
+                time.sleep(delay)
+            else:
+                raise
+    return False
+
+
+def _already_sent_today() -> set[str]:
+    today = date.today().isoformat()
+    try:
+        result = (
+            supabase.table("newsletter_sends")
+            .select("email")
+            .eq("send_date", today)
+            .execute()
+        )
+        return {r["email"] for r in (result.data or [])}
+    except Exception:
+        return set()
+
+
+def _record_send(email: str) -> None:
+    today = date.today().isoformat()
+    try:
+        supabase.table("newsletter_sends").upsert(
+            {"email": email, "send_date": today},
+            on_conflict="email,send_date",
+        ).execute()
+    except Exception as e:
+        logger.warning("newsletter_emailer: failed to record send for {}: {}", email, e)
+
+
 def send_newsletter() -> str:
     briefing = _get_todays_newsletter()
     if not briefing:
-        logger.warning("newsletter_emailer: no briefing found for today — skipping")
+        logger.warning("newsletter_emailer: no briefing found for today, skipping")
+        sentry_sdk.capture_message("Newsletter send skipped: no briefing found for today")
         return "no briefing found"
 
     subscribers = _get_subscribers()
@@ -279,9 +327,12 @@ def send_newsletter() -> str:
         logger.info("newsletter_emailer: no subscribers")
         return "0 sent"
 
+    already_sent = _already_sent_today()
     subject   = briefing.get("headline", f"Plebs — {date.today().strftime('%b %-d')}")
     text_body = _render_text(briefing)
-    sent, failed = 0, 0
+    sent, skipped, failed = 0, 0, 0
+    failed_emails: list[str] = []
+    last_error: str = ""
 
     for sub in subscribers:
         email   = sub.get("email")
@@ -291,21 +342,36 @@ def send_newsletter() -> str:
         if not email:
             continue
 
+        if email in already_sent:
+            skipped += 1
+            continue
+
         try:
             html_body = _render_html(briefing, tier, user_id)
-            resend.Emails.send({
+            _send_with_retry({
                 "from":    FROM_ADDRESS,
                 "to":      [email],
                 "subject": subject,
                 "html":    html_body,
                 "text":    text_body,
             })
+            _record_send(email)
             sent += 1
         except Exception as e:
-            logger.error("newsletter_emailer: failed to send to {} — {}", email, e)
+            last_error = f"{type(e).__name__}: {e}"
+            logger.error("newsletter_emailer: all {} retries exhausted for {}: {}", MAX_RETRIES, email, last_error)
             sentry_sdk.capture_exception(e)
             failed += 1
+            failed_emails.append(email)
 
-    summary = f"{sent} sent, {failed} failed"
-    logger.info("newsletter_emailer complete — {}", summary)
+    if failed > 0:
+        sentry_sdk.capture_message(
+            f"Newsletter send partially failed: {failed} of {sent + failed} emails failed. "
+            f"Failed addresses: {', '.join(failed_emails)}"
+        )
+
+    summary = f"{sent} sent, {skipped} already sent, {failed} failed"
+    if last_error:
+        summary += f" | last_error: {last_error}"
+    logger.info("newsletter_emailer complete: {}", summary)
     return summary

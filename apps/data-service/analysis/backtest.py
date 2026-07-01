@@ -35,6 +35,8 @@ import pandas_ta_classic as ta
 from loguru import logger
 from dotenv import load_dotenv
 
+from ingestion.alpaca_client import fetch_stock_bars, fetch_crypto_bars
+
 load_dotenv()
 
 # ─── Date range ───────────────────────────────────────────────────────────────
@@ -259,8 +261,36 @@ def _fetch_av_ohlcv(ticker: str) -> pd.DataFrame | None:
     return df[["open", "high", "low", "close", "volume"]]
 
 
+def _days_needed() -> int:
+    """How many days back from today covers DATE_FROM, plus a small buffer."""
+    return (datetime.now(timezone.utc).date()
+            - datetime.strptime(DATE_FROM, "%Y-%m-%d").date()).days + 5
+
+
+def _clip_to_range(df: pd.DataFrame | None) -> pd.DataFrame | None:
+    if df is None or df.empty:
+        return None
+    df = df.copy()
+    if df.index.tz is not None:
+        df.index = df.index.tz_localize(None)
+    df = df[(df.index >= pd.Timestamp(DATE_FROM)) & (df.index <= pd.Timestamp(DATE_TO))]
+    return df if not df.empty else None
+
+
+def _fetch_alpaca_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
+    return _clip_to_range(fetch_stock_bars(ticker, days=_days_needed()))
+
+
+def _fetch_alpaca_crypto_ohlcv(symbol: str) -> pd.DataFrame | None:
+    return _clip_to_range(fetch_crypto_bars(symbol, days=_days_needed()))
+
+
 def _fetch_stock_ohlcv(ticker: str) -> pd.DataFrame | None:
-    """FMP primary, Alpha Vantage fallback."""
+    """Alpaca primary — FMP / Alpha Vantage are fallbacks only."""
+    df = _fetch_alpaca_stock_ohlcv(ticker)
+    if df is not None and not df.empty:
+        return df
+    logger.debug("{}: Alpaca miss — trying FMP", ticker)
     df = _fetch_fmp_ohlcv(ticker)
     if df is not None and not df.empty:
         return df
@@ -341,7 +371,11 @@ def _fetch_binance_ohlcv_fallback(symbol: str, pair: str) -> pd.DataFrame | None
 
 
 def _fetch_crypto_ohlcv(symbol: str, cg_id: str, pair: str) -> pd.DataFrame | None:
-    """CoinGecko primary (matches live ingestion), Binance last-resort fallback."""
+    """Alpaca primary — CoinGecko / Binance are fallbacks only."""
+    df = _fetch_alpaca_crypto_ohlcv(symbol)
+    if df is not None and not df.empty:
+        return df
+    logger.debug("{}: Alpaca miss — trying CoinGecko", symbol)
     df = _fetch_coingecko_ohlcv(cg_id)
     if df is not None and not df.empty:
         return df

@@ -32,7 +32,7 @@ const NAV: {
   { href: "/dashboard/watchlist",   label: "Watchlist",     icon: Star },
   { href: "/dashboard/portfolio",   label: "Portfolio",     icon: Wallet,     tier: "pro" },
   { href: "/dashboard/performance", label: "Performance",   icon: TrendingUp, tier: "pro" },
-  { href: "/dashboard/history",     label: "Trade History", icon: Receipt,    tier: "pro" },
+  { href: "/dashboard/history",     label: "Pleby Trades", icon: Receipt,    tier: "pro" },
   { href: "/dashboard/alerts",      label: "Alerts",        icon: Bell,       tier: "pro" },
   { href: "/dashboard/congress",    label: "Congress",      icon: Landmark },
   { href: "/dashboard/insiders",    label: "Insiders",      icon: Eye },

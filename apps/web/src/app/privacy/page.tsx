@@ -1,6 +1,11 @@
 export const metadata = {
+<<<<<<< HEAD
   title: 'Privacy Policy | Plebs.Finance',
   description: 'Privacy Policy for Plebs.Finance',
+=======
+  title: 'Privacy Policy | Plebs.finance',
+  description: 'Privacy Policy for Plebs.finance',
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
 };
 
 export default function PrivacyPolicy() {
@@ -11,12 +16,20 @@ export default function PrivacyPolicy() {
 
       <section className="mb-8">
         <p>
+<<<<<<< HEAD
           Plebs.Finance (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) operates the Plebs.Finance platform, a market intelligence
+=======
+          Plebs.finance (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) operates the Plebs.finance platform, a market intelligence
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           and trading signals service. This Privacy Policy explains how we collect, use, and
           protect your information when you use our service.
         </p>
         <p className="mt-4">
+<<<<<<< HEAD
           By using Plebs.Finance you agree to the collection and use of information as described here.
+=======
+          By using Plebs.finance you agree to the collection and use of information as described here.
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           If you are a California resident, additional rights apply under the California Consumer
           Privacy Act (CCPA) — see the section below.
         </p>
@@ -36,7 +49,11 @@ export default function PrivacyPolicy() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-white mb-3">How We Use Your Information</h2>
         <ul className="list-disc pl-5 space-y-2">
+<<<<<<< HEAD
           <li>To provide and maintain the Plebs.Finance service.</li>
+=======
+          <li>To provide and maintain the Plebs.finance service.</li>
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           <li>To process payments and manage your subscription.</li>
           <li>To send daily briefings, alerts, and product updates you have opted into.</li>
           <li>To personalize your experience and improve our signal generation.</li>
@@ -47,7 +64,11 @@ export default function PrivacyPolicy() {
 
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-white mb-3">Third-Party Services</h2>
+<<<<<<< HEAD
         <p>We use the following third-party services to operate Plebs.Finance:</p>
+=======
+        <p>We use the following third-party services to operate Plebs.finance:</p>
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
         <ul className="list-disc pl-5 mt-3 space-y-2">
           <li><strong>Supabase</strong> — database and authentication</li>
           <li><strong>Stripe</strong> — payment processing</li>
@@ -99,7 +120,11 @@ export default function PrivacyPolicy() {
         <h2 className="text-xl font-semibold text-white mb-3">Changes to This Policy</h2>
         <p>
           We may update this Privacy Policy from time to time. We will notify you of significant
+<<<<<<< HEAD
           changes via email or a notice on the platform. Continued use of Plebs.Finance after changes
+=======
+          changes via email or a notice on the platform. Continued use of Plebs.finance after changes
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           constitutes acceptance of the updated policy.
         </p>
       </section>

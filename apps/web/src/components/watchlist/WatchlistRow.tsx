@@ -23,9 +23,7 @@ type WatchlistItem = {
 
 const DIR_COLOR: Record<string, string> = {
   BUY:  "text-emerald-400",
-  YES:  "text-emerald-400",
   SELL: "text-red-400",
-  NO:   "text-red-400",
   HOLD: "text-zinc-400",
 };
 
@@ -61,9 +59,7 @@ export default function WatchlistRow({ item }: { item: WatchlistItem }) {
         {item.latest_price?.price != null ? (
           <>
             <div className="text-sm text-white font-mono tabular-nums">
-              {item.asset_type === "prediction"
-                ? `${(item.latest_price.price * 100).toFixed(1)}%`
-                : `$${Number(item.latest_price.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+              ${Number(item.latest_price.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </div>
             {change != null && (
               <div className={`text-xs tabular-nums ${change >= 0 ? "text-emerald-400" : "text-red-400"}`}>

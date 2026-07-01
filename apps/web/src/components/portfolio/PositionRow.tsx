@@ -21,9 +21,7 @@ type Position = {
 
 const DIR_COLOR: Record<string, string> = {
   LONG:  "text-emerald-400",
-  YES:   "text-emerald-400",
   SHORT: "text-red-400",
-  NO:    "text-red-400",
 };
 
 export default function PositionRow({ pos }: { pos: Position }) {
@@ -37,7 +35,7 @@ export default function PositionRow({ pos }: { pos: Position }) {
   const entry     = Number(pos.entry_price);
   const size      = Number(pos.size);
   const current   = pos.current_price;
-  const isLong    = pos.direction === "LONG" || pos.direction === "YES";
+  const isLong    = pos.direction === "LONG";
 
   const unrealizedPnl =
     isOpen && current != null
@@ -90,9 +88,7 @@ export default function PositionRow({ pos }: { pos: Position }) {
         <div className="text-xs text-zinc-500 min-w-[70px] sm:min-w-[90px]">
           <span className="text-zinc-600">Entry </span>
           <span className="font-mono text-zinc-300">
-            {pos.asset_type === "prediction"
-              ? `${(entry * 100).toFixed(1)}%`
-              : `$${entry.toLocaleString(undefined, { maximumFractionDigits: 4 })}`}
+            ${entry.toLocaleString(undefined, { maximumFractionDigits: 4 })}
           </span>
         </div>
 

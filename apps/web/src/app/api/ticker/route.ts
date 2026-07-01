@@ -37,26 +37,30 @@ const CG_IDS: Record<string, string> = {
 
 // ─── Primary source: freshest rows from raw_prices (populated by scheduler) ────
 
-async function fromRawPrices(): Promise<TickerItem[]> {
+async function fromRawPrices(marketOpen: boolean): Promise<TickerItem[]> {
   const admin = createAdminClient();
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const [{ data: stocks }, { data: crypto }] = await Promise.all([
-    admin
-      .from("raw_prices")
-      .select("identifier, price, change_24h, asset_type")
-      .eq("asset_type", "stock")
-      .in("identifier", TOP_STOCKS)
-      .gte("captured_at", since)
-      .order("captured_at", { ascending: false }),
-    admin
-      .from("raw_prices")
-      .select("identifier, price, change_24h, asset_type")
-      .eq("asset_type", "crypto")
-      .in("identifier", TOP_CRYPTO)
-      .gte("captured_at", since)
-      .order("captured_at", { ascending: false }),
-  ]);
+  const stockQuery = admin
+    .from("raw_prices")
+    .select("identifier, price, change_24h, asset_type")
+    .eq("asset_type", "stock")
+    .in("identifier", TOP_STOCKS)
+    .order("captured_at", { ascending: false });
+
+  const cryptoQuery = admin
+    .from("raw_prices")
+    .select("identifier, price, change_24h, asset_type")
+    .eq("asset_type", "crypto")
+    .in("identifier", TOP_CRYPTO)
+    .order("captured_at", { ascending: false });
+
+  if (marketOpen) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    stockQuery.gte("captured_at", since);
+    cryptoQuery.gte("captured_at", since);
+  }
+
+  const [{ data: stocks }, { data: crypto }] = await Promise.all([stockQuery, cryptoQuery]);
 
   const dedup = (rows: TickerItem[] | null) => {
     const seen = new Set<string>();
@@ -75,7 +79,74 @@ async function fromRawPrices(): Promise<TickerItem[]> {
 
 // ─── Live fallback: real quotes on demand when raw_prices has no fresh data ────
 
-// FMP batch quote — one call covers all symbols. Primary live source.
+// Alpaca snapshot — batch call for all symbols. Primary live source.
+async function liveStocksAlpaca(symbols: string[]): Promise<TickerItem[]> {
+  const key = process.env.ALPACA_API_KEY;
+  const secret = process.env.ALPACA_API_SECRET;
+  if (!key || !secret || symbols.length === 0) return [];
+  try {
+    const res = await fetch(
+      `https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbols.join(",")}&feed=iex`,
+      {
+        headers: {
+          "APCA-API-KEY-ID": key,
+          "APCA-API-SECRET-KEY": secret,
+        },
+        signal: AbortSignal.timeout(8000),
+      },
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as Record<string, {
+      latestTrade?: { p: number };
+      dailyBar?: { c: number; o: number };
+      prevDailyBar?: { c: number };
+    }>;
+    return Object.entries(data)
+      .filter(([, snap]) => snap.latestTrade?.p || snap.dailyBar?.c)
+      .map(([symbol, snap]) => {
+        const price = snap.latestTrade?.p ?? snap.dailyBar?.c ?? 0;
+        const prevClose = snap.prevDailyBar?.c;
+        const change = prevClose ? ((price - prevClose) / prevClose) * 100 : null;
+        return { identifier: symbol, price, change_24h: change, asset_type: "stock" };
+      });
+  } catch {
+    return [];
+  }
+}
+
+// Alpaca crypto quotes — batch call for crypto symbols.
+async function liveCryptoAlpaca(symbols: string[]): Promise<TickerItem[]> {
+  const key = process.env.ALPACA_API_KEY;
+  const secret = process.env.ALPACA_API_SECRET;
+  if (!key || !secret || symbols.length === 0) return [];
+  const pairs = symbols.map((s) => `${s}/USD`);
+  try {
+    const res = await fetch(
+      `https://data.alpaca.markets/v1beta3/crypto/us/latest/quotes?symbols=${pairs.join(",")}`,
+      {
+        headers: {
+          "APCA-API-KEY-ID": key,
+          "APCA-API-SECRET-KEY": secret,
+        },
+        signal: AbortSignal.timeout(8000),
+      },
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { quotes: Record<string, { ap?: number; bp?: number }> };
+    return Object.entries(data.quotes ?? {})
+      .filter(([, q]) => q.ap || q.bp)
+      .map(([pair, q]) => ({
+        identifier: pair.replace("/USD", ""),
+        price: q.ap ?? q.bp ?? 0,
+        change_24h: null,
+        asset_type: "crypto",
+      }));
+  } catch {
+    return [];
+  }
+}
+
+// FMP batch quote — fallback for stocks. One call covers all symbols.
 async function liveStocksFmp(symbols: string[]): Promise<TickerItem[]> {
   const key = process.env.FMP_API_KEY;
   if (!key || symbols.length === 0) return [];
@@ -128,21 +199,27 @@ async function liveStocksFinnhub(symbols: string[]): Promise<TickerItem[]> {
   return results.filter((r): r is TickerItem => r !== null);
 }
 
-// Multi-source live fallback: FMP batch first, then Finnhub fills any gaps.
-// Never depends on a single provider — if FMP is down/rate-limited, Finnhub covers.
+// Multi-source live fallback: Alpaca first, then FMP, then Finnhub fills gaps.
 async function liveStocks(): Promise<TickerItem[]> {
-  const fromFmp = await liveStocksFmp(TOP_STOCKS);
-  const have = new Set(fromFmp.map((i) => i.identifier));
-  const missing = TOP_STOCKS.filter((s) => !have.has(s));
+  const fromAlpaca = await liveStocksAlpaca(TOP_STOCKS);
+  const have = new Set(fromAlpaca.map((i) => i.identifier));
+  let missing = TOP_STOCKS.filter((s) => !have.has(s));
 
-  if (missing.length === 0) return fromFmp;
+  if (missing.length === 0) return fromAlpaca;
+
+  const fromFmp = await liveStocksFmp(missing);
+  for (const item of fromFmp) have.add(item.identifier);
+  missing = TOP_STOCKS.filter((s) => !have.has(s));
+
+  if (missing.length === 0) return [...fromAlpaca, ...fromFmp];
 
   const fromFinnhub = await liveStocksFinnhub(missing);
-  return [...fromFmp, ...fromFinnhub];
+  return [...fromAlpaca, ...fromFmp, ...fromFinnhub];
 }
 
-async function liveCrypto(): Promise<TickerItem[]> {
-  const ids = TOP_CRYPTO.map((s) => CG_IDS[s]).filter(Boolean);
+async function liveCryptoCoingecko(symbols: string[]): Promise<TickerItem[]> {
+  if (symbols.length === 0) return [];
+  const ids = symbols.map((s) => CG_IDS[s]).filter(Boolean);
   const idToSymbol = Object.fromEntries(
     Object.entries(CG_IDS).map(([sym, id]) => [id, sym]),
   );
@@ -172,6 +249,18 @@ async function liveCrypto(): Promise<TickerItem[]> {
   }
 }
 
+// Multi-source live fallback: Alpaca first, then CoinGecko fills gaps.
+async function liveCrypto(): Promise<TickerItem[]> {
+  const fromAlpaca = await liveCryptoAlpaca(TOP_CRYPTO);
+  const have = new Set(fromAlpaca.map((i) => i.identifier));
+  const missing = TOP_CRYPTO.filter((s) => !have.has(s));
+
+  if (missing.length === 0) return fromAlpaca;
+
+  const fromCG = await liveCryptoCoingecko(missing);
+  return [...fromAlpaca, ...fromCG];
+}
+
 function isMarketOpen(): boolean {
   const now = new Date();
   const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
@@ -185,7 +274,7 @@ export async function GET() {
   const marketOpen = isMarketOpen();
 
   const [rawItems, liveStockItems, liveCryptoItems] = await Promise.all([
-    fromRawPrices().catch(() => [] as TickerItem[]),
+    fromRawPrices(marketOpen).catch(() => [] as TickerItem[]),
     marketOpen ? liveStocks().catch(() => [] as TickerItem[]) : Promise.resolve([]),
     liveCrypto().catch(() => [] as TickerItem[]),
   ]);

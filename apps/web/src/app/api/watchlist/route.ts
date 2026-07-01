@@ -6,7 +6,7 @@ import { WATCHLIST_LIMIT } from "@/lib/tier";
 import type { Tier } from "@/lib/tier";
 
 const Body = z.object({
-  asset_type: z.enum(["stock", "crypto", "prediction"]),
+  asset_type: z.enum(["stock", "crypto"]),
   identifier: z.string().min(1).max(100).transform((s) => s.toUpperCase()),
 });
 

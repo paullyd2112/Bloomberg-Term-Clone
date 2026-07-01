@@ -1,19 +1,18 @@
 """
-Options flow ingestion — yfinance options chains.
+Options flow ingestion — Alpaca options snapshots (indicative feed).
 Pulls calls + puts for the default watchlist, flags unusual activity,
 and upserts to options_flow.
 Runs every 60 minutes weekdays 9am-5pm ET via scheduler.
 """
 
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
-import pandas as pd
-import yfinance as yf
 import sentry_sdk
 from loguru import logger
 
 from supabase_client import supabase
+from ingestion.alpaca_client import fetch_options_snapshots, parse_occ_symbol
 from ingestion.stocks import get_default_watchlist
 
 # Thresholds for flagging unusual activity
@@ -29,49 +28,54 @@ def _fetch_chain(ticker: str) -> list[dict]:
     """Return a flat list of option rows for the nearest MAX_EXPIRIES dates."""
     rows: list[dict] = []
     try:
-        t        = yf.Ticker(ticker)
-        expiries = t.options
-        if not expiries:
+        snapshots = fetch_options_snapshots(ticker, max_expiries=MAX_EXPIRIES)
+        if not snapshots:
             return []
 
-        for exp in expiries[:MAX_EXPIRIES]:
-            try:
-                chain = t.option_chain(exp)
-            except Exception as e:
-                logger.debug("options_flow: {}/{} chain fetch failed — {}", ticker, exp, e)
+        parsed_by_symbol = {}
+        for contract_symbol, snap in snapshots.items():
+            parsed = parse_occ_symbol(contract_symbol)
+            if parsed:
+                parsed_by_symbol[contract_symbol] = parsed
+
+        nearest_expiries = sorted({p["expiry"] for p in parsed_by_symbol.values()})[:MAX_EXPIRIES]
+        allowed_expiries = set(nearest_expiries)
+
+        for contract_symbol, parsed in parsed_by_symbol.items():
+            if parsed["expiry"] not in allowed_expiries:
                 continue
 
-            for contract_type, df in (("call", chain.calls), ("put", chain.puts)):
-                for _, row in df.iterrows():
-                    volume = int(row.get("volume") or 0)
-                    oi     = int(row.get("openInterest") or 0)
-                    strike = float(row.get("strike") or 0)
+            snap         = snapshots[contract_symbol]
+            daily_bar    = snap.get("dailyBar") or {}
+            latest_trade = snap.get("latestTrade") or {}
 
-                    if volume < MIN_VOLUME:
-                        continue
-                    if strike <= 0:
-                        continue
+            volume = int(daily_bar.get("v") or 0)
+            oi     = int(snap.get("openInterest") or snap.get("open_interest") or 0)
+            strike = parsed["strike"]
 
-                    last_price     = float(row.get("lastPrice") or 0)
-                    vol_oi_ratio   = round(volume / oi, 4) if oi > 0 else None
-                    premium_usd    = round(volume * last_price * CONTRACT_SIZE, 2)
+            if volume < MIN_VOLUME or strike <= 0:
+                continue
 
-                    is_unusual = (
-                        (vol_oi_ratio is not None and vol_oi_ratio >= VOL_OI_RATIO_THRESH)
-                        or premium_usd >= BIG_PREMIUM_USD
-                    )
+            last_price   = float(latest_trade.get("p") or daily_bar.get("c") or 0)
+            vol_oi_ratio = round(volume / oi, 4) if oi > 0 else None
+            premium_usd  = round(volume * last_price * CONTRACT_SIZE, 2)
 
-                    rows.append({
-                        "ticker":         ticker,
-                        "contract_type":  contract_type,
-                        "strike":         strike,
-                        "expiry":         exp,
-                        "volume":         volume,
-                        "open_interest":  oi if oi > 0 else None,
-                        "volume_oi_ratio": vol_oi_ratio,
-                        "premium_usd":    premium_usd if premium_usd > 0 else None,
-                        "is_unusual":     is_unusual,
-                    })
+            is_unusual = (
+                (vol_oi_ratio is not None and vol_oi_ratio >= VOL_OI_RATIO_THRESH)
+                or premium_usd >= BIG_PREMIUM_USD
+            )
+
+            rows.append({
+                "ticker":          ticker,
+                "contract_type":   parsed["contract_type"],
+                "strike":          strike,
+                "expiry":          parsed["expiry"],
+                "volume":          volume,
+                "open_interest":   oi if oi > 0 else None,
+                "volume_oi_ratio": vol_oi_ratio,
+                "premium_usd":     premium_usd if premium_usd > 0 else None,
+                "is_unusual":      is_unusual,
+            })
 
     except Exception as e:
         logger.warning("options_flow: {} fetch error — {}", ticker, e)

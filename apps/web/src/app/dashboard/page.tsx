@@ -1,12 +1,17 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { Activity, Clock, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getUserTier } from "@/lib/user";
+import { getUserTier, getUserProfile } from "@/lib/user";
 import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
 import SubscribeGate from "@/components/ui/SubscribeGate";
 import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
+<<<<<<< HEAD
 import SectionHeader from "@/components/ui/SectionHeader";
+=======
+import SkipTrialBanner from "@/components/SkipTrialBanner";
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
 
 export const revalidate = 60;
 
@@ -72,7 +77,7 @@ async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
   }
 
   const totalResolved = totalWins + totalLosses;
-  if (totalResolved < 3) return null;
+  if (totalResolved < 5) return null;
   const overallWinRate = totalWins / totalResolved;
 
   const byAssetClass = Array.from(assetGrouped.entries()).map(([asset_type, g]) => {
@@ -88,7 +93,7 @@ async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
     });
 
   const ydayResolved = ydayWins + ydayLosses;
-  const yesterday = ydayResolved > 0
+  const yesterday = ydayResolved >= 3
     ? { wins: ydayWins, losses: ydayLosses, winRate: ydayWins / ydayResolved, resolved: ydayResolved }
     : null;
 
@@ -97,11 +102,16 @@ async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
 
 async function fetchSignals(): Promise<Signal[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.rpc("get_dashboard_signals", {
-    p_limit: 60,
-  });
+  const { data, error } = await supabase
+    .from("signals")
+    .select("*")
+    .eq("is_backtest", false)
+    .gte("created_at", ENGINE_CUTOFF)
+    .gte("confidence", 70)
+    .order("created_at", { ascending: false })
+    .limit(200);
   if (error) {
-    console.error("get_dashboard_signals error:", error.message);
+    console.error("fetchSignals error:", error.message);
     return [];
   }
   return (data as Signal[]) ?? [];
@@ -141,8 +151,8 @@ async function fetchTopMovers() {
 }
 
 export default async function DashboardPage() {
-  const user    = await getUser();
   const tier    = await getUserTier();
+  const profile = await getUserProfile();
   const [signals, movers, accuracy] = await Promise.all([
     fetchSignals(),
     fetchTopMovers(),
@@ -152,11 +162,8 @@ export default async function DashboardPage() {
   const winCount  = signals.filter((s) => s.outcome === "WIN").length;
   const lossCount = signals.filter((s) => s.outcome === "LOSS").length;
   const pending   = signals.filter((s) => s.outcome === "PENDING").length;
-
-  if (tier === "free") {
-    const { redirect } = await import("next/navigation");
-    redirect("/dashboard/upgrade");
-  }
+  const resolved  = winCount + lossCount;
+  const allPending = resolved === 0 && pending > 0;
 
   return (
     <div className="p-5 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -170,17 +177,37 @@ export default async function DashboardPage() {
           <h1 className="text-xl font-semibold tracking-tight text-white">Signals</h1>
         </div>
         <p className="text-sm text-zinc-500">
-          Live AI signals across stocks, crypto, and prediction markets — updating in real time.
+          Live AI signals across stocks and crypto — updating in real time.
         </p>
       </header>
 
+      {tier !== "free" && profile?.billing_interval !== "lifetime" && (
+        <SkipTrialBanner />
+      )}
+
       {/* Stats row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Total signals" value={signals.length} icon={Activity} />
-        <StatCard label="Pending" value={pending} icon={Clock} />
-        <StatCard label="Wins" value={winCount} color="green" icon={TrendingUp} />
-        <StatCard label="Losses" value={lossCount} color="red" icon={TrendingDown} />
-      </div>
+      {allPending ? (
+        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-6 py-5">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />
+            </span>
+            <div>
+              <p className="text-sm font-medium text-white">Signals are being analyzed</p>
+              <p className="text-xs text-zinc-500 mt-0.5">{pending} signal{pending === 1 ? "" : "s"} pending resolution — win rate will appear once signals resolve</p>
+              <p className="text-xs text-zinc-600 mt-0.5">Signals typically resolve within 6–24 hours depending on the time horizon.</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard label="Total signals" value={signals.length} icon={Activity} />
+          <StatCard label="Pending" value={pending} icon={Clock} />
+          <StatCard label="Wins" value={winCount} color="green" icon={TrendingUp} />
+          <StatCard label="Losses" value={lossCount} color="red" icon={TrendingDown} />
+        </div>
+      )}
 
       {/* Platform accuracy */}
       {accuracy && (
@@ -194,10 +221,10 @@ export default async function DashboardPage() {
                 <span className={`text-2xl font-bold tabular-nums ${rateColor(accuracy.overallWinRate)}`}>
                   {(accuracy.overallWinRate * 100).toFixed(1)}%
                 </span>
-                <span className="text-xs text-zinc-500">win rate</span>
+                <span className="text-xs text-zinc-500">win rate · {accuracy.totalResolved} signals</span>
               </div>
               <div className="text-xs text-zinc-500 mt-1">
-                {accuracy.totalWins}W – {accuracy.totalLosses}L · {accuracy.totalResolved} resolved
+                {accuracy.totalWins}W – {accuracy.totalLosses}L
               </div>
             </div>
 
@@ -209,7 +236,7 @@ export default async function DashboardPage() {
                   <span className={`text-2xl font-bold tabular-nums ${rateColor(accuracy.yesterday.winRate)}`}>
                     {(accuracy.yesterday.winRate * 100).toFixed(0)}%
                   </span>
-                  <span className="text-xs text-zinc-500">win rate</span>
+                  <span className="text-xs text-zinc-500">win rate · {accuracy.yesterday.resolved} signals</span>
                 </div>
                 <div className="text-xs text-zinc-500 mt-1">
                   {accuracy.yesterday.wins}W – {accuracy.yesterday.losses}L
@@ -228,7 +255,7 @@ export default async function DashboardPage() {
                       <span className={`text-sm font-semibold tabular-nums ${rateColor(a.winRate)}`}>
                         {(a.winRate * 100).toFixed(1)}%
                       </span>
-                      <span className="text-[10px] text-zinc-600">({a.resolved})</span>
+                      <span className="text-[10px] text-zinc-600">({a.resolved} signal{a.resolved === 1 ? "" : "s"})</span>
                     </div>
                   </div>
                 ))}
@@ -240,15 +267,18 @@ export default async function DashboardPage() {
               <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4 sm:col-span-2 lg:col-span-3">
                 <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Month over month</div>
                 <div className="flex gap-4 overflow-x-auto scrollbar-none">
-                  {accuracy.byMonth.map((m) => (
-                    <div key={m.month} className="flex-shrink-0 min-w-[80px]">
-                      <div className="text-xs text-zinc-400 font-mono">{m.month}</div>
-                      <div className={`text-lg font-bold tabular-nums ${rateColor(m.winRate)}`}>
-                        {(m.winRate * 100).toFixed(0)}%
+                  {accuracy.byMonth.map((m) => {
+                    const monthResolved = m.wins + m.losses;
+                    return (
+                      <div key={m.month} className="flex-shrink-0 min-w-[80px]">
+                        <div className="text-xs text-zinc-400 font-mono">{m.month}</div>
+                        <div className={`text-lg font-bold tabular-nums ${rateColor(m.winRate)}`}>
+                          {(m.winRate * 100).toFixed(0)}%
+                        </div>
+                        <div className="text-[10px] text-zinc-600">{m.wins}W – {m.losses}L · {monthResolved} signals</div>
                       </div>
-                      <div className="text-[10px] text-zinc-600">{m.wins}W – {m.losses}L</div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -264,8 +294,9 @@ export default async function DashboardPage() {
             {movers.map((m) => {
               const up = (m.change_24h ?? 0) >= 0;
               return (
-                <div
+                <Link
                   key={`${m.asset_type}:${m.identifier}`}
+                  href={`/dashboard/asset/${m.asset_type}/${m.identifier}`}
                   className="group flex-shrink-0 bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-4 py-3 flex flex-col gap-1.5 min-w-[120px] hover:bg-white/[0.05] hover:border-white/[0.1] transition-all"
                 >
                   <span className="font-mono text-xs font-semibold text-white truncate">
@@ -284,7 +315,7 @@ export default async function DashboardPage() {
                     {up ? "+" : ""}
                     {Number(m.change_24h).toFixed(2)}%
                   </span>
-                </div>
+                </Link>
               );
             })}
           </div>
@@ -310,7 +341,7 @@ export default async function DashboardPage() {
 }
 
 function rateColor(rate: number): string {
-  if (rate >= 0.6) return "text-emerald-400";
+  if (rate >= 0.55) return "text-emerald-400";
   if (rate >= 0.45) return "text-amber-400";
   return "text-red-400";
 }

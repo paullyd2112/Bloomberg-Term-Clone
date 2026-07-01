@@ -20,11 +20,19 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+<<<<<<< HEAD
   title: "Plebs · Hedge fund tools. Retail prices.",
   description: "AI-powered trading signals for stocks, crypto & prediction markets. Unusual options flow, morning briefing, per-asset accuracy. Wall Street's toolkit, finally for everyone.",
   openGraph: {
     title: "Plebs · Hedge fund tools. Retail prices.",
     description: "AI-powered trading signals for stocks, crypto & prediction markets.",
+=======
+  title: "Plebs — Hedge fund tools. Retail prices.",
+  description: "AI-powered trading signals for stocks and crypto. Unusual options flow, morning briefing, per-asset accuracy — Wall Street's toolkit, finally for everyone.",
+  openGraph: {
+    title: "Plebs — Hedge fund tools. Retail prices.",
+    description: "AI-powered trading signals for stocks and crypto.",
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
     images: [{ url: "/logo.png", width: 500, height: 200 }],
   },
   twitter: {

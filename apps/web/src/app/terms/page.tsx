@@ -1,6 +1,11 @@
 export const metadata = {
+<<<<<<< HEAD
   title: 'Terms of Service | Plebs.Finance',
   description: 'Terms of Service for Plebs.Finance',
+=======
+  title: 'Terms of Service | Plebs.finance',
+  description: 'Terms of Service for Plebs.finance',
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
 };
 
 export default function TermsOfService() {
@@ -11,17 +16,28 @@ export default function TermsOfService() {
 
       <section className="mb-8">
         <p>
+<<<<<<< HEAD
           These Terms of Service (&quot;Terms&quot;) govern your use of Plebs.Finance (&quot;Service&quot;), operated by
           Plebs.Finance (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). By creating an account or using the Service, you agree
           to these Terms. If you do not agree, do not use Plebs.Finance.
+=======
+          These Terms of Service (&quot;Terms&quot;) govern your use of Plebs.finance (&quot;Service&quot;), operated by
+          Plebs.finance (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). By creating an account or using the Service, you agree
+          to these Terms. If you do not agree, do not use Plebs.finance.
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
         </p>
       </section>
 
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-white mb-3">1. The Service</h2>
         <p>
+<<<<<<< HEAD
           Plebs.Finance is a market intelligence platform that provides AI-generated trading signals,
           market data, prediction market data, portfolio tracking,
+=======
+          Plebs.finance is a market intelligence platform that provides AI-generated trading signals,
+          market data, portfolio tracking,
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           and related financial information tools. The Service is provided for informational and
           educational purposes only.
         </p>
@@ -30,7 +46,11 @@ export default function TermsOfService() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-white mb-3">2. Not Financial Advice</h2>
         <p className="font-semibold text-yellow-400">
+<<<<<<< HEAD
           IMPORTANT: Plebs.Finance is not a registered investment advisor. Nothing on this platform
+=======
+          IMPORTANT: Plebs.finance is not a registered investment advisor. Nothing on this platform
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           constitutes financial, investment, legal, or tax advice. All signals, analysis, and
           content are for informational purposes only and should not be relied upon to make
           investment decisions.
@@ -46,7 +66,11 @@ export default function TermsOfService() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-white mb-3">3. Accounts</h2>
         <ul className="list-disc pl-5 space-y-2">
+<<<<<<< HEAD
           <li>You must be at least 18 years old to use Plebs.Finance.</li>
+=======
+          <li>You must be at least 18 years old to use Plebs.finance.</li>
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           <li>You are responsible for maintaining the security of your account credentials.</li>
           <li>You must provide accurate information when creating your account.</li>
           <li>You may not share your account with others or create multiple accounts to abuse trial periods.</li>
@@ -57,7 +81,7 @@ export default function TermsOfService() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-white mb-3">4. Subscriptions & Payments</h2>
         <ul className="list-disc pl-5 space-y-2">
-          <li><strong>Free trial:</strong> New accounts receive a 14-day free trial with full access on monthly plans. A valid payment method is required to start the trial. No charge during the trial period.</li>
+          <li><strong>Trial:</strong> New accounts receive a 14-day trial with full access on monthly plans. A valid payment method is required to start the trial. No charge during the trial period.</li>
           <li><strong>Billing:</strong> After the trial, your selected plan is billed automatically via Stripe on a monthly or quarterly basis depending on your selection.</li>
           <li><strong>Lifetime access:</strong> Lifetime Pro purchases are one-time payments that grant perpetual access to Pro features as they exist at time of purchase. We reserve the right to add new features to higher tiers.</li>
           <li><strong>Price changes:</strong> We may change subscription prices with 30 days notice. Existing subscribers on locked-in rates will not be affected.</li>
@@ -82,7 +106,11 @@ export default function TermsOfService() {
         <h2 className="text-xl font-semibold text-white mb-3">6. Acceptable Use</h2>
         <p>You agree not to:</p>
         <ul className="list-disc pl-5 mt-3 space-y-2">
+<<<<<<< HEAD
           <li>Scrape, copy, or redistribute any data or signals from Plebs.Finance without written permission.</li>
+=======
+          <li>Scrape, copy, or redistribute any data or signals from Plebs.finance without written permission.</li>
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           <li>Use the Service for any unlawful purpose.</li>
           <li>Attempt to reverse engineer, hack, or disrupt the platform.</li>
           <li>Use automated tools to access the Service beyond normal usage.</li>
@@ -93,8 +121,13 @@ export default function TermsOfService() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-white mb-3">7. Intellectual Property</h2>
         <p>
+<<<<<<< HEAD
           All content on Plebs.Finance, including signals, AI analysis, platform design, and branding,
           is owned by Plebs.Finance. You may not reproduce or distribute this content without explicit
+=======
+          All content on Plebs.finance, including signals, AI analysis, platform design, and branding,
+          is owned by Plebs.finance. You may not reproduce or distribute this content without explicit
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           written permission. Signal sharing features provided within the platform are permitted
           for personal, non-commercial use.
         </p>
@@ -105,7 +138,11 @@ export default function TermsOfService() {
         <p>
           The Service is provided &quot;as is&quot; without warranties of any kind. We do not guarantee
           the accuracy, completeness, or timeliness of any market data or signals. To the maximum
+<<<<<<< HEAD
           extent permitted by law, Plebs.Finance shall not be liable for any trading losses, lost
+=======
+          extent permitted by law, Plebs.finance shall not be liable for any trading losses, lost
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           profits, or indirect damages arising from your use of the Service.
         </p>
         <p className="mt-3">

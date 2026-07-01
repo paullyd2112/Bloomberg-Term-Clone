@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check } from "lucide-react";
 
 type Experience = "beginner" | "intermediate" | "advanced";
-type AssetPref  = "stocks" | "crypto" | "predictions";
+type AssetPref  = "stocks" | "crypto";
 
 const EXPERIENCE_OPTIONS: { value: Experience; label: string }[] = [
   { value: "beginner",     label: "Beginner" },
@@ -15,7 +15,6 @@ const EXPERIENCE_OPTIONS: { value: Experience; label: string }[] = [
 const ASSET_OPTIONS: { value: AssetPref; label: string }[] = [
   { value: "stocks",      label: "Stocks" },
   { value: "crypto",      label: "Crypto" },
-  { value: "predictions", label: "Predictions" },
 ];
 
 type Props = {

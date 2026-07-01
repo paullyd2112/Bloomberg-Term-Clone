@@ -52,6 +52,7 @@ async function fetchWatchlist(userId: string): Promise<WatchlistItem[]> {
           .eq("asset_type", row.asset_type)
           .eq("identifier", row.identifier)
           .eq("is_backtest", false)
+          .gte("confidence", 70)
           .order("created_at", { ascending: false })
           .limit(1)
           .single(),
@@ -111,7 +112,7 @@ export default async function WatchlistPage() {
           </span>
           <p className="text-zinc-300 text-sm font-medium">Your watchlist is empty</p>
           <p className="text-zinc-500 text-xs max-w-xs leading-relaxed">
-            Add stocks, crypto, or prediction markets to track signals for them.
+            Add stocks or crypto to track signals for them.
           </p>
         </div>
       ) : (

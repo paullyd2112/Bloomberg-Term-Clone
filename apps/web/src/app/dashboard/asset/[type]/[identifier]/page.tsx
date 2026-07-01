@@ -15,7 +15,7 @@ import SectionHeader from "@/components/ui/SectionHeader";
 
 export const revalidate = 60;
 
-const VALID_TYPES = ["stock", "crypto", "prediction"] as const;
+const VALID_TYPES = ["stock", "crypto"] as const;
 type AssetType = (typeof VALID_TYPES)[number];
 
 type PageProps = {
@@ -50,6 +50,7 @@ async function fetchAssetData(assetType: AssetType, identifier: string, userId: 
         .eq("asset_type", assetType)
         .eq("identifier", identifier)
         .eq("is_backtest", false)
+        .gte("confidence", 70)
         .order("created_at", { ascending: false })
         .limit(20),
 
@@ -302,7 +303,7 @@ export default async function AssetPage({ params }: PageProps) {
               <SectionHeader>AI accuracy</SectionHeader>
               <div className="space-y-2">
                 <StatRow label="Total signals" value={accuracy.total_signals} />
-                <StatRow label="Win rate" value={`${((accuracy.win_rate ?? 0) * 100).toFixed(1)}%`} highlight />
+                <StatRow label="Win rate" value={`${((accuracy.win_rate ?? 0) * 100).toFixed(1)}% (${accuracy.wins + accuracy.losses} resolved)`} highlight />
                 <StatRow label="Wins" value={accuracy.wins} />
                 <StatRow label="Losses" value={accuracy.losses} />
                 <StatRow label="Neutral" value={accuracy.neutrals} />

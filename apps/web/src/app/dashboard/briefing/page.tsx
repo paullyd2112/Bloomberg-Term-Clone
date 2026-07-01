@@ -19,7 +19,6 @@ type BriefingContent = {
   market_overview:        string;
   top_trades:             Trade[];
   macro_context:          string;
-  prediction_market_edge: string;
   watch_today:            string[];
   risk_note:              string;
 };
@@ -42,9 +41,7 @@ const TONE_STYLE = {
 
 const DIR_STYLE: Record<string, string> = {
   BUY:  "bg-emerald-500/20 text-emerald-400 border-emerald-700/40",
-  YES:  "bg-emerald-500/20 text-emerald-400 border-emerald-700/40",
   SELL: "bg-red-500/20 text-red-400 border-red-700/40",
-  NO:   "bg-red-500/20 text-red-400 border-red-700/40",
   HOLD: "bg-white/[0.06] text-zinc-400 border-white/[0.1]",
 };
 
@@ -71,7 +68,7 @@ export default async function BriefingPage() {
           </span>
           <h2 className="text-white font-semibold text-lg tracking-tight">Morning Briefing</h2>
           <p className="text-zinc-400 text-sm leading-relaxed max-w-md">
-            A daily AI-generated market brief lands in your inbox at 8:45am ET — covering top signals, macro context, and prediction market edge. Pro and Elite only.
+            A daily AI-generated market brief lands in your inbox at 7am ET — covering top signals, macro context, and trade ideas. Pro and Elite only.
           </p>
           <Link
             href="/dashboard/upgrade"
@@ -156,15 +153,6 @@ export default async function BriefingPage() {
       <Section label="Macro context">
         <p className="text-zinc-300 text-sm leading-relaxed">{content.macro_context}</p>
       </Section>
-
-      {/* Prediction market edge */}
-      {content.prediction_market_edge && (
-        <Section label="Prediction market edge">
-          <p className="text-zinc-300 text-sm leading-relaxed">
-            {content.prediction_market_edge}
-          </p>
-        </Section>
-      )}
 
       {/* Watch today */}
       <Section label="Watch today">

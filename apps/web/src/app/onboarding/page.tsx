@@ -5,18 +5,17 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 type Experience = "beginner" | "intermediate" | "advanced";
-type AssetPref  = "stocks" | "crypto" | "predictions";
+type AssetPref  = "stocks" | "crypto";
 
 const EXPERIENCE_OPTIONS: { value: Experience; label: string; desc: string }[] = [
   { value: "beginner",     label: "Beginner",     desc: "New to trading, learning the ropes" },
   { value: "intermediate", label: "Intermediate",  desc: "Comfortable with stocks and charts" },
-  { value: "advanced",     label: "Advanced",      desc: "Options, leverage, prediction markets" },
+  { value: "advanced",     label: "Advanced",      desc: "Options, leverage, active trading" },
 ];
 
 const ASSET_OPTIONS: { value: AssetPref; label: string; icon: string; desc: string }[] = [
   { value: "stocks",      label: "Stocks",             icon: "📈", desc: "Equities, ETFs, options flow" },
   { value: "crypto",      label: "Crypto",              icon: "₿",  desc: "BTC, ETH, altcoins" },
-  { value: "predictions", label: "Prediction markets",  icon: "🎯", desc: "Polymarket & Kalshi" },
 ];
 
 const STEPS = ["profile", "experience", "markets", "done"] as const;
@@ -28,6 +27,7 @@ export default function OnboardingPage() {
   const [phone, setPhone]       = useState("");
   const [experience, setExp]    = useState<Experience | null>(null);
   const [assets, setAssets]     = useState<Set<AssetPref>>(new Set());
+  const [newsletter, setNews]    = useState(true);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
 
@@ -64,6 +64,7 @@ export default function OnboardingPage() {
           phone_number:       phone.trim() || null,
           trading_experience: experience,
           asset_preferences:  Array.from(assets),
+          subscribe_newsletter: newsletter,
         }),
       });
       if (!res.ok) throw new Error("Failed to save");
@@ -230,6 +231,21 @@ export default function OnboardingPage() {
               })}
             </div>
 
+            <label className="flex items-start gap-3 p-4 rounded-lg border border-zinc-800 bg-zinc-900 cursor-pointer hover:border-zinc-600 transition-colors">
+              <input
+                type="checkbox"
+                checked={newsletter}
+                onChange={(e) => setNews(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-green-500 focus:ring-green-500 focus:ring-offset-0 accent-green-500"
+              />
+              <div>
+                <div className="font-semibold text-white text-sm">Daily morning briefing</div>
+                <div className="text-xs text-zinc-400 mt-0.5">
+                  Market recap, AI signals, and trade ideas — delivered before market open (7am ET weekdays)
+                </div>
+              </div>
+            </label>
+
             {error && (
               <p className="text-sm text-red-400">{error}</p>
             )}
@@ -259,19 +275,20 @@ export default function OnboardingPage() {
             <div>
               <h1 className="text-2xl font-bold text-white">You&apos;re all set!</h1>
               <p className="text-zinc-400 text-sm mt-2">
-                Your 14-day trial is active. Full access starts now.
+                One more step: choose a plan to get started. Credit card required
+                — cancel anytime during your 14-day trial and you won&apos;t be charged.
               </p>
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 text-left space-y-2">
               <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                Included in your trial
+                What you get with your trial
               </p>
               {[
-                "AI signals — stocks, crypto & predictions",
+                "AI signals: stocks & crypto",
                 "Unlimited watchlist",
                 "Unusual options flow",
-                "Morning briefing email (8:45am ET)",
+                "Morning briefing email (7am ET)",
                 "Per-asset AI accuracy tracking",
               ].map((f) => (
                 <div key={f} className="flex items-center gap-2 text-sm text-zinc-300">
@@ -283,16 +300,16 @@ export default function OnboardingPage() {
 
             <div className="space-y-3">
               <Link
-                href="/dashboard"
+                href="/dashboard/upgrade"
                 className="block w-full bg-green-500 hover:bg-green-400 text-black font-bold py-3 rounded-lg transition-colors text-center"
               >
-                Open dashboard →
+                Choose a plan →
               </Link>
               <Link
-                href="/dashboard/upgrade"
-                className="block text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+                href="/dashboard"
+                className="block text-sm text-zinc-500 hover:text-zinc-300 transition-colors text-center"
               >
-                View plans &amp; pricing
+                Browse the dashboard first
               </Link>
             </div>
           </div>

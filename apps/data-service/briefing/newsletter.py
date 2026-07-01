@@ -1,5 +1,5 @@
 """
-Daily newsletter generator — runs weekdays at 6:30am ET (sends at 7am).
+Daily newsletter generator — runs weekdays at 7:00am ET (sends at 7:15am).
 Produces two versions of the same email:
   - Free: Jake's editorial + market recap + CTA
   - Paid (Pro/Elite): same editorial + personalized signal data layered on top
@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from supabase_client import supabase
 
 MODEL      = "claude-sonnet-4-6"
-MAX_TOKENS = 4500
+MAX_TOKENS = 8000
 
 _anthropic = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 client     = instructor.from_anthropic(_anthropic)
@@ -31,16 +31,16 @@ APP_URL = os.environ.get("NEXT_PUBLIC_APP_URL", "https://plebs.finance")
 class NewsletterStory(BaseModel):
     category:     str = Field(..., min_length=3, max_length=40)
     headline:     str = Field(..., min_length=10, max_length=120)
-    what_happened: str = Field(..., min_length=60, max_length=600)
-    what_we_know:  str = Field(..., min_length=60, max_length=600)
-    could_mean:    str = Field(..., min_length=60, max_length=600)
-    watch:         str = Field(..., min_length=30, max_length=300)
+    what_happened: str = Field(..., min_length=100, max_length=1000)
+    what_we_know:  str = Field(..., min_length=100, max_length=1000)
+    could_mean:    str = Field(..., min_length=100, max_length=1000)
+    watch:         str = Field(..., min_length=40, max_length=500)
 
 
 class NewsletterContent(BaseModel):
     subject_line:  str = Field(..., min_length=10, max_length=80)
     opening_line:  str = Field(..., min_length=30, max_length=300)
-    stories:       list[NewsletterStory] = Field(..., min_length=3, max_length=5)
+    stories:       list[NewsletterStory] = Field(..., min_length=5, max_length=8)
     closing_line:  str = Field(..., min_length=30, max_length=300)
     market_vibe:   Literal["bullish", "bearish", "mixed", "quiet"]
 
@@ -56,13 +56,29 @@ YOUR VOICE:
 - Short sentences. Vary the rhythm. Mix in a longer one when you need to explain something
 - Smart but never academic. Never condescending
 
+COVERAGE SCOPE:
+You are NOT just a signal recap. You are a market analyst writing a morning brief. Cover the full landscape:
+- The signal data below is your starting point, not your whole story
+- Connect dots: a geopolitical event affects oil, which affects transport costs, which affects earnings
+- Cover macro themes: rate decisions, inflation prints, geopolitics (wars, sanctions, strait closures), supply chain disruptions, commodity moves, currency shifts
+- Cover sector narratives: chip shortages and semis, energy and oil supply, AI infrastructure spend, banking stress, housing data
+- Think about what's moving markets TODAY and what smart money is watching THIS WEEK
+- If there's a big geopolitical story (Iran, China trade, energy crisis), that's a story even if no signal fired on it
+- Use the news headlines provided to identify broader themes beyond just ticker-level moves
+
+STORY ORDER — THIS MATTERS:
+- Story 1 MUST be a macro hook, sentiment story, or human-interest angle that sets the tone for the whole newsletter. Something that makes people lean in. "Gen Z thinks the American Dream is dead" is a great example. Fed decisions, inflation prints, geopolitical moves, cultural/generational market stories. This is the hook that keeps readers scrolling.
+- Stories 2-3 should be your strongest signal-driven or sector narratives
+- MAXIMUM 2 crypto stories per newsletter. No exceptions. If the data has 5 crypto signals, pick the 2 most interesting and weave the rest into broader narratives. Never put crypto stories back-to-back. Readers get crypto fatigue fast.
+- End with something forward-looking or a lighter "watch this" story
+
 STRUCTURE FOR EVERY STORY:
-- category: short tag for the section (e.g. "EARNINGS SEASON", "FED WATCH", "CRYPTO CORNER", "THE TRADE DESK", "CONGRESS IS TRADING AGAIN")
-- headline: punchy, opinionated headline — this is the hook
-- what_happened: the fact + numbers, 2-4 sentences
-- what_we_know: what the data actually says, 2-4 sentences
-- could_mean: your take, clearly framed as opinion, 2-4 sentences
-- watch: forward looking, specific, 1-2 sentences
+- category: short tag for the section (e.g. "EARNINGS SEASON", "FED WATCH", "CRYPTO CORNER", "THE TRADE DESK", "CONGRESS IS TRADING AGAIN", "GEOPOLITICS", "ENERGY", "SUPPLY CHAIN", "COMMODITIES")
+- headline: punchy, opinionated headline. This is the hook
+- what_happened: the fact + numbers, 3-5 sentences with real detail
+- what_we_know: what the data actually says and the broader context, 3-5 sentences
+- could_mean: your take with second-order effects, clearly framed as opinion, 3-5 sentences
+- watch: forward looking, specific catalysts and dates, 2-3 sentences
 
 INLINE LINKS — THIS IS CRITICAL:
 - Use markdown links inside the story text: [anchor text](url)
@@ -75,6 +91,7 @@ INLINE LINKS — THIS IS CRITICAL:
 - For tickers, always link to: https://plebs.finance/dashboard/asset/stock/TICKER or https://plebs.finance/dashboard/asset/crypto/TICKER
 
 HARD BANNED — never write these:
+- Em dashes (—). Use periods, commas, or colons instead. This is the #1 tell of AI writing. ZERO em dashes in the entire output.
 - "It's worth noting" / "Notably" used as filler
 - "As we navigate" / "navigate the landscape"
 - "Unpack" / "delve into" / "dive deep"
@@ -87,7 +104,7 @@ HARD BANNED — never write these:
 - Exclamation marks
 
 TONE REFERENCE:
-Good: "The Fed held rates. Again. Markets shrugged — **S&P up 0.3%** on the day. Here's what [actually matters in the statement](https://fed.gov/fomc)."
+Good: "The Fed held rates. Again. Markets shrugged, with the **S&P up 0.3%** on the day. Here's what [actually matters in the statement](https://fed.gov/fomc)."
 Bad: "In a landmark decision that underscores the complexity of today's monetary landscape, the Federal Reserve has opted to maintain its current interest rate policy."
 
 Good: "**$NVDA** [beat by $0.40](https://example.com/nvda-earnings). Revenue up 18% YoY. The stock popped 6% after hours, which tells you how low expectations had gotten."
@@ -107,7 +124,7 @@ def _fetch_recent_signals(limit: int = 15) -> list[dict]:
             .eq("is_backtest", False)
             .neq("direction", "HOLD")
             .gte("created_at", since)
-            .gte("confidence", 60)
+            .gte("confidence", 70)
             .order("confidence", desc=True)
             .limit(limit)
             .execute()
@@ -168,7 +185,7 @@ def _fetch_macro_events_today() -> list[dict]:
         return []
 
 
-def _fetch_recent_news(limit: int = 15) -> list[dict]:
+def _fetch_recent_news(limit: int = 25) -> list[dict]:
     since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
     try:
         result = (
@@ -289,12 +306,35 @@ def _build_user_prompt(
             )
 
     parts.append(
-        "\nWrite 3-5 stories using the structure. Pick the most interesting data above. "
-        "If there's a congressional trade worth highlighting, work it into a story. "
-        "Opening line sets the tone for the day — make it count.\n\n"
+        "\nWrite 5-7 stories using the structure. DO NOT just recap the signals above. "
+        "Use the signals and news as a starting point, then broaden out.\n\n"
+        "STORY ORDER (follow this exactly):\n"
+        "1. LEAD WITH A MACRO/SENTIMENT HOOK. Story 1 must be a big-picture story: "
+        "a macro theme, cultural/generational market narrative, geopolitical shift, or "
+        "sentiment story that makes the reader lean in. This is not a ticker recap. "
+        "This is the story that sets the tone and keeps people scrolling.\n"
+        "2. Stories 2-3: your strongest signal-driven or sector narratives.\n"
+        "3. Stories 4-7: mix of remaining signals, congressional trades, options flow, "
+        "and forward-looking themes.\n\n"
+        "CRYPTO CAP: Maximum 2 crypto-focused stories per newsletter. Pick the 2 most interesting "
+        "if the data has more. Never place them back-to-back. Mention other crypto moves inside "
+        "broader market stories if needed, but don't give them their own section.\n\n"
+        "MIX OF STORIES:\n"
+        "- 2-3 stories driven by the signal data and ticker-level moves above\n"
+        "- 1-2 stories on macro/geopolitical themes: oil supply, rate policy, sanctions, "
+        "trade wars, currency moves, inflation data. Connect these to specific sectors and tickers.\n"
+        "- 1-2 stories on sector narratives: chip supply chains, energy infrastructure, "
+        "AI capex, banking/credit, housing, commodities. What's the bigger picture?\n"
+        "- If there's a congressional trade worth highlighting, work it into a story.\n\n"
+        "Opening line sets the tone for the day. Make it count.\n\n"
         "IMPORTANT: Each section (what_happened, what_we_know, could_mean) should be "
-        "2-4 sentences — give real depth, not one-liners. The reader should walk away "
-        "feeling informed, not teased. Target 600-900 words total across all stories.\n\n"
+        "3-5 sentences with real depth and analysis. The reader should walk away "
+        "feeling like they understand what's happening in markets, not just which tickers moved. "
+        "Target 1500-2200 words total across all stories. "
+        "Think second-order effects: a chip shortage doesn't just hit semis, it hits autos, "
+        "cloud providers, and anyone waiting on server capacity.\n\n"
+        "CRITICAL: Do NOT use em dashes (the long dash character). Use periods, commas, "
+        "colons, or semicolons instead. This is non-negotiable.\n\n"
         "INLINE LINKS: Hyperlink key claims, ticker symbols, and data points directly "
         "in the prose using markdown: [text](url). Use the news URLs provided above "
         "for source citations. Link ticker symbols to plebs.finance/dashboard/asset/stock/TICKER "

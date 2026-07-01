@@ -4,6 +4,7 @@ import { TIER_FEATURES } from "@/lib/tier";
 import UpgradeButtons from "./UpgradeButtons";
 import LifetimeButton from "./LifetimeButton";
 import BillingPortalButton from "./BillingPortalButton";
+import CancelButton from "./CancelButton";
 
 export default async function UpgradePage() {
   const tier = await getUserTier();
@@ -17,9 +18,36 @@ export default async function UpgradePage() {
         <h1 className="text-xl font-bold text-white tracking-tight">Plans & Billing</h1>
         <p className="text-sm text-zinc-400 mt-1.5">
           {tier === "free"
-            ? "Pick a plan to start your 14-day free trial."
+            ? "Pick a plan to start your 14-day trial."
             : <>You&apos;re on the <span className="text-white capitalize font-medium">{tier}</span> plan.</>}
         </p>
+      </div>
+
+      {/* Subscription plans */}
+      <div>
+        <h2 className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.15em] text-zinc-500 mb-4">
+          <span className="text-emerald-400/60">●</span>
+          Subscription plans
+        </h2>
+        <div className="grid gap-5 md:grid-cols-2">
+          <PlanCard
+            name="Pro"
+            price={{ monthly: 40, quarterly: 100 }}
+            description="Serious retail traders"
+            features={TIER_FEATURES.pro}
+            current={tier === "pro" && profile?.billing_interval !== "lifetime"}
+            tier="pro"
+            highlighted
+          />
+          <PlanCard
+            name="Elite"
+            price={{ monthly: 80, quarterly: 200 }}
+            description="For the obsessed"
+            features={TIER_FEATURES.elite}
+            current={tier === "elite" && profile?.billing_interval !== "lifetime"}
+            tier="elite"
+          />
+        </div>
       </div>
 
       {/* Lifetime plans */}
@@ -96,43 +124,23 @@ export default async function UpgradePage() {
         </div>
       </div>
 
-      {/* Subscription plans */}
-      <div>
-        <h2 className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.15em] text-zinc-500 mb-4">
-          <span className="text-emerald-400/60">●</span>
-          Subscription plans
-        </h2>
-        <div className="grid gap-5 md:grid-cols-2">
-          <PlanCard
-            name="Pro"
-            price={{ monthly: 40, quarterly: 100 }}
-            description="Serious retail traders"
-            features={TIER_FEATURES.pro}
-            current={tier === "pro" && profile?.billing_interval !== "lifetime"}
-            tier="pro"
-            highlighted
-          />
-          <PlanCard
-            name="Elite"
-            price={{ monthly: 80, quarterly: 200 }}
-            description="For the obsessed"
-            features={TIER_FEATURES.elite}
-            current={tier === "elite" && profile?.billing_interval !== "lifetime"}
-            tier="elite"
-          />
-        </div>
-      </div>
-
       {/* Billing portal */}
       {tier !== "free" && (
-        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5 flex items-center justify-between gap-4">
-          <div>
-            <div className="text-sm font-medium text-white">Billing & invoices</div>
-            <div className="text-xs text-zinc-500 mt-1">
-              Manage your subscription, update payment method, or download invoices.
+        <div className="space-y-3">
+          <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5 flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-medium text-white">Billing & invoices</div>
+              <div className="text-xs text-zinc-500 mt-1">
+                Manage your subscription, update payment method, or download invoices.
+              </div>
             </div>
+            <BillingPortalButton />
           </div>
-          <BillingPortalButton />
+          {profile?.billing_interval !== "lifetime" && (
+            <div className="flex justify-end px-1">
+              <CancelButton />
+            </div>
+          )}
         </div>
       )}
     </div>

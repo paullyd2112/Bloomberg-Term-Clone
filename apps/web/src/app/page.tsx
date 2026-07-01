@@ -23,7 +23,11 @@ import AssetShot from "@/components/landing/showcase/AssetShot";
 export const metadata: Metadata = {
   title: "Plebs · Hedge fund tools. Retail prices.",
   description:
+<<<<<<< HEAD
     "Real-time AI signals for stocks, crypto, and prediction markets. Congressional trade tracker, options flow, morning briefing. Wall Street's toolkit, finally for everyone.",
+=======
+    "Real-time AI signals for stocks and crypto. Congressional trade tracker, options flow, morning briefing — Wall Street's toolkit, finally for everyone.",
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
 };
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
@@ -41,6 +45,7 @@ function Nav() {
         <div className="hidden md:flex items-center gap-8 text-sm text-secondary-foreground">
           <a href="#terminal" className="hover:text-white transition-colors">The terminal</a>
           <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
+          <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
         </div>
 
         <div className="flex items-center gap-1 sm:gap-3">
@@ -99,7 +104,11 @@ function Hero() {
               <span className="font-mono uppercase tracking-[0.18em] text-[10px] text-emerald-400">
                 Live
               </span>
+<<<<<<< HEAD
               <span className="text-muted-foreground">Markets open · signals updating</span>
+=======
+              <span className="text-zinc-500">Live</span>
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-semibold text-white leading-[1.03] tracking-tightest text-balance">
@@ -108,8 +117,13 @@ function Hero() {
               <span className="text-gradient-emerald">Retail prices.</span>
             </h1>
 
+<<<<<<< HEAD
             <p className="mt-6 text-lg text-secondary-foreground max-w-md leading-relaxed text-pretty">
               Real-time AI signals across stocks, crypto, and prediction markets,
+=======
+            <p className="mt-6 text-lg text-zinc-400 max-w-md leading-relaxed text-pretty">
+              Real-time AI signals across stocks and crypto —
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
               plus options flow, congressional trades, and a morning briefing. One terminal.
             </p>
 
@@ -129,6 +143,7 @@ function Hero() {
               </Link>
             </div>
 
+<<<<<<< HEAD
             {/* Coverage bar */}
             <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2">
               <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">
@@ -143,6 +158,11 @@ function Hero() {
                 </span>
               ))}
             </div>
+=======
+            <p className="mt-5 font-mono text-[11px] uppercase tracking-wider text-zinc-600">
+              Credit card required · Cancel anytime
+            </p>
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           </div>
 
           {/* Right — live panel */}
@@ -192,9 +212,9 @@ function Showcase() {
 function Stats() {
   const items = [
     { value: "3",     label: "Markets covered" },
-    { value: "8:45a", label: "Daily briefing, ET" },
-    { value: "<2s",   label: "Signal latency" },
-    { value: "14d",   label: "Free trial" },
+    { value: "7a",    label: "Daily briefing, ET" },
+    { value: "60+",   label: "Assets tracked" },
+    { value: "14d",   label: "Trial period" },
   ];
 
   return (
@@ -219,8 +239,13 @@ const FEATURES = [
   {
     icon: Zap,
     title: "Real-time AI signals",
+<<<<<<< HEAD
     desc: "Model-driven analysis across stocks, crypto, and Polymarket / Kalshi contracts. BUY, SELL, YES, NO, each with a confidence score and the reasoning behind it.",
     span: "lg:col-span-3",
+=======
+    desc: "Model-driven analysis across stocks and crypto. BUY, SELL, or HOLD — each with a confidence score and the reasoning behind it.",
+    wide: true,
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
   },
   {
     icon: Landmark,
@@ -230,15 +255,24 @@ const FEATURES = [
   },
   {
     icon: Waves,
+<<<<<<< HEAD
     title: "Options & dark pool flow",
     desc: "Unusual sweeps and block trades flagged in real time. Follow the smart money early.",
     span: "lg:col-span-2",
+=======
+    title: "Unusual options flow",
+    desc: "Unusual sweeps and large block trades flagged automatically. Follow the smart money early.",
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
   },
   {
     icon: Sunrise,
     title: "Morning briefing",
+<<<<<<< HEAD
     desc: "An AI-written market brief in your inbox at 8:45a ET. Top signals, macro, and risk.",
     span: "lg:col-span-2",
+=======
+    desc: "An AI-written market brief in your inbox at 7a ET — top signals, macro, and risk.",
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
   },
   {
     icon: Wallet,
@@ -330,9 +364,9 @@ const PLANS = [
     features: [
       "Real-time AI signals for stocks & crypto",
       "Unlimited watchlist",
-      "Full options flow + dark pool",
+      "Unusual options flow",
       "Congressional trade tracker",
-      "Morning briefing email",
+      "Morning briefing email (7a ET)",
       "Portfolio tracker + P&L",
       "Price & signal alerts",
     ],
@@ -341,17 +375,25 @@ const PLANS = [
     name:      "Elite",
     price:     "$80",
     period:    "/mo",
+<<<<<<< HEAD
     blurb:     "The real alpha: prediction markets and your own AI analyst.",
+=======
+    blurb:     "The real alpha — your own AI analyst and personalized briefings.",
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
     highlight: true,
     cta:       "Start 14-day trial",
     href:      "/signup",
     features: [
       "Everything in Pro",
+<<<<<<< HEAD
       "Prediction-market signals (Kalshi + Polymarket)",
       "AI finds mispriced contracts",
       "Pleby, your AI trading analyst, on call",
+=======
+      "Pleby — your AI trading analyst, on call",
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
       "Personalised morning briefing",
-      "Priority signal delivery",
+      "On-demand AI analysis — score any ticker",
     ],
   },
 ];
@@ -360,9 +402,15 @@ function Pricing() {
   return (
     <section id="pricing" className="py-24 px-5 sm:px-8">
       <div className="max-w-5xl mx-auto">
+<<<<<<< HEAD
         <Reveal className="max-w-2xl mb-12">
           <SectionLabel index="03">Pricing</SectionLabel>
           <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest">
+=======
+        <div className="max-w-2xl mb-14">
+          <SectionLabel index="02">Pricing</SectionLabel>
+          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tight">
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
             Two tiers. The signals pay for themselves.
           </h2>
         </Reveal>
@@ -419,8 +467,13 @@ function Pricing() {
           ))}
         </div>
 
+<<<<<<< HEAD
         <p className="text-center text-muted-foreground text-sm mt-8">
           14-day free trial, cancel anytime. Prefer to pay once?{" "}
+=======
+        <p className="text-center text-zinc-500 text-sm mt-8">
+          14-day trial — credit card required, cancel anytime. Prefer to pay once?{" "}
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           <Link href="/signup" className="text-emerald-400 hover:text-emerald-300 underline underline-offset-4 transition-colors">
             Lifetime access from $399
           </Link>
@@ -431,7 +484,11 @@ function Pricing() {
   );
 }
 
+<<<<<<< HEAD
 // ─── FAQ ──────────────────────────────────────────────────────────────────────
+=======
+// ─── FAQ ─────────────────────────────────────────────────────────────────────
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
 
 const FAQS = [
   {
@@ -456,6 +513,7 @@ const FAQS = [
   },
 ];
 
+<<<<<<< HEAD
 function Faq() {
   return (
     <section id="faq" className="py-24 px-5 sm:px-8">
@@ -482,6 +540,25 @@ function Faq() {
                 </p>
               </details>
             </Reveal>
+=======
+function FAQ() {
+  return (
+    <section id="faq" className="py-24 px-5 sm:px-8">
+      <div className="max-w-3xl mx-auto">
+        <div className="mb-14">
+          <SectionLabel index="03">FAQ</SectionLabel>
+          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tight">
+            Common questions
+          </h2>
+        </div>
+
+        <div className="space-y-px rounded-2xl overflow-hidden border border-white/[0.06]">
+          {FAQS.map((faq) => (
+            <div key={faq.q} className="bg-zinc-950 p-6 sm:p-7">
+              <h3 className="text-white font-medium text-[15px]">{faq.q}</h3>
+              <p className="text-zinc-400 text-sm leading-relaxed mt-2">{faq.a}</p>
+            </div>
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
           ))}
         </div>
       </div>
@@ -507,7 +584,7 @@ function CTAStrip() {
             href="/signup"
             className="group mt-8 inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-base px-9 py-3.5 rounded-xl transition-colors"
           >
-            Start your free trial
+            Start your trial
             <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </Link>
 
@@ -603,6 +680,7 @@ function Footer() {
             </div>
           ))}
         </div>
+<<<<<<< HEAD
 
         <div className="mt-12 pt-8 border-t border-white/[0.06] flex flex-col gap-4">
           <p className="text-[11px] text-zinc-600 leading-relaxed max-w-3xl">
@@ -614,6 +692,13 @@ function Footer() {
           <div className="font-mono text-xs text-zinc-600">
             © {new Date().getFullYear()} Plebs · Not financial advice
           </div>
+=======
+        <div className="flex items-center gap-6 text-xs text-zinc-500">
+          <Link href="/dashboard" className="hover:text-zinc-200 transition-colors">Dashboard</Link>
+          <Link href="/terms"     className="hover:text-zinc-200 transition-colors">Terms</Link>
+          <Link href="/privacy"   className="hover:text-zinc-200 transition-colors">Privacy</Link>
+          <Link href="/glossary"  className="hover:text-zinc-200 transition-colors">Glossary</Link>
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
         </div>
       </div>
     </footer>
@@ -627,7 +712,7 @@ export default function LandingPage() {
     <div className="font-sans bg-background min-h-screen antialiased selection:bg-emerald-500/30 selection:text-white">
       <Nav />
       <div className="pt-14">
-        <TickerBar />
+        <TickerBar showStatus={false} />
       </div>
       <main>
         <Hero />
@@ -635,7 +720,11 @@ export default function LandingPage() {
         <Stats />
         <Features />
         <Pricing />
+<<<<<<< HEAD
         <Faq />
+=======
+        <FAQ />
+>>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
         <CTAStrip />
       </main>
       <Footer />

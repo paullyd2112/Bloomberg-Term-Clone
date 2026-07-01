@@ -11,6 +11,8 @@ export async function GET() {
       .select("id, identifier, direction, confidence, time_horizon, created_at")
       .eq("is_backtest", false)
       .neq("direction", "HOLD")
+      .neq("asset_type", "prediction")
+      .gte("confidence", 70)
       .order("created_at", { ascending: false })
       .limit(6);
 

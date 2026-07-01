@@ -1,5 +1,5 @@
 """
-Briefing emailer — runs weekdays at 8:45am ET (15 min after generation).
+Briefing emailer — runs weekdays at 7:15am ET (15 min after generation).
 Sends today's briefing to all Pro and Elite users who have confirmed emails.
 """
 

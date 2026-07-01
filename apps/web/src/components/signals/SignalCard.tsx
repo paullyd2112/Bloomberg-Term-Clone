@@ -7,7 +7,7 @@ export type Signal = {
   id: number;
   asset_type: string;
   identifier: string;
-  direction: "BUY" | "SELL" | "HOLD" | "YES" | "NO";
+  direction: "BUY" | "SELL" | "HOLD";
   confidence: number;
   reasoning: string;
   time_horizon: string;
@@ -19,9 +19,7 @@ export type Signal = {
 
 const DIRECTION_STYLE: Record<string, string> = {
   BUY:  "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  YES:  "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
   SELL: "bg-red-500/15 text-red-400 border-red-500/30",
-  NO:   "bg-red-500/15 text-red-400 border-red-500/30",
   HOLD: "bg-white/[0.06] text-zinc-400 border-white/10",
 };
 
@@ -92,15 +90,34 @@ export default function SignalCard({ signal }: { signal: Signal }) {
             style={{ width: `${signal.confidence}%` }}
           />
         </div>
-        <span className="text-xs text-zinc-400 w-8 text-right tabular-nums">
-          {signal.confidence}%
-        </span>
+        <div className="group relative">
+          <span className="text-xs text-zinc-400 w-8 text-right tabular-nums cursor-help">
+            {signal.confidence}%
+          </span>
+          <div className="hidden group-hover:block absolute bottom-full right-0 mb-1.5 w-52 bg-zinc-800 border border-white/10 text-zinc-300 text-[11px] rounded-lg px-3 py-2 shadow-xl z-50">
+            Model certainty in this signal direction, based on technical indicators, sentiment, and market context.
+          </div>
+        </div>
       </div>
 
-      {/* Reasoning */}
-      <p className="text-sm text-zinc-300 leading-relaxed line-clamp-3">
+      {/* Reasoning — clickable to signal detail */}
+      <Link
+        href={`/signal/${signal.id}`}
+        className="block text-sm text-zinc-300 leading-relaxed line-clamp-3 hover:text-zinc-100 transition-colors cursor-pointer"
+      >
         {signal.reasoning}
-      </p>
+      </Link>
+
+      {/* News context */}
+      {signal.news_context && signal.news_context.length > 0 && (
+        <div className="space-y-1">
+          {signal.news_context.slice(0, 3).map((item, i) => (
+            <p key={i} className="text-[11px] text-zinc-500 leading-snug truncate">
+              • {item}
+            </p>
+          ))}
+        </div>
+      )}
 
       {/* Footer */}
       <div className="flex items-center justify-between gap-2 pt-1">
@@ -108,22 +125,13 @@ export default function SignalCard({ signal }: { signal: Signal }) {
           <span className="text-[11px] text-zinc-500">
             {HORIZON_LABEL[signal.time_horizon] ?? signal.time_horizon}
           </span>
-          {signal.price_at_signal && (
+          {signal.price_at_signal != null && (
             <span className="text-[11px] text-zinc-500 font-mono">
-              @ {signal.asset_type === "prediction"
-                  ? `${(signal.price_at_signal * 100).toFixed(1)}%`
-                  : `$${Number(signal.price_at_signal).toLocaleString()}`}
+              @ ${Number(signal.price_at_signal).toLocaleString()}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          {signal.news_context && signal.news_context.length > 0 && (
-            <span className="text-[11px] text-zinc-600">
-              {signal.news_context.length} news item{signal.news_context.length > 1 ? "s" : ""}
-            </span>
-          )}
-          <ShareButton signalId={signal.id} />
-        </div>
+        <ShareButton signalId={signal.id} ticker={signal.identifier} direction={signal.direction} confidence={signal.confidence} />
       </div>
 
       {/* Disclaimer */}

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type AssetType = "stock" | "crypto" | "prediction";
+type AssetType = "stock" | "crypto";
 type Direction = "LONG" | "SHORT" | "YES" | "NO";
 
 export default function AddPositionForm({ onClose }: { onClose: () => void }) {
@@ -17,7 +17,7 @@ export default function AddPositionForm({ onClose }: { onClose: () => void }) {
   const [loading, setLoading]       = useState(false);
 
   const dirOptions: Direction[] =
-    assetType === "prediction" ? ["YES", "NO"] : ["LONG", "SHORT"];
+    ["LONG", "SHORT"];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -56,13 +56,12 @@ export default function AddPositionForm({ onClose }: { onClose: () => void }) {
             value={assetType}
             onChange={(e) => {
               setAssetType(e.target.value as AssetType);
-              setDirection(e.target.value === "prediction" ? "YES" : "LONG");
+              setDirection("LONG");
             }}
             className="w-full bg-white/[0.04] border border-white/[0.1] text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500/50"
           >
             <option value="stock">Stock</option>
             <option value="crypto">Crypto</option>
-            <option value="prediction">Prediction</option>
           </select>
         </div>
 
@@ -93,7 +92,7 @@ export default function AddPositionForm({ onClose }: { onClose: () => void }) {
 
         <div>
           <label className="block text-xs text-zinc-400 mb-1">
-            {assetType === "prediction" ? "Entry price (0–1)" : "Entry price ($)"}
+            Entry price ($)
           </label>
           <input
             required
@@ -109,7 +108,7 @@ export default function AddPositionForm({ onClose }: { onClose: () => void }) {
 
         <div className="col-span-2">
           <label className="block text-xs text-zinc-400 mb-1">
-            {assetType === "prediction" ? "Contracts" : "Shares / units"}
+            Shares / units
           </label>
           <input
             required

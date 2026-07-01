@@ -20,11 +20,14 @@ from ingestion.short_interest import ingest_short_interest
 from ingestion.earnings import ingest_earnings
 from ingestion.macro_events import seed_macro_events
 from ingestion.fred import enrich_macro_events
-from scoring.engine import score_stocks, score_stocks_event_only, score_crypto, score_prediction_markets
+from ingestion.news import ingest_news
+from ingestion.crypto_momentum import ingest_momentum_coins
+from scoring.engine import score_stocks, score_stocks_event_only, score_crypto, score_prediction_markets, score_options_flow
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
 from briefing.newsletter import generate_newsletter
 from briefing.newsletter_emailer import send_newsletter
+from briefing.elite_briefing import send_elite_briefings
 from briefing.welcome_emails import send_welcome_sequence
 
 load_dotenv()
@@ -107,11 +110,23 @@ def job_ingest_congressional():
 def job_ingest_insider_trades():
     return ingest_insider_trades()
 
+def job_score_options_flow():
+    return score_options_flow()
+
+def job_ingest_news():
+    return ingest_news()
+
+def job_crypto_momentum():
+    return ingest_momentum_coins()
+
 def job_generate_newsletter():
     return generate_newsletter()
 
 def job_send_newsletter():
     return send_newsletter()
+
+def job_send_elite_briefings():
+    return send_elite_briefings()
 
 def job_send_welcome_sequence():
     return send_welcome_sequence()
@@ -239,9 +254,8 @@ def _run_stock_job(name: str, fn):
 # Prediction markets — every 2 hours (was every 30 min)
 scheduler.add_job(lambda: _run_job("ingest_prediction_markets", job_ingest_prediction_markets),
                   IntervalTrigger(minutes=30), id="ingest_prediction_markets")
-# Prediction scoring disabled until data matures (~3 weeks of ingestion)
-# scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
-#                   CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
+scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
+                  CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
 
 # Stocks — full scoring at open + close, event-only midday, weekdays only
 scheduler.add_job(lambda: _run_stock_job("ingest_stocks", job_ingest_stocks),
@@ -251,11 +265,19 @@ scheduler.add_job(lambda: _run_stock_job("score_stocks", job_score_stocks),
 scheduler.add_job(lambda: _run_stock_job("score_stocks_event", job_score_stocks_event_only),
                   CronTrigger(minute=20, hour="11,13", day_of_week="mon-fri"), id="score_stocks_event")
 
-# Crypto — every hour
+# Crypto — 6x/day (3 market-hours windows + 3 overnight) to balance signal volume with stocks
 scheduler.add_job(lambda: _run_job("ingest_crypto", job_ingest_crypto),
-                  IntervalTrigger(hours=1), id="ingest_crypto")
+                  CronTrigger(minute=0, hour="0,4,8,12,16,20"), id="ingest_crypto")
 scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
-                  CronTrigger(minute=20, hour="*"), id="score_crypto")
+                  CronTrigger(minute=20, hour="0,4,8,12,16,20"), id="score_crypto")
+
+# Crypto momentum screener — every 2 hours, catches pumps/breakouts outside watchlist
+scheduler.add_job(lambda: _run_job("crypto_momentum", job_crypto_momentum),
+                  CronTrigger(minute=45, hour="*/2"), id="crypto_momentum")
+
+# Options flow scoring — runs after flow ingestion, backtest-only until validated
+scheduler.add_job(lambda: _run_stock_job("score_options_flow", job_score_options_flow),
+                  CronTrigger(minute=30, hour="10,15", day_of_week="mon-fri"), id="score_options_flow")
 
 # Enrichment — weekdays, skip holidays
 scheduler.add_job(lambda: _run_stock_job("ingest_options_flow", job_ingest_options_flow),
@@ -269,18 +291,27 @@ scheduler.add_job(lambda: _run_stock_job("seed_macro_events", job_seed_macro_eve
 scheduler.add_job(lambda: _run_stock_job("enrich_fred", job_enrich_fred),
                   CronTrigger(hour=6, minute=45, day_of_week="mon-fri"), id="enrich_fred")
 
-# Congressional — daily at 8am ET (FMP Basic API)
+# Congressional — daily at 8am ET (Senate Stock Watcher → Finnhub → FMP)
 scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressional),
                   CronTrigger(hour=8, minute=0), id="ingest_congressional")
-# Insider trades (SEC Form 4) — daily at 8:15am ET (FMP)
+# Insider trades (SEC Form 4) — daily at 8:15am ET (EDGAR → Finnhub → FMP)
 scheduler.add_job(lambda: _run_job("ingest_insider_trades", job_ingest_insider_trades),
                   CronTrigger(hour=8, minute=15), id="ingest_insider_trades")
 
-# Newsletter — generate at 9:30am, send via Resend at 9:45am ET weekdays
+# Market news — ingest at 6:45am ET weekdays, before newsletter generation
+scheduler.add_job(lambda: _run_job("ingest_news", job_ingest_news),
+                  CronTrigger(hour=6, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_news")
+
+# Newsletter — generate at 7:00am, send via Resend at 7:15am ET weekdays, retry at 7:45am
 scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newsletter),
-                  CronTrigger(hour=9, minute=30, day_of_week="mon-fri", timezone="America/New_York"), id="generate_newsletter")
+                  CronTrigger(hour=7, minute=0, day_of_week="mon-fri", timezone="America/New_York"), id="generate_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter", job_send_newsletter),
-                  CronTrigger(hour=9, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
+                  CronTrigger(hour=7, minute=15, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
+scheduler.add_job(lambda: _run_job("send_newsletter_retry", job_send_newsletter),
+                  CronTrigger(hour=7, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter_retry")
+# Personalized Elite briefing — runs after main newsletter, one AI call per Elite user
+scheduler.add_job(lambda: _run_job("send_elite_briefings", job_send_elite_briefings),
+                  CronTrigger(hour=7, minute=20, day_of_week="mon-fri", timezone="America/New_York"), id="send_elite_briefings")
 scheduler.add_job(lambda: _run_job("send_welcome_sequence", job_send_welcome_sequence),
                   CronTrigger(hour=9, minute=0, timezone="America/New_York"), id="send_welcome_sequence")
 
@@ -517,6 +548,56 @@ def score_now_status():
     return jsonify(state)
 
 
+@app.route("/run-job/<job_name>", methods=["POST"])
+def run_job_manual(job_name: str):
+    """Manually trigger any registered job by name."""
+    import threading
+    import traceback
+
+    job_map = {
+        "ingest_congressional": job_ingest_congressional,
+        "ingest_insider_trades": job_ingest_insider_trades,
+        "resolve_outcomes": job_resolve_outcomes,
+        "refresh_asset_accuracy": job_refresh_asset_accuracy,
+        "ingest_news": job_ingest_news,
+        "ingest_stocks": job_ingest_stocks,
+        "ingest_crypto": job_ingest_crypto,
+        "ingest_prediction_markets": job_ingest_prediction_markets,
+        "ingest_options_flow": job_ingest_options_flow,
+        "score_stocks": job_score_stocks,
+        "score_crypto": job_score_crypto,
+        "score_prediction_markets": job_score_prediction_markets,
+        "score_options_flow": job_score_options_flow,
+        "crypto_momentum": job_crypto_momentum,
+        "generate_newsletter": job_generate_newsletter,
+        "send_newsletter": job_send_newsletter,
+    }
+
+    fn = job_map.get(job_name)
+    if not fn:
+        return jsonify({"error": f"Unknown job: {job_name}", "available": list(job_map.keys())}), 404
+
+    def _run():
+        try:
+            _job_state[f"manual_{job_name}"] = {"status": "running", "started": datetime.now(timezone.utc).isoformat()}
+            result = fn()
+            _job_state[f"manual_{job_name}"] = {"status": "ok", "result": str(result), "finished": datetime.now(timezone.utc).isoformat()}
+            logger.info("Manual {}: {}", job_name, result)
+        except Exception as e:
+            _job_state[f"manual_{job_name}"] = {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+            logger.error("Manual {} failed: {}", job_name, e)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return jsonify({"status": "started", "job": job_name, "check": f"/run-job/{job_name}/status"})
+
+
+@app.route("/run-job/<job_name>/status")
+def run_job_status(job_name: str):
+    state = _job_state.get(f"manual_{job_name}", {"status": "never_run"})
+    return jsonify(state)
+
+
 @app.route("/score-now/debug")
 def score_now_debug():
     """
@@ -530,8 +611,8 @@ def score_now_debug():
     key1 = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     key2 = os.environ.get("SUPABASE_SERVICE_ROLE_KEY_", "")
     env_diag["SUPABASE_URL"] = f"{url[:30]}..." if url else "NOT SET"
-    env_diag["SUPABASE_SERVICE_ROLE_KEY"] = f"{key1[:10]}...({len(key1)} chars)" if key1 else "NOT SET"
-    env_diag["SUPABASE_SERVICE_ROLE_KEY_"] = f"{key2[:10]}...({len(key2)} chars)" if key2 else "NOT SET"
+    env_diag["SUPABASE_SERVICE_ROLE_KEY"] = f"SET ({len(key1)} chars)" if key1 else "NOT SET"
+    env_diag["SUPABASE_SERVICE_ROLE_KEY_"] = f"SET ({len(key2)} chars)" if key2 else "NOT SET"
     env_diag["key_used"] = "SUPABASE_SERVICE_ROLE_KEY" if key1 else ("SUPABASE_SERVICE_ROLE_KEY_" if key2 else "NONE")
 
     # Test a direct Supabase insert
@@ -607,6 +688,43 @@ def resolve_now():
         "accuracy": accuracy_result,
         "signal_counts": diag,
     })
+
+@app.route("/send-newsletter-now", methods=["GET", "POST"])
+def send_newsletter_now():
+    """Manually trigger today's newsletter send. Optionally send to a single email."""
+    from flask import request as flask_request
+    body = flask_request.get_json(silent=True) or {}
+    single_email = body.get("email") or flask_request.args.get("email")
+
+    if single_email:
+        from briefing.newsletter_emailer import _get_todays_newsletter, _render_html, _render_text
+        import resend as _resend
+        _resend.api_key = os.environ.get("RESEND_API_KEY", "") or os.environ.get("RESEND_API_KEY_", "")
+
+        briefing = _get_todays_newsletter()
+        if not briefing:
+            return jsonify({"error": "No briefing found for today"}), 404
+
+        from datetime import date as _date
+        subject = briefing.get("headline", f"Plebs — {_date.today().strftime('%b %-d')}")
+        html_body = _render_html(briefing, "free", None)
+        text_body = _render_text(briefing)
+
+        try:
+            _resend.Emails.send({
+                "from": "Pleby from Plebs <daily@plebs.finance>",
+                "to": [single_email],
+                "subject": subject,
+                "html": html_body,
+                "text": text_body,
+            })
+            return jsonify({"status": "ok", "sent_to": single_email, "subject": subject})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    result = send_newsletter()
+    return jsonify({"status": "ok", "result": result})
+
 
 @app.route("/health")
 def health():
@@ -839,6 +957,158 @@ def claude_backtest_status():
     return jsonify(state)
 
 
+@app.route("/backfill-alpaca", methods=["GET", "POST"])
+def backfill_alpaca():
+    """
+    Backfill 60 days of daily bars from Alpaca for all watchlist tickers.
+    Writes to raw_prices. Idempotent (duplicates are fine, latest row wins).
+    """
+    from flask import request as flask_request
+    import threading
+
+    body = flask_request.get_json(silent=True) or {}
+    days = int(body.get("days", 60))
+    asset_type = body.get("asset_type", "both")
+
+    def _run():
+        from supabase_client import supabase
+        from ingestion.alpaca_client import fetch_stock_bars, fetch_crypto_bars, _is_configured
+        from ingestion.stocks import get_default_watchlist, _compute_indicators
+        from ingestion.crypto import PRIORITY_SYMBOLS, _compute_crypto_indicators
+
+        if not _is_configured():
+            _job_state["backfill_alpaca"] = {
+                "status": "error",
+                "error": "ALPACA_API_KEY or ALPACA_API_SECRET not set",
+            }
+            return
+
+        _job_state["backfill_alpaca"] = {
+            "status": "running",
+            "started": datetime.now(timezone.utc).isoformat(),
+        }
+
+        results = {"stocks": {"success": 0, "failed": 0, "errors": []}, "crypto": {"success": 0, "failed": 0, "errors": []}}
+
+        if asset_type in ("both", "stocks"):
+            tickers = get_default_watchlist()
+            for ticker in tickers:
+                try:
+                    df = fetch_stock_bars(ticker, days=days)
+                    if df is None or df.empty:
+                        results["stocks"]["failed"] += 1
+                        results["stocks"]["errors"].append(f"{ticker}: no data returned")
+                        continue
+                    indicators = _compute_indicators(df)
+                    supabase.table("raw_prices").insert({
+                        "asset_type": "stock",
+                        "identifier": ticker,
+                        "price": indicators["close"],
+                        "volume": indicators["volume"],
+                        "change_24h": indicators.get("change_1d_pct"),
+                        "metadata": {**indicators, "source": "alpaca_backfill"},
+                    }).execute()
+                    results["stocks"]["success"] += 1
+                except Exception as e:
+                    logger.warning("Backfill failed for {}: {}", ticker, e)
+                    results["stocks"]["failed"] += 1
+                    results["stocks"]["errors"].append(f"{ticker}: {e}")
+                import time
+                time.sleep(0.3)
+
+        if asset_type in ("both", "crypto"):
+            for symbol in PRIORITY_SYMBOLS:
+                try:
+                    df = fetch_crypto_bars(symbol, days=days)
+                    if df is None or df.empty:
+                        results["crypto"]["failed"] += 1
+                        results["crypto"]["errors"].append(f"{symbol}: no data returned")
+                        continue
+                    indicators = _compute_crypto_indicators(df)
+                    supabase.table("raw_prices").insert({
+                        "asset_type": "crypto",
+                        "identifier": symbol,
+                        "price": indicators["close"],
+                        "volume": indicators.get("volume_24h"),
+                        "change_24h": None,
+                        "metadata": {**indicators, "source": "alpaca_backfill"},
+                    }).execute()
+                    results["crypto"]["success"] += 1
+                except Exception as e:
+                    logger.warning("Backfill failed for {}: {}", symbol, e)
+                    results["crypto"]["failed"] += 1
+                    results["crypto"]["errors"].append(f"{symbol}: {e}")
+                import time
+                time.sleep(0.3)
+
+        # Keep only first 5 errors per category to avoid huge status responses
+        for cat in ("stocks", "crypto"):
+            results[cat]["errors"] = results[cat]["errors"][:5]
+
+        _job_state["backfill_alpaca"] = {
+            "status": "ok",
+            "finished": datetime.now(timezone.utc).isoformat(),
+            "results": results,
+        }
+        logger.info("Alpaca backfill complete: {}", results)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return jsonify({
+        "status": "started",
+        "days": days,
+        "asset_type": asset_type,
+        "check": "/backfill-alpaca/status",
+    })
+
+
+@app.route("/backfill-alpaca/status")
+def backfill_alpaca_status():
+    state = _job_state.get("backfill_alpaca", {"status": "never_run"})
+    return jsonify(state)
+
+
+@app.route("/alpaca-test")
+def alpaca_test():
+    """Quick diagnostic: test Alpaca API with a single stock + crypto call."""
+    import httpx
+    key = os.environ.get("ALPACA_API_KEY", "")
+    secret = os.environ.get("ALPACA_API_SECRET", "")
+    results = {
+        "key_set": bool(key),
+        "secret_set": bool(secret),
+        "key_prefix": key[:8] + "..." if len(key) > 8 else "(short)",
+    }
+    headers = {"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret}
+    try:
+        resp = httpx.get(
+            "https://data.alpaca.markets/v2/stocks/AAPL/bars",
+            params={"timeframe": "1Day", "limit": 1, "feed": "iex"},
+            headers=headers,
+            timeout=10,
+        )
+        results["stock_test"] = {
+            "status": resp.status_code,
+            "body": resp.text[:300] if resp.status_code != 200 else f"{len(resp.json().get('bars', []))} bars",
+        }
+    except Exception as e:
+        results["stock_test"] = {"error": str(e)}
+    try:
+        resp = httpx.get(
+            "https://data.alpaca.markets/v1beta3/crypto/us/bars",
+            params={"symbols": "BTC/USD", "timeframe": "1Day", "limit": 1},
+            headers=headers,
+            timeout=10,
+        )
+        results["crypto_test"] = {
+            "status": resp.status_code,
+            "body": resp.text[:300] if resp.status_code != 200 else f"{len(resp.json().get('bars', {}).get('BTC/USD', []))} bars",
+        }
+    except Exception as e:
+        results["crypto_test"] = {"error": str(e)}
+    return jsonify(results)
+
+
 @app.route("/scanner")
 def scanner_endpoint():
     """
@@ -885,12 +1155,130 @@ def backtest_data_diagnostic():
                         "traceback": traceback.format_exc()}), 500
 
 
+@app.route("/pipeline-check")
+def pipeline_check():
+    """
+    One-stop diagnostic: checks every data pipeline for recent data,
+    reports what's working, what's empty, and why.
+    """
+    from supabase_client import supabase
+    from datetime import date as _date, timedelta as _td
+
+    checks = {}
+    cutoff_7d = (datetime.now(timezone.utc) - _td(days=7)).isoformat()
+    cutoff_30d = (datetime.now(timezone.utc) - _td(days=30)).isoformat()
+
+    def _count(table, since=None, extra_filters=None, date_column="created_at"):
+        try:
+            q = supabase.table(table).select("id", count="exact")
+            if since:
+                q = q.gte(date_column, since)
+            if extra_filters:
+                for k, v in extra_filters.items():
+                    q = q.eq(k, v)
+            return q.execute().count or 0
+        except Exception as e:
+            return f"error: {e}"
+
+    def _count_date(table, date_col="trade_date", since=None):
+        try:
+            q = supabase.table(table).select("id", count="exact")
+            if since:
+                q = q.gte(date_col, since)
+            return q.execute().count or 0
+        except Exception as e:
+            return f"error: {e}"
+
+    checks["signals"] = {
+        "total": _count("signals"),
+        "last_7d": _count("signals", since=cutoff_7d),
+        "stocks_7d": _count("signals", since=cutoff_7d, extra_filters={"asset_type": "stock"}),
+        "crypto_7d": _count("signals", since=cutoff_7d, extra_filters={"asset_type": "crypto"}),
+    }
+
+    try:
+        since_cutoff = "2026-06-22"
+        q = supabase.table("signals").select("outcome, confidence", count="exact").gte("created_at", since_cutoff).execute()
+        rows = q.data or []
+        wins = sum(1 for r in rows if r.get("outcome") == "win")
+        losses = sum(1 for r in rows if r.get("outcome") == "loss")
+        pending = sum(1 for r in rows if r.get("outcome") in (None, "PENDING", "pending"))
+        total = len(rows)
+        decisive = wins + losses
+
+        by_bracket = {}
+        for bracket_name, lo, hi in [("50-59", 50, 59), ("60-69", 60, 69), ("70-79", 70, 79), ("80-89", 80, 89), ("90-100", 90, 100)]:
+            b_rows = [r for r in rows if lo <= (r.get("confidence") or 0) <= hi]
+            b_wins = sum(1 for r in b_rows if r.get("outcome") == "win")
+            b_losses = sum(1 for r in b_rows if r.get("outcome") == "loss")
+            b_dec = b_wins + b_losses
+            by_bracket[bracket_name] = {
+                "total": len(b_rows),
+                "wins": b_wins,
+                "losses": b_losses,
+                "pending": len(b_rows) - b_wins - b_losses,
+                "win_rate": round(b_wins / b_dec * 100, 1) if b_dec else None,
+            }
+
+        checks["performance_since_june22"] = {
+            "total": total,
+            "wins": wins,
+            "losses": losses,
+            "pending": pending,
+            "decisive": decisive,
+            "win_rate": round(wins / decisive * 100, 1) if decisive else None,
+            "by_confidence_bracket": by_bracket,
+        }
+    except Exception as e:
+        checks["performance_since_june22"] = f"error: {e}"
+
+    checks["congressional_trades"] = {
+        "total": _count_date("congressional_trades"),
+        "last_30d": _count_date("congressional_trades", since=(datetime.now(timezone.utc) - _td(days=30)).strftime("%Y-%m-%d")),
+    }
+
+    checks["insider_trades"] = {
+        "total": _count_date("insider_trades"),
+        "last_30d": _count_date("insider_trades", since=(datetime.now(timezone.utc) - _td(days=30)).strftime("%Y-%m-%d")),
+    }
+
+    checks["prediction_markets"] = {
+        "total_raw_prices": _count("raw_prices", extra_filters={"asset_type": "prediction"}, date_column="captured_at"),
+        "last_7d": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "prediction"}, date_column="captured_at"),
+        "scoring_enabled": True,
+        "note": "Ingestion every 30min, scoring every 2h.",
+    }
+
+    checks["raw_prices_7d"] = {
+        "stocks": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "stock"}, date_column="captured_at"),
+        "crypto": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "crypto"}, date_column="captured_at"),
+    }
+
+    checks["news_items_7d"] = _count("news_items", since=cutoff_7d)
+
+    checks["env_keys"] = {
+        "FMP_API_KEY": "set" if os.environ.get("FMP_API_KEY") else "MISSING",
+        "ANTHROPIC_API_KEY": "set" if os.environ.get("ANTHROPIC_API_KEY") else "MISSING",
+        "ALPACA_API_KEY": "set" if os.environ.get("ALPACA_API_KEY") else "MISSING",
+        "ALPACA_API_SECRET": "set" if os.environ.get("ALPACA_API_SECRET") else "MISSING",
+        "ENABLE_SCHEDULER": os.environ.get("ENABLE_SCHEDULER", "false"),
+    }
+
+    checks["scheduler_running"] = scheduler.running
+
+    return jsonify(checks)
+
+
 # ─── Entry point ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     logger.info("Starting Plebs data service")
     if os.environ.get("ENABLE_SCHEDULER", "false").lower() == "true":
         scheduler.start()
         logger.info("Scheduler started with {} jobs", len(scheduler.get_jobs()))
+
+        if os.environ.get("ALPACA_API_KEY"):
+            from streaming.alpaca_ws import start_streaming
+            start_streaming()
     else:
         logger.info("Scheduler DISABLED (set ENABLE_SCHEDULER=true to activate). Endpoints still available.")
     port = int(os.environ.get("PORT", 8080))

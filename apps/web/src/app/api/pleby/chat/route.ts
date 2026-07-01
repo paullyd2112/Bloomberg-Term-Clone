@@ -10,21 +10,32 @@ export const maxDuration = 60;
 
 const MAX_ITERATIONS = 6;
 
-// Per-user daily cap — 50 messages/24 h (in-memory, resets on deploy)
-const _rl = new Map<string, { count: number; resetAt: number }>();
-const DAILY_LIMIT = 100;
+// Per-user daily cap — 30 messages/24 h, persisted to Supabase
+const DAILY_LIMIT = 30;
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
-function isRateLimited(userId: string): boolean {
-  const now = Date.now();
-  const entry = _rl.get(userId);
-  if (!entry || now > entry.resetAt) {
-    _rl.set(userId, { count: 1, resetAt: now + WINDOW_MS });
-    return false;
-  }
-  if (entry.count >= DAILY_LIMIT) return true;
-  entry.count++;
-  return false;
+async function isRateLimited(userId: string): Promise<boolean> {
+  const supabase = createClient();
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - WINDOW_MS).toISOString();
+
+  // Get all conversation IDs for this user, then count user messages in the last 24h
+  const { data: convos } = await supabase
+    .from("pleby_conversations")
+    .select("id")
+    .eq("user_id", userId);
+
+  if (!convos || convos.length === 0) return false;
+
+  const convoIds = convos.map((c) => c.id);
+  const { count } = await supabase
+    .from("pleby_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "user")
+    .in("conversation_id", convoIds)
+    .gte("created_at", windowStart);
+
+  return (count ?? 0) >= DAILY_LIMIT;
 }
 
 function sse(event: string, data: unknown): string {
@@ -40,7 +51,7 @@ export async function POST(req: Request) {
     return new Response("Elite tier required", { status: 403 });
   }
 
-  if (isRateLimited(user.id)) {
+  if (await isRateLimited(user.id)) {
     return new Response(
       JSON.stringify({ error: "Daily message limit reached. Resets in 24 hours." }),
       { status: 429, headers: { "Content-Type": "application/json" } },

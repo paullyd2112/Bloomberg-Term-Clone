@@ -16,7 +16,7 @@ export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
     "Unlimited watchlist",
     "Unusual options flow",
     "Congressional trade tracker",
-    "Morning briefing email (8:45am ET)",
+    "Morning briefing email (7am ET)",
     "Portfolio tracker + P&L",
     "Performance analytics + equity curve",
     "Email alerts when signals fire",
@@ -25,17 +25,14 @@ export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
   elite: [
     "Everything in Pro",
     "On-demand AI analysis — score any ticker instantly",
-    "Prediction market signals — coming soon (Kalshi + Polymarket)",
     "Pleby — AI trading analyst chat",
     "Ask Pleby about any asset anytime",
     "Personalised morning briefing",
-    "Priority signal delivery",
   ],
 };
 
-export function canAccessFeature(tier: Tier, feature: "pleby" | "portfolio" | "alerts" | "real_time" | "prediction_markets" | "on_demand_scoring" | "screener" | "performance"): boolean {
+export function canAccessFeature(tier: Tier, feature: "pleby" | "portfolio" | "alerts" | "real_time" | "on_demand_scoring" | "screener" | "performance"): boolean {
   if (feature === "pleby")               return tier === "elite";
-  if (feature === "prediction_markets")  return tier === "elite";
   if (feature === "on_demand_scoring")   return tier === "elite";
   if (feature === "portfolio")           return tier === "pro" || tier === "elite";
   if (feature === "alerts")              return tier === "pro" || tier === "elite";

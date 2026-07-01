@@ -18,12 +18,14 @@ from supabase_client import supabase
 from prompts import stocks as stocks_prompt
 from prompts import crypto as crypto_prompt
 from prompts import prediction_markets as pred_prompt
+from prompts import options_flow as options_prompt
 
 load_dotenv()
 
 MODEL              = "claude-sonnet-4-6"
 SIGNAL_COOLDOWN_H  = 4      # skip if signal generated within this many hours
 MAX_TOKENS         = 1024
+ENGINE_CUTOFF      = "2026-06-22T00:00:00Z"  # signals before this date are unreliable
 
 _anthropic = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 client     = instructor.from_anthropic(_anthropic)
@@ -59,6 +61,15 @@ class PredictionSignal(BaseModel):
     news_context:     list[str] = Field(default_factory=list, max_length=3)
 
 
+class OptionsFlowSignal(BaseModel):
+    direction:    Literal["BUY", "SELL", "HOLD"]
+    confidence:   int    = Field(..., ge=0, le=100)
+    reasoning:    str    = Field(..., min_length=20)
+    time_horizon: Literal["intraday", "swing", "longterm"]
+    key_risk:     str
+    news_context: list[str] = Field(default_factory=list, max_length=3)
+
+
 # ─── Supabase helpers ─────────────────────────────────────────────────────────
 
 def _get_latest_price(asset_type: str, identifier: str) -> dict | None:
@@ -80,8 +91,7 @@ def _get_latest_price(asset_type: str, identifier: str) -> dict | None:
 
 def _get_recent_news(asset_type: str, identifier: str, limit: int = 3) -> list[str]:
     try:
-        # For crypto, also pull general crypto news
-        query = supabase.table("news_items").select("headline")
+        query = supabase.table("news_items").select("headline, url")
         if asset_type == "crypto":
             query = query.in_("identifier", [identifier, "CRYPTO_GENERAL"])
         else:
@@ -95,6 +105,30 @@ def _get_recent_news(asset_type: str, identifier: str, limit: int = 3) -> list[s
             .execute()
         )
         return [r["headline"] for r in result.data if r.get("headline")]
+    except Exception as e:
+        logger.warning("news fetch failed for {}/{}: {}", asset_type, identifier, e)
+        return []
+
+
+def _get_recent_news_with_urls(asset_type: str, identifier: str, limit: int = 3) -> list[dict]:
+    try:
+        query = supabase.table("news_items").select("headline, url")
+        if asset_type == "crypto":
+            query = query.in_("identifier", [identifier, "CRYPTO_GENERAL"])
+        else:
+            query = query.eq("identifier", identifier)
+
+        result = (
+            query
+            .eq("asset_type", asset_type)
+            .order("published_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return [
+            {"headline": r["headline"], "url": r.get("url") or ""}
+            for r in result.data if r.get("headline")
+        ]
     except Exception as e:
         logger.warning("news fetch failed for {}/{}: {}", asset_type, identifier, e)
         return []
@@ -293,18 +327,96 @@ def _get_upcoming_macro(days: int = 2) -> list[str]:
     return lines
 
 
+# ─── Accuracy penalty ────────────────────────────────────────────────────────
+
+def _get_asset_accuracy(identifier: str, asset_type: str) -> dict | None:
+    """Query resolved signals (WIN/LOSS only) for an asset since ENGINE_CUTOFF.
+
+    Returns {"wins": N, "losses": N, "total": N, "win_rate": float} if
+    there are 3+ resolved signals, otherwise None (not enough data).
+    """
+    try:
+        result = (
+            supabase.table("signals")
+            .select("outcome")
+            .eq("identifier", identifier)
+            .eq("asset_type", asset_type)
+            .in_("outcome", ["WIN", "LOSS"])
+            .gte("created_at", ENGINE_CUTOFF)
+            .execute()
+        )
+        rows = result.data or []
+    except Exception as e:
+        logger.warning("accuracy lookup failed for {}/{}: {}", asset_type, identifier, e)
+        return None
+
+    if len(rows) < 3:
+        return None
+
+    wins   = sum(1 for r in rows if r["outcome"] == "WIN")
+    losses = sum(1 for r in rows if r["outcome"] == "LOSS")
+    total  = wins + losses
+    win_rate = round(wins / total * 100, 1) if total > 0 else 0.0
+
+    return {"wins": wins, "losses": losses, "total": total, "win_rate": win_rate}
+
+
+def _apply_accuracy_penalty(confidence: int, accuracy: dict | None) -> int:
+    """Cap confidence when an asset has a poor historical win rate.
+
+    Rules:
+    - 3+ resolved signals AND win_rate < 15% → cap at 55
+    - 3+ resolved signals AND win_rate < 30% → cap at 60
+    - Fewer than 3 resolved signals → no penalty
+    """
+    if accuracy is None:
+        return confidence
+
+    win_rate = accuracy["win_rate"]
+
+    if win_rate < 15:
+        cap = 55
+    elif win_rate < 30:
+        cap = 60
+    else:
+        return confidence
+
+    if confidence > cap:
+        logger.warning(
+            "Accuracy penalty: confidence {} → {} (win_rate={:.1f}%, {}/{} wins, {} resolved signals)",
+            confidence, cap, win_rate, accuracy["wins"], accuracy["total"], accuracy["total"],
+        )
+        return cap
+
+    return confidence
+
+
 # ─── Signal writer ────────────────────────────────────────────────────────────
 
-def _write_signal(asset_type: str, identifier: str, price: float | None, signal) -> dict:
+def _write_signal(asset_type: str, identifier: str, price: float | None, signal, news_with_urls: list[dict] | None = None) -> dict:
+    accuracy = _get_asset_accuracy(identifier, asset_type)
+    adjusted_confidence = _apply_accuracy_penalty(signal.confidence, accuracy)
+
+    url_lookup = {}
+    if news_with_urls:
+        for item in news_with_urls:
+            url_lookup[item["headline"].lower().strip()] = item.get("url", "")
+
+    news_urls = []
+    for headline in (signal.news_context or []):
+        matched_url = url_lookup.get(headline.lower().strip(), "")
+        news_urls.append(matched_url)
+
     base = {
         "asset_type":      asset_type,
         "identifier":      identifier,
         "direction":       signal.direction,
-        "confidence":      signal.confidence,
+        "confidence":      adjusted_confidence,
         "reasoning":       signal.reasoning,
         "time_horizon":    signal.time_horizon,
         "price_at_signal": price,
         "news_context":    signal.news_context,
+        "news_urls":       news_urls,
         "is_backtest":     False,
         "outcome":         "PENDING",
     }
@@ -314,12 +426,14 @@ def _write_signal(asset_type: str, identifier: str, price: float | None, signal)
 
 # ─── Core scoring function ────────────────────────────────────────────────────
 
-def score_asset(asset_type: str, identifier: str) -> dict | None:
+def score_asset(asset_type: str, identifier: str, model_override: str | None = None) -> dict | None:
     """
     Build context from Supabase, call Claude via Instructor,
     write validated signal. Returns signal dict or None if skipped.
     """
     # Skip if scored recently
+    use_model = model_override or MODEL
+
     if _signal_exists_recently(asset_type, identifier):
         logger.debug("{}/{}: skipping — scored within {}h", asset_type, identifier, SIGNAL_COOLDOWN_H)
         return None
@@ -332,6 +446,7 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
     meta          = price_row.get("metadata") or {}
     current_price = price_row.get("price")
     news          = _get_recent_news(asset_type, identifier)
+    news_with_urls = _get_recent_news_with_urls(asset_type, identifier)
 
     # Without a valid price there is nothing meaningful to score
     if current_price is None:
@@ -360,7 +475,7 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
                 "upcoming_macro":       macro_events,
             }
             signal: StockSignal = client.chat.completions.create(
-                model=MODEL,
+                model=use_model,
                 max_tokens=MAX_TOKENS,
                 system=[{"type": "text", "text": stocks_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": stocks_prompt.build_user_prompt(context)}],
@@ -380,7 +495,7 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
                 "upcoming_macro":      macro_events,
             }
             signal: CryptoSignal = client.chat.completions.create(
-                model=MODEL,
+                model=use_model,
                 max_tokens=MAX_TOKENS,
                 system=[{"type": "text", "text": crypto_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": crypto_prompt.build_user_prompt(context)}],
@@ -398,7 +513,7 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
                 "news_headlines": news,
             }
             signal: PredictionSignal = client.chat.completions.create(
-                model=MODEL,
+                model=use_model,
                 max_tokens=MAX_TOKENS,
                 system=[{"type": "text", "text": pred_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": pred_prompt.build_user_prompt(context)}],
@@ -448,15 +563,28 @@ def score_asset(asset_type: str, identifier: str) -> dict | None:
         except (TypeError, ValueError):
             pass
 
+    # Skip HOLD signals entirely — users want actionable BUY/SELL only
+    if signal.direction == "HOLD":
+        logger.debug("{}/{}: skipping HOLD signal ({}%)", asset_type, identifier, signal.confidence)
+        return None
+
     # Write to Supabase
     try:
-        record = _write_signal(asset_type, identifier, current_price, signal)
+        record = _write_signal(asset_type, identifier, current_price, signal, news_with_urls)
         logger.info(
             "{}/{}: {} {}% confidence — {}",
             asset_type, identifier,
             signal.direction, signal.confidence,
             signal.reasoning[:80],
         )
+
+        # Fire email alert for high-confidence BUY/SELL signals
+        try:
+            from briefing.signal_alerts import notify_high_confidence_signal
+            notify_high_confidence_signal(record)
+        except Exception as e:
+            logger.debug("signal_alerts dispatch failed: {}", e)
+
         return record
     except Exception as e:
         logger.error("{}/{}: signal write failed — {}", asset_type, identifier, e)
@@ -716,3 +844,177 @@ def score_prediction_markets() -> str:
 
     return (f"{success} scored, {skipped} skipped, {failed} failed — "
             f"{haiku_calls} Haiku, {sonnet_calls} Sonnet")
+
+
+# ─── Options flow scoring ───────────────────────────────────────────────────
+
+OPTIONS_FLOW_COOLDOWN_H = 6
+MIN_UNUSUAL_CONTRACTS   = 3
+MIN_TOTAL_PREMIUM       = 200_000
+
+
+def _get_unusual_flow_grouped() -> dict[str, list[dict]]:
+    """Fetch recent unusual options flow, grouped by ticker."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+    try:
+        result = (
+            supabase.table("options_flow")
+            .select("ticker, contract_type, strike, expiry, volume, open_interest, "
+                    "volume_oi_ratio, premium_usd, captured_at")
+            .eq("is_unusual", True)
+            .gte("captured_at", cutoff)
+            .order("premium_usd", desc=True)
+            .limit(200)
+            .execute()
+        )
+        rows = result.data or []
+    except Exception as e:
+        logger.error("options scoring: flow fetch failed — {}", e)
+        return {}
+
+    grouped: dict[str, list[dict]] = {}
+    for r in rows:
+        grouped.setdefault(r["ticker"], []).append(r)
+    return grouped
+
+
+def _build_flow_aggregate(flows: list[dict]) -> dict:
+    calls = [f for f in flows if f.get("contract_type") == "call"]
+    puts  = [f for f in flows if f.get("contract_type") == "put"]
+    total_premium = sum(f.get("premium_usd") or 0 for f in flows)
+
+    largest = max(flows, key=lambda f: f.get("premium_usd") or 0) if flows else {}
+
+    return {
+        "total_unusual":    len(flows),
+        "unusual_calls":    len(calls),
+        "unusual_puts":     len(puts),
+        "put_call_ratio":   round(len(puts) / len(calls), 2) if calls else None,
+        "total_premium":    total_premium,
+        "largest_direction": largest.get("contract_type"),
+        "largest_premium":   largest.get("premium_usd") or 0,
+    }
+
+
+def _options_signal_exists_recently(ticker: str) -> bool:
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=OPTIONS_FLOW_COOLDOWN_H)).isoformat()
+    try:
+        result = (
+            supabase.table("signals")
+            .select("id")
+            .eq("asset_type", "stock")
+            .eq("identifier", ticker)
+            .eq("is_backtest", False)
+            .gte("created_at", cutoff)
+            .limit(1)
+            .execute()
+        )
+        return bool(result.data)
+    except Exception:
+        return False
+
+
+def _write_options_signal(ticker: str, price: float | None, signal: OptionsFlowSignal) -> dict:
+    accuracy = _get_asset_accuracy(ticker, "stock")
+    adjusted_confidence = _apply_accuracy_penalty(signal.confidence, accuracy)
+
+    record = {
+        "asset_type":      "stock",
+        "identifier":      ticker,
+        "direction":       signal.direction,
+        "confidence":      adjusted_confidence,
+        "reasoning":       f"[Options flow] {signal.reasoning}",
+        "time_horizon":    signal.time_horizon,
+        "price_at_signal": price,
+        "news_context":    signal.news_context,
+        "is_backtest":     False,
+        "outcome":         "PENDING",
+    }
+    result = supabase.table("signals").insert(record).execute()
+    return result.data[0] if result.data else record
+
+
+def score_options_flow() -> str:
+    """Score unusual options flow — generates directional signals on underlying stocks."""
+    from scoring.haiku_prescreen import prescreen_options_flow, should_escalate_to_sonnet
+
+    grouped = _get_unusual_flow_grouped()
+    if not grouped:
+        return "no unusual flow found"
+
+    benchmarks = _get_market_benchmark()
+    haiku_calls, sonnet_calls = 0, 0
+    success, skipped, failed = 0, 0, 0
+
+    for ticker, flows in grouped.items():
+        agg = _build_flow_aggregate(flows)
+
+        if agg["total_unusual"] < MIN_UNUSUAL_CONTRACTS:
+            skipped += 1
+            continue
+        if agg["total_premium"] < MIN_TOTAL_PREMIUM:
+            skipped += 1
+            continue
+
+        if _options_signal_exists_recently(ticker):
+            skipped += 1
+            continue
+
+        quick = prescreen_options_flow(ticker, agg)
+        haiku_calls += 1
+
+        if not should_escalate_to_sonnet(quick):
+            skipped += 1
+            continue
+
+        price_row = _get_latest_price("stock", ticker)
+        current_price = float(price_row["price"]) if price_row and price_row.get("price") else None
+        change_24h = price_row.get("change_24h") if price_row else None
+        news = _get_recent_news("stock", ticker)
+
+        context = {
+            "ticker":            ticker,
+            "current_price":     current_price,
+            "change_24h":        change_24h,
+            "flow":              flows[:15],
+            "aggregate":         agg,
+            "news_headlines":    news,
+            "market_benchmarks": benchmarks,
+        }
+
+        try:
+            signal: OptionsFlowSignal = client.chat.completions.create(
+                model=MODEL,
+                max_tokens=MAX_TOKENS,
+                system=[{"type": "text", "text": options_prompt.SYSTEM_PROMPT,
+                         "cache_control": {"type": "ephemeral"}}],
+                messages=[{"role": "user", "content": options_prompt.build_user_prompt(context)}],
+                response_model=OptionsFlowSignal,
+            )
+            sonnet_calls += 1
+        except Exception as e:
+            logger.error("options scoring: Claude call failed for {} — {}", ticker, e)
+            sentry_sdk.capture_exception(e)
+            failed += 1
+            continue
+
+        if signal.direction == "HOLD":
+            skipped += 1
+            continue
+
+        try:
+            _write_options_signal(ticker, current_price, signal)
+            logger.info(
+                "options_flow/{}: {} {}% — {}",
+                ticker, signal.direction, signal.confidence,
+                signal.reasoning[:80],
+            )
+            success += 1
+        except Exception as e:
+            logger.error("options scoring: write failed for {} — {}", ticker, e)
+            sentry_sdk.capture_exception(e)
+            failed += 1
+
+    return (f"{success} scored, {skipped} skipped, {failed} failed — "
+            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet, "
+            f"{len(grouped)} tickers with unusual flow")
