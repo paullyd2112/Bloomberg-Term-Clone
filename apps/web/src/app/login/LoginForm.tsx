@@ -3,9 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 type LoginMode = "password" | "magic-link";
+
+const CARD = "bg-white/[0.02] border border-white/[0.06] ring-hairline rounded-2xl p-6";
+const INPUT =
+  "w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 focus:bg-white/[0.05] transition-colors";
+const PRIMARY_BTN =
+  "w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold rounded-lg px-4 py-2.5 text-sm transition-colors";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -83,16 +90,18 @@ export default function LoginForm() {
 
   if (magicLinkSent) {
     return (
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 text-center space-y-4">
-        <div className="text-4xl">&#x2709;&#xFE0F;</div>
+      <div className={`${CARD} text-center space-y-4`}>
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
+          <Mail className="h-5 w-5" />
+        </div>
         <h2 className="text-white font-semibold">Check your email for a sign-in link</h2>
-        <p className="text-zinc-400 text-sm">
+        <p className="text-secondary-foreground text-sm leading-relaxed">
           We sent a magic link to <span className="text-white">{email}</span>.
           Click it to sign in — no password needed.
         </p>
         <button
           onClick={() => setMagicLinkSent(false)}
-          className="text-green-400 text-sm hover:text-green-300"
+          className="text-emerald-400 text-sm hover:text-emerald-300 transition-colors"
         >
           Back to sign in
         </button>
@@ -101,36 +110,36 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-4">
+    <div className={`${CARD} space-y-4`}>
       {error && (
-        <div className="text-sm text-red-400 bg-red-950/40 border border-red-800 rounded px-3 py-2">
+        <div className="text-sm text-red-400 bg-red-950/40 border border-red-800/60 rounded-lg px-3 py-2">
           {error}
         </div>
       )}
 
       <button
         onClick={handleGoogleLogin}
-        className="w-full flex items-center justify-center gap-2 bg-white text-black font-medium rounded px-4 py-2.5 text-sm hover:bg-zinc-100 transition-colors"
+        className="w-full flex items-center justify-center gap-2 bg-white text-black font-medium rounded-lg px-4 py-2.5 text-sm hover:bg-zinc-100 transition-colors"
       >
         <GoogleIcon />
         Continue with Google
       </button>
 
       <div className="flex items-center gap-3">
-        <div className="flex-1 h-px bg-zinc-800" />
-        <span className="text-xs text-zinc-500">or</span>
-        <div className="flex-1 h-px bg-zinc-800" />
+        <div className="flex-1 h-px bg-white/[0.08]" />
+        <span className="text-xs text-muted-foreground">or</span>
+        <div className="flex-1 h-px bg-white/[0.08]" />
       </div>
 
       {/* Mode toggle tabs */}
-      <div className="flex rounded bg-zinc-800 p-0.5">
+      <div className="flex rounded-lg bg-white/[0.04] p-0.5">
         <button
           type="button"
           onClick={() => switchMode("password")}
-          className={`flex-1 text-xs font-medium py-1.5 rounded transition-colors ${
+          className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
             mode === "password"
-              ? "bg-zinc-700 text-white"
-              : "text-zinc-400 hover:text-zinc-300"
+              ? "bg-white/[0.08] text-white"
+              : "text-secondary-foreground hover:text-white"
           }`}
         >
           Password
@@ -138,10 +147,10 @@ export default function LoginForm() {
         <button
           type="button"
           onClick={() => switchMode("magic-link")}
-          className={`flex-1 text-xs font-medium py-1.5 rounded transition-colors ${
+          className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
             mode === "magic-link"
-              ? "bg-zinc-700 text-white"
-              : "text-zinc-400 hover:text-zinc-300"
+              ? "bg-white/[0.08] text-white"
+              : "text-secondary-foreground hover:text-white"
           }`}
         >
           Magic link
@@ -151,7 +160,7 @@ export default function LoginForm() {
       {mode === "password" ? (
         <form onSubmit={handleEmailLogin} className="space-y-3">
           <div>
-            <label className="block text-xs text-zinc-400 mb-1" htmlFor="email">
+            <label className="block text-xs text-secondary-foreground mb-1.5" htmlFor="email">
               Email
             </label>
             <input
@@ -161,13 +170,13 @@ export default function LoginForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors"
+              className={INPUT}
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label className="block text-xs text-zinc-400 mb-1" htmlFor="password">
+            <label className="block text-xs text-secondary-foreground mb-1.5" htmlFor="password">
               Password
             </label>
             <input
@@ -177,23 +186,19 @@ export default function LoginForm() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors"
+              className={INPUT}
               placeholder="••••••••"
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold rounded px-4 py-2.5 text-sm transition-colors"
-          >
+          <button type="submit" disabled={loading} className={PRIMARY_BTN}>
             {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
       ) : (
         <form onSubmit={handleMagicLinkLogin} className="space-y-3">
           <div>
-            <label className="block text-xs text-zinc-400 mb-1" htmlFor="magic-email">
+            <label className="block text-xs text-secondary-foreground mb-1.5" htmlFor="magic-email">
               Email
             </label>
             <input
@@ -203,28 +208,27 @@ export default function LoginForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition-colors"
+              className={INPUT}
               placeholder="you@example.com"
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold rounded px-4 py-2.5 text-sm transition-colors"
-          >
+          <button type="submit" disabled={loading} className={PRIMARY_BTN}>
             {loading ? "Sending link…" : "Send magic link"}
           </button>
 
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             We&apos;ll email you a link that signs you in instantly — no password required.
           </p>
         </form>
       )}
 
-      <p className="text-center text-xs text-zinc-500">
+      <p className="text-center text-xs text-muted-foreground">
         No account?{" "}
-        <Link href={`/signup?next=${encodeURIComponent(next)}`} className="text-green-400 hover:text-green-300">
+        <Link
+          href={`/signup?next=${encodeURIComponent(next)}`}
+          className="text-emerald-400 hover:text-emerald-300 transition-colors"
+        >
           Start free trial
         </Link>
       </p>
@@ -234,7 +238,7 @@ export default function LoginForm() {
 
 function GoogleIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24">
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
       <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
       <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
