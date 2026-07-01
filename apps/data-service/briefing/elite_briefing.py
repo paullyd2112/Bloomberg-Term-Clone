@@ -159,6 +159,17 @@ def _md_to_html(text: str) -> str:
     return safe.replace("\n\n", "</p><p style='color:#d4d4d8;font-size:15px;line-height:1.7;margin:0 0 16px;'>")
 
 
+MONO = "'SF Mono','Menlo','Consolas',monospace"
+
+
+def _confidence_bar_color(confidence: int) -> str:
+    if confidence >= 75:
+        return "#22c55e"
+    if confidence >= 50:
+        return "#f59e0b"
+    return "#71717a"
+
+
 def _signal_row_html(s: dict) -> str:
     direction  = html.escape(s.get("direction", ""))
     identifier = html.escape(s.get("identifier", ""))
@@ -166,16 +177,20 @@ def _signal_row_html(s: dict) -> str:
     confidence = s.get("confidence", 0)
     horizon    = html.escape(s.get("time_horizon", ""))
     dir_color  = "#22c55e" if direction in ("BUY", "YES") else "#ef4444"
+    bar_color  = _confidence_bar_color(confidence)
     asset_url  = f"{APP_URL}/dashboard/asset/{asset_type}/{identifier}"
 
     return f"""
     <tr>
-      <td style="padding:8px 12px;border-bottom:1px solid #27272a;">
-        <a href="{asset_url}" style="font-family:monospace;font-weight:700;color:#fff;text-decoration:none;">{identifier}</a>
+      <td style="padding:9px 12px;border-bottom:1px solid #27272a;">
+        <a href="{asset_url}" style="font-family:{MONO};font-weight:700;color:#fff;text-decoration:none;">{identifier}</a>
         &nbsp;
         <span style="background:{dir_color}22;color:{dir_color};border:1px solid {dir_color}55;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">{direction}</span>
       </td>
-      <td style="padding:8px 12px;border-bottom:1px solid #27272a;color:#71717a;font-size:12px;">{confidence}% · {horizon}</td>
+      <td style="padding:9px 12px;border-bottom:1px solid #27272a;text-align:right;">
+        <span style="font-family:{MONO};font-weight:700;color:{bar_color};font-size:13px;">{confidence}%</span>
+        <span style="color:#52525b;font-size:11px;text-transform:uppercase;">&nbsp;{horizon}</span>
+      </td>
     </tr>"""
 
 
@@ -195,11 +210,18 @@ def _render_email(summary_html: str, signals: list[dict], watchlist: list[dict])
 
     email_html = f"""<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="max-width:600px;margin:0 auto;padding:32px 20px;">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+</head>
+<body style="margin:0;padding:0;background-color:#09090b;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#09090b;">
+<tr><td align="center">
+  <div style="max-width:600px;margin:0 auto;padding:32px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:left;">
     <div style="margin-bottom:20px;">
-      <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;">
+      <div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.01em;">
         plebs<span style="color:#22c55e;">.finance</span>
       </div>
       <div style="font-size:11px;color:#52525b;margin-top:2px;">{today} · Your personalized briefing</div>
@@ -225,6 +247,8 @@ def _render_email(summary_html: str, signals: list[dict], watchlist: list[dict])
       <a href="{APP_URL}/unsubscribe" style="color:#52525b;">Unsubscribe</a>
     </div>
   </div>
+</td></tr>
+</table>
 </body>
 </html>"""
 

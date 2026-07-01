@@ -94,6 +94,28 @@ def _horizon_label(horizon: str) -> str:
     }.get(horizon, horizon or "—")
 
 
+MONO = "'SF Mono','Menlo','Consolas',monospace"
+
+
+def _confidence_bar_color(confidence: int) -> str:
+    if confidence >= 75:
+        return "#22c55e"
+    if confidence >= 50:
+        return "#f59e0b"
+    return "#71717a"
+
+
+def _chunk_reasoning(reasoning: str) -> str:
+    """Split reasoning into short lines instead of one dense paragraph —
+    makes the technical setup scannable instead of read-as-prose."""
+    import re
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", reasoning.strip()) if s.strip()]
+    return "".join(
+        f'<p style="color:#d4d4d8;font-size:15px;line-height:1.65;margin:0 0 10px;">{s}</p>'
+        for s in sentences
+    )
+
+
 def _render_email(signal: dict) -> tuple[str, str, str]:
     direction = signal["direction"]
     identifier = signal["identifier"]
@@ -105,6 +127,7 @@ def _render_email(signal: dict) -> tuple[str, str, str]:
 
     emoji = _direction_emoji(direction)
     color = _direction_color(direction)
+    bar_color = _confidence_bar_color(confidence)
 
     subject = f"{emoji} {direction} {identifier} — {confidence}% confidence"
 
@@ -112,35 +135,55 @@ def _render_email(signal: dict) -> tuple[str, str, str]:
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
-    <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:24px;">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+</head>
+<body style="margin:0;padding:0;background-color:#09090b;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#09090b;">
+<tr><td align="center">
+  <div style="max-width:560px;margin:0 auto;padding:32px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:left;">
+    <div style="font-size:20px;font-weight:800;color:#fff;margin-bottom:28px;letter-spacing:-0.01em;">
       plebs<span style="color:#22c55e;">.finance</span>
     </div>
 
-    <div style="background:#18181b;border:1px solid #27272a;border-radius:12px;padding:24px;margin-bottom:24px;">
-      <div style="font-size:28px;font-weight:800;color:{color};margin-bottom:4px;">
+    <div style="background:#111113;border:1px solid #1e1e22;border-radius:10px;padding:24px;margin-bottom:20px;">
+      <div style="font-family:{MONO};font-size:26px;font-weight:800;color:{color};margin-bottom:10px;">
         {direction} {identifier}
       </div>
-      <div style="color:#a1a1aa;font-size:14px;margin-bottom:16px;">
-        {confidence}% confidence &middot; {_horizon_label(horizon)} &middot; Entry {_fmt_price(price)}
+
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:18px;">
+        <tr>
+          <td style="font-family:{MONO};font-size:20px;font-weight:700;color:{bar_color};padding-right:8px;">{confidence}%</td>
+          <td style="width:60px;">
+            <div style="height:5px;width:56px;background:#27272a;border-radius:3px;overflow:hidden;">
+              <div style="height:5px;width:{confidence}%;background:{bar_color};border-radius:3px;"></div>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <div style="color:#71717a;font-size:12px;font-family:{MONO};margin-bottom:18px;text-transform:uppercase;letter-spacing:.06em;">
+        {_horizon_label(horizon)} &middot; Entry {_fmt_price(price)}
       </div>
-      <div style="color:#d4d4d8;font-size:15px;line-height:1.6;">
-        {reasoning}
-      </div>
+
+      {_chunk_reasoning(reasoning)}
     </div>
 
-    <a href="{asset_url}" style="display:inline-block;background:#22c55e;color:#000;font-weight:600;font-size:14px;text-decoration:none;padding:10px 20px;border-radius:6px;margin:0 0 24px;">
+    <a href="{asset_url}" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:14px;text-decoration:none;padding:10px 20px;border-radius:6px;margin:0 0 24px;">
       View {identifier} on Plebs →
     </a>
 
-    <hr style="border:none;border-top:1px solid #27272a;margin:24px 0;">
+    <hr style="border:none;border-top:1px solid #1e1e22;margin:24px 0;">
     <p style="color:#52525b;font-size:12px;line-height:1.5;margin:0;">
       This is a high-confidence signal alert from Plebs.finance.
       Not financial advice — always do your own research.
     </p>
   </div>
+</td></tr>
+</table>
 </body>
 </html>"""
 
