@@ -7,11 +7,8 @@ import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
 import SubscribeGate from "@/components/ui/SubscribeGate";
 import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
-<<<<<<< HEAD
 import SectionHeader from "@/components/ui/SectionHeader";
-=======
 import SkipTrialBanner from "@/components/SkipTrialBanner";
->>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
 
 export const revalidate = 60;
 

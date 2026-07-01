@@ -225,16 +225,11 @@ export default function LoginForm() {
 
       <p className="text-center text-xs text-muted-foreground">
         No account?{" "}
-<<<<<<< HEAD
         <Link
           href={`/signup?next=${encodeURIComponent(next)}`}
           className="text-emerald-400 hover:text-emerald-300 transition-colors"
         >
           Start free trial
-=======
-        <Link href={`/signup?next=${encodeURIComponent(next)}`} className="text-green-400 hover:text-green-300">
-          Start trial
->>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
         </Link>
       </p>
     </div>

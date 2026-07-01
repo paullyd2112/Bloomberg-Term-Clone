@@ -166,18 +166,6 @@ export default function TickerBar({ showStatus = true }: { showStatus?: boolean 
 
   return (
     <div className="relative bg-black/60 backdrop-blur-sm border-b border-white/[0.06] h-10 flex items-center overflow-hidden select-none">
-<<<<<<< HEAD
-      {/* Fixed LIVE marker — items emerge from behind it */}
-      <div className="absolute left-0 top-0 bottom-0 z-20 flex items-center gap-1.5 bg-black/85 backdrop-blur-sm pl-4 pr-3.5 border-r border-white/[0.08]">
-        <span className="relative flex h-1.5 w-1.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-        </span>
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">Live</span>
-      </div>
-
-      {/* Right fade */}
-=======
       {showStatus && (
         <div className="relative z-20 flex-shrink-0 pl-3 pr-2">
           <MarketStatusBadge />
@@ -185,7 +173,6 @@ export default function TickerBar({ showStatus = true }: { showStatus?: boolean 
       )}
 
       <div className={`pointer-events-none absolute top-0 bottom-0 w-12 z-10 bg-gradient-to-r from-black/60 to-transparent ${showStatus ? "left-[145px]" : "left-0"}`} />
->>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
       <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 z-10 bg-gradient-to-l from-black to-transparent" />
 
       <div className="flex animate-marquee">

@@ -11,7 +11,6 @@ export default function SignupPage() {
 
       <div className="relative w-full max-w-sm">
         <div className="mb-8 text-center">
-<<<<<<< HEAD
           <Link
             href="/"
             className="text-2xl font-semibold tracking-tightest text-white"
@@ -20,11 +19,6 @@ export default function SignupPage() {
             Plebs<span className="text-emerald-400">.</span>
           </Link>
           <p className="mt-3 text-sm text-secondary-foreground">Start your 14-day free trial</p>
-=======
-          <span className="text-2xl font-bold tracking-tight text-white">plebs</span>
-          <span className="text-2xl font-bold tracking-tight text-green-400">.finance</span>
-          <p className="mt-2 text-sm text-zinc-400">Start your 14-day trial</p>
->>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
         </div>
         <Suspense
           fallback={

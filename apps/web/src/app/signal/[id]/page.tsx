@@ -50,15 +50,9 @@ export async function generateMetadata({
     .eq("id", params.id)
     .single();
 
-<<<<<<< HEAD
   if (!data) return { title: "Signal — Plebs.Finance" };
 
   const title = `${data.direction} ${data.identifier} (${data.confidence}%) — Plebs.Finance`;
-=======
-  if (!data) return { title: "Signal — Plebs.finance" };
-
-  const title = `${data.direction} ${data.identifier} (${data.confidence}%) — Plebs.finance`;
->>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
   const desc  = (data.reasoning as string).slice(0, 160);
 
   return {
@@ -67,11 +61,7 @@ export async function generateMetadata({
     openGraph: {
       title,
       description: desc,
-<<<<<<< HEAD
       siteName:    "Plebs.Finance",
-=======
-      siteName:    "Plebs.finance",
->>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
       type:        "website",
     },
     twitter: {

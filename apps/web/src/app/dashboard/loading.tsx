@@ -26,11 +26,10 @@ export default function DashboardLoading() {
         ))}
       </div>
 
-<<<<<<< HEAD
       {/* Signal feed: tabs + cards */}
       <div className="space-y-4">
         <div className="flex gap-1 border-b border-white/[0.08] pb-0">
-          {["All", "Stocks", "Crypto", "Predictions"].map((t) => (
+          {["All", "Stocks", "Crypto"].map((t) => (
             <Skeleton key={t} className="h-9 w-20" />
           ))}
         </div>
@@ -39,20 +38,6 @@ export default function DashboardLoading() {
             <SkeletonCard key={i} />
           ))}
         </div>
-=======
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-white/[0.08] pb-0">
-        {["All", "Stocks", "Crypto"].map((t) => (
-          <Skeleton key={t} className="h-9 w-20" />
-        ))}
-      </div>
-
-      {/* Signal cards grid */}
-      <div className="grid gap-3 sm:grid-cols-1 xl:grid-cols-2">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <SkeletonCard key={i} />
-        ))}
->>>>>>> 7796bb55b34c9bea668375d5b7937747a9746108
       </div>
     </div>
   );

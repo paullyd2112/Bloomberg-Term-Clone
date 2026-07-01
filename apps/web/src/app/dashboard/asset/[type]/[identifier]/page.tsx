@@ -530,7 +530,7 @@ function FundamentalsCard({ metadata }: { metadata: Record<string, unknown> }) {
 
   return (
     <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
-      <SectionHeader label="Fundamentals" />
+      <SectionHeader>Fundamentals</SectionHeader>
       <div className="space-y-2">
         {roi30d != null && (
           <StatRow
