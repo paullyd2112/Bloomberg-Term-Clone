@@ -3,11 +3,17 @@ Corporate actions ingestion — Alpaca Corporate Actions API.
 Pulls upcoming/recent splits, dividends, spinoffs, and mergers for the
 default watchlist. Runs daily via scheduler.
 
-NOTE: field extraction below is based on Alpaca's documented Corporate
-Actions API response shape. The full raw item is always stored in the
-`raw` column, so if Alpaca's actual field names differ slightly for a
-given action type, the data isn't lost — just re-derive the flat
-columns from `raw` once verified against a live response.
+Verified against live Alpaca responses (2026-07-01): ex_date, record_date,
+payable_date, cash_amount (from "rate"), old_rate, and new_rate all map
+correctly. `declaration_date` does not — Alpaca's Corporate Actions API
+doesn't return a true announcement/declaration date for dividends or
+splits at all. The closest field, `process_date`, is not a stand-in for
+it (it duplicates payable_date in every sample seen), so it's
+deliberately left unmapped rather than populated with a misleading
+value. It stays null for those two action types; unconfirmed whether
+mergers/spinoffs carry a real declaration field, since none were fetched
+in the verification run. The full raw item is always stored in the
+`raw` column regardless, so nothing is lost.
 """
 
 from datetime import date
@@ -16,8 +22,15 @@ from loguru import logger
 import sentry_sdk
 
 from supabase_client import supabase
-from ingestion.alpaca_client import fetch_corporate_actions
+from ingestion.alpaca_client import fetch_corporate_actions, CORPORATE_ACTION_TYPES
 from ingestion.stocks import get_default_watchlist
+
+# Alpaca's response groups actions under its own pluralized type key
+# (e.g. "cash_dividends", "forward_splits"), but every other consumer in
+# this codebase — the Alpaca request params above, the scoring context,
+# the web dashboard's label map — uses the singular form. Normalize once
+# here so "ca_type" means the same thing everywhere downstream.
+_CA_TYPE_SINGULAR = {f"{t}s": t for t in CORPORATE_ACTION_TYPES}
 
 
 def _first(item: dict, *keys: str):
@@ -41,9 +54,11 @@ def _normalize(item: dict) -> dict | None:
     if not ticker:
         return None
 
+    raw_ca_type = item.get("ca_type", "unknown")
+
     return {
         "ticker":           str(ticker).upper(),
-        "ca_type":          item.get("ca_type", "unknown"),
+        "ca_type":          _CA_TYPE_SINGULAR.get(raw_ca_type, raw_ca_type),
         "ex_date":          _parse_date(_first(item, "ex_date")),
         "record_date":      _parse_date(_first(item, "record_date")),
         "payable_date":     _parse_date(_first(item, "payable_date", "pay_date")),

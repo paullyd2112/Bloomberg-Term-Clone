@@ -1277,6 +1277,9 @@ def pipeline_check():
         "ANTHROPIC_API_KEY": "set" if os.environ.get("ANTHROPIC_API_KEY") else "MISSING",
         "ALPACA_API_KEY": "set" if os.environ.get("ALPACA_API_KEY") else "MISSING",
         "ALPACA_API_SECRET": "set" if os.environ.get("ALPACA_API_SECRET") else "MISSING",
+        "KALSHI_API_KEY": "set" if os.environ.get("KALSHI_API_KEY") else "MISSING",
+        "KALSHI_PRIVATE_KEY": "set" if os.environ.get("KALSHI_PRIVATE_KEY") else "MISSING",
+        "NEWS_API_KEY": "set" if os.environ.get("NEWS_API_KEY") else "MISSING",
         "ENABLE_SCHEDULER": os.environ.get("ENABLE_SCHEDULER", "false"),
     }
 
