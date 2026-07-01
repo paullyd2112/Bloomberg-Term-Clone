@@ -31,8 +31,6 @@ TRUSTED_SOURCES: set[str] = {
     "CoinDesk",
     "The Block",
     "Decrypt",
-    "CoinTelegraph",
-    "Cointelegraph",
 
     # Business / general
     "Forbes",
