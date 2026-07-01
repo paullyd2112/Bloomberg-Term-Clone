@@ -25,7 +25,7 @@ type PageProps = {
 async function fetchAssetData(assetType: AssetType, identifier: string, userId: string) {
   const supabase = createClient();
 
-  const [priceRes, historyRes, signalsRes, accuracyRes, newsRes, optionsRes, watchlistRes, shortInterestRes, earningsRes, sentimentRes] =
+  const [priceRes, historyRes, signalsRes, accuracyRes, newsRes, optionsRes, watchlistRes, shortInterestRes, earningsRes, sentimentRes, corporateActionsRes] =
     await Promise.all([
       supabase
         .from("raw_prices")
@@ -120,6 +120,17 @@ async function fetchAssetData(assetType: AssetType, identifier: string, userId: 
             .limit(1)
             .single()
         : Promise.resolve({ data: null }),
+
+      // Corporate actions — splits, dividends, spinoffs, mergers (stocks only)
+      assetType === "stock"
+        ? supabase
+            .from("corporate_actions")
+            .select("ca_type, ex_date, cash_amount, old_rate, new_rate")
+            .eq("ticker", identifier)
+            .gte("ex_date", new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10))
+            .order("ex_date", { ascending: true })
+            .limit(10)
+        : Promise.resolve({ data: null }),
     ]);
 
   // Build chart points: dedupe by timestamp, ascending, drop nulls
@@ -145,6 +156,7 @@ async function fetchAssetData(assetType: AssetType, identifier: string, userId: 
     shortInterest: shortInterestRes.data,
     earnings:      earningsRes.data,
     sentiment:     sentimentRes.data,
+    corporateActions: corporateActionsRes.data ?? [],
   };
 }
 
@@ -159,7 +171,7 @@ export default async function AssetPage({ params }: PageProps) {
   const canSeeOptions = canAccessFeature(tier, "real_time");
   const canScoreOnDemand = canAccessFeature(tier, "on_demand_scoring");
 
-  const { price, history, signals, accuracy, news, options, watchlistId, shortInterest, earnings, sentiment } =
+  const { price, history, signals, accuracy, news, options, watchlistId, shortInterest, earnings, sentiment, corporateActions } =
     await fetchAssetData(type, identifier, user!.id);
 
   if (!price && signals.length === 0) notFound();
@@ -229,6 +241,11 @@ export default async function AssetPage({ params }: PageProps) {
           {/* Short Interest (stocks only) */}
           {type === "stock" && shortInterest && (
             <ShortInterestCard data={shortInterest} />
+          )}
+
+          {/* Corporate actions (stocks only) */}
+          {type === "stock" && corporateActions.length > 0 && (
+            <CorporateActionsList actions={corporateActions} />
           )}
 
           {/* Market Stats (crypto only) */}
@@ -444,6 +461,54 @@ function ShortInterestCard({
             highlight={data.vs_previous < 0}
           />
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Corporate actions (stocks only) — dense rows, not cards ---------- */
+const CA_TYPE_LABEL: Record<string, string> = {
+  forward_split:        "Split",
+  reverse_split:        "Reverse split",
+  unit_split:           "Split",
+  cash_dividend:        "Dividend",
+  stock_dividend:       "Stock dividend",
+  spin_off:             "Spinoff",
+  cash_merger:          "Merger",
+  stock_merger:         "Merger",
+  stock_and_cash_merger: "Merger",
+};
+
+function CorporateActionsList({
+  actions,
+}: {
+  actions: {
+    ca_type: string;
+    ex_date: string | null;
+    cash_amount: number | null;
+    old_rate: number | null;
+    new_rate: number | null;
+  }[];
+}) {
+  function detail(a: (typeof actions)[number]): string {
+    if (a.cash_amount != null) return `$${Number(a.cash_amount).toFixed(2)}/sh`;
+    if (a.old_rate != null && a.new_rate != null) return `${a.old_rate}:${a.new_rate}`;
+    return "";
+  }
+
+  return (
+    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-2">
+      <SectionHeader>Corporate actions</SectionHeader>
+      <div className="divide-y divide-white/[0.05]">
+        {actions.map((a, i) => (
+          <div key={i} className="flex items-center justify-between gap-3 py-2 text-xs">
+            <span className="text-zinc-300">{CA_TYPE_LABEL[a.ca_type] ?? a.ca_type}</span>
+            <span className="flex items-center gap-3 font-mono text-zinc-500">
+              {detail(a) && <span className="text-zinc-400">{detail(a)}</span>}
+              <span>{a.ex_date ?? "—"}</span>
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );

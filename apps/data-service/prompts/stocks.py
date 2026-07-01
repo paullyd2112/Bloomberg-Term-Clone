@@ -123,6 +123,16 @@ def build_user_prompt(context: dict) -> str:
             f"  Trend: {s.get('vs_previous', 'N/A')}",
         ]
 
+    if context.get("corporate_actions"):
+        lines += ["", "Corporate actions (splits/dividends/spinoffs/mergers):"]
+        for ca in context["corporate_actions"]:
+            detail = ""
+            if ca.get("cash_amount") is not None:
+                detail = f" — ${ca['cash_amount']}/share"
+            elif ca.get("old_rate") is not None and ca.get("new_rate") is not None:
+                detail = f" — {ca['old_rate']}:{ca['new_rate']}"
+            lines.append(f"  {ca.get('ex_date', 'N/A')}: {ca.get('ca_type', 'N/A')}{detail}")
+
     # Broad market benchmarks + upcoming macro events are identical across
     # every ticker scored this run, so they're sent as a separate cached
     # system content block (see scoring/engine.py _format_market_context)

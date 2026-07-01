@@ -267,6 +267,26 @@ def _get_short_interest_context(ticker: str) -> dict | None:
         return None
 
 
+def _get_corporate_actions_context(ticker: str) -> list[dict] | None:
+    """Return upcoming/recent corporate actions (splits, dividends, spinoffs,
+    mergers) for a ticker, most relevant to a swing-trade horizon."""
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
+        result = (
+            supabase.table("corporate_actions")
+            .select("ca_type, ex_date, cash_amount, old_rate, new_rate")
+            .eq("ticker", ticker)
+            .gte("ex_date", cutoff)
+            .order("ex_date", desc=False)
+            .limit(5)
+            .execute()
+        )
+        return result.data or None
+    except Exception as e:
+        logger.warning("corporate actions context failed for {}: {}", ticker, e)
+        return None
+
+
 # ─── Macro context ───────────────────────────────────────────────────────────
 
 def _get_market_benchmark() -> dict:
@@ -510,6 +530,7 @@ def score_asset(
                 "earnings_context":     _get_earnings_context(identifier),
                 "options_context":      _get_options_context(identifier),
                 "short_interest_context": _get_short_interest_context(identifier),
+                "corporate_actions":     _get_corporate_actions_context(identifier),
             }
             signal: StockSignal = client.chat.completions.create(
                 model=use_model,
