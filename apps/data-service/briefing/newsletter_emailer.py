@@ -128,6 +128,17 @@ def _story_html(story: dict) -> str:
     </div>"""
 
 
+MONO = "'SF Mono','Menlo','Consolas',monospace"
+
+
+def _confidence_bar_color(confidence: int) -> str:
+    if confidence >= 75:
+        return "#22c55e"
+    if confidence >= 50:
+        return "#f59e0b"
+    return "#71717a"
+
+
 def _signals_html(signals: list[dict]) -> str:
     if not signals:
         return ""
@@ -139,20 +150,24 @@ def _signals_html(signals: list[dict]) -> str:
         confidence = s.get("confidence", 0)
         horizon    = html.escape(s.get("time_horizon", ""))
         dir_color  = "#22c55e" if direction in ("BUY", "YES") else "#ef4444"
+        bar_color  = _confidence_bar_color(confidence)
         asset_url  = f"{APP_URL}/dashboard/asset/{asset_type}/{identifier}"
         rows += f"""
         <tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #1e1e22;">
-            <a href="{asset_url}" style="font-family:monospace;font-weight:700;color:#fff;text-decoration:none;">{identifier}</a>
+          <td style="padding:9px 12px;border-bottom:1px solid #1e1e22;">
+            <a href="{asset_url}" style="font-family:{MONO};font-weight:700;color:#fff;text-decoration:none;">{identifier}</a>
             &nbsp;
             <span style="background:{dir_color}22;color:{dir_color};border:1px solid {dir_color}55;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">{direction}</span>
           </td>
-          <td style="padding:8px 12px;border-bottom:1px solid #1e1e22;color:#71717a;font-size:12px;">{confidence}% · {horizon}</td>
+          <td style="padding:9px 12px;border-bottom:1px solid #1e1e22;text-align:right;">
+            <span style="font-family:{MONO};font-weight:700;color:{bar_color};font-size:13px;">{confidence}%</span>
+            <span style="color:#52525b;font-size:11px;text-transform:uppercase;">&nbsp;{horizon}</span>
+          </td>
         </tr>"""
     return f"""
     <div style="margin:24px 0;padding:20px;background:#111113;border-radius:10px;border:1px solid #1e1e22;">
       <div style="font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Your signals today</div>
-      <table style="width:100%;border-collapse:collapse;">{rows}</table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">{rows}</table>
       <a href="{APP_URL}/dashboard" style="display:inline-block;margin-top:12px;color:#22c55e;font-size:12px;font-weight:600;text-decoration:none;">Full signal feed &rarr;</a>
     </div>"""
 
@@ -160,23 +175,23 @@ def _signals_html(signals: list[dict]) -> str:
 def _options_html(options: list[dict]) -> str:
     if not options:
         return ""
-    items = ""
+    rows = ""
     for o in options:
         ticker      = html.escape(o.get("ticker", ""))
         option_type = html.escape(o.get("option_type", "").upper())
         volume      = o.get("volume", 0)
         oi          = o.get("open_interest", 0)
         color       = "#22c55e" if option_type == "CALL" else "#ef4444"
-        items += f"""
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e1e22;">
-          <span style="font-family:monospace;font-weight:700;color:#fff;">{ticker}</span>
-          <span style="color:{color};font-size:12px;font-weight:700;">{option_type}</span>
-          <span style="color:#71717a;font-size:12px;">vol {volume:,} / OI {oi:,}</span>
-        </div>"""
+        rows += f"""
+        <tr>
+          <td style="padding:6px 0;border-bottom:1px solid #1e1e22;font-family:{MONO};font-weight:700;color:#fff;">{ticker}</td>
+          <td style="padding:6px 0;border-bottom:1px solid #1e1e22;color:{color};font-size:12px;font-weight:700;text-align:center;">{option_type}</td>
+          <td style="padding:6px 0;border-bottom:1px solid #1e1e22;color:#71717a;font-size:12px;text-align:right;">vol {volume:,} / OI {oi:,}</td>
+        </tr>"""
     return f"""
     <div style="margin:16px 0;padding:20px;background:#111113;border-radius:10px;border:1px solid #1e1e22;">
       <div style="font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Unusual options flow</div>
-      {items}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">{rows}</table>
     </div>"""
 
 
@@ -206,15 +221,24 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
 
     return f"""<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0a0a0c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="max-width:620px;margin:0 auto;padding:36px 20px;">
-    <div style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;">
-      <div style="font-size:22px;font-weight:800;color:#f4f4f5;letter-spacing:-0.02em;">
-        plebs<span style="color:#22c55e;">.finance</span>
-      </div>
-      <div style="font-size:11px;color:#71717a;font-weight:600;letter-spacing:.04em;">{today}</div>
-    </div>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0c;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0c;">
+<tr><td align="center">
+  <div style="max-width:620px;margin:0 auto;padding:36px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:left;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr>
+        <td style="font-size:20px;font-weight:800;color:#f4f4f5;letter-spacing:-0.01em;">
+          plebs<span style="color:#22c55e;">.finance</span>
+        </td>
+        <td style="text-align:right;font-size:11px;color:#71717a;font-weight:600;letter-spacing:.04em;">{today}</td>
+      </tr>
+    </table>
     <h1 style="color:#f4f4f5;font-size:22px;font-weight:700;margin:0 0 16px;line-height:1.35;">{subject_line}</h1>
     <p style="color:#a1a1aa;font-size:15px;line-height:1.7;margin:0 0 28px;border-left:3px solid #22c55e44;padding-left:14px;">{opening}</p>
     <div style="padding-top:8px;">
@@ -228,6 +252,8 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
       <a href="{APP_URL}/unsubscribe" style="color:#71717a;">Unsubscribe</a>
     </div>
   </div>
+</td></tr>
+</table>
 </body>
 </html>"""
 
