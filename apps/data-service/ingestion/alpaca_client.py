@@ -264,6 +264,65 @@ def fetch_multi_stock_snapshots(tickers: list[str]) -> dict:
         return {}
 
 
+CORPORATE_ACTION_TYPES = [
+    "forward_split", "reverse_split", "unit_split",
+    "cash_dividend", "stock_dividend",
+    "spin_off",
+    "cash_merger", "stock_merger", "stock_and_cash_merger",
+]
+
+
+def fetch_corporate_actions(symbols: list[str], days_ahead: int = 30, days_back: int = 7) -> list[dict]:
+    """Fetch upcoming/recent corporate actions (splits, dividends, spinoffs, mergers)
+    for a batch of tickers from Alpaca's Corporate Actions API.
+
+    Returns a flat list of dicts, each tagged with its own `ca_type`, since Alpaca's
+    response groups results by action type rather than returning one flat list.
+    """
+    if not _is_configured() or not symbols:
+        return []
+
+    start = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    end = (datetime.now(timezone.utc) + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+
+    flat: list[dict] = []
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT, headers=_headers()) as client:
+            resp = client.get(
+                f"{DATA_BASE}/v1/corporate-actions",
+                params={
+                    "symbols": ",".join(symbols),
+                    "types": ",".join(CORPORATE_ACTION_TYPES),
+                    "start": start,
+                    "end": end,
+                    "limit": 1000,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            actions = data.get("corporate_actions") or {}
+            # Alpaca groups by pluralized type key (e.g. "cash_dividends", "forward_splits") —
+            # iterate whatever keys are actually present rather than hardcoding the mapping,
+            # so an unexpected/renamed key doesn't silently drop a whole action type.
+            for key, items in actions.items():
+                if not isinstance(items, list):
+                    continue
+                for item in items:
+                    flat.append({**item, "ca_type": key})
+
+        return flat
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code in (401, 403):
+            logger.warning("Alpaca corporate actions auth failed ({})", e.response.status_code)
+        else:
+            logger.debug("Alpaca corporate actions fetch failed — {}", e)
+        return []
+    except Exception as e:
+        logger.debug("Alpaca corporate actions fetch failed — {}", e)
+        return []
+
+
 _OCC_EXPIRY_RE = re.compile(r"(\d{6})[CP]\d{8}$")
 
 

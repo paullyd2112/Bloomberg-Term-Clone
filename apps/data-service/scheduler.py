@@ -18,6 +18,7 @@ from ingestion.sec_form4 import ingest_insider_trades
 from ingestion.options_flow import ingest_options_flow
 from ingestion.short_interest import ingest_short_interest
 from ingestion.earnings import ingest_earnings
+from ingestion.corporate_actions import ingest_corporate_actions
 from ingestion.macro_events import seed_macro_events
 from ingestion.fred import enrich_macro_events
 from ingestion.news import ingest_news
@@ -98,6 +99,9 @@ def job_ingest_short_interest():
 
 def job_ingest_earnings():
     return ingest_earnings()
+
+def job_ingest_corporate_actions():
+    return ingest_corporate_actions()
 
 def job_seed_macro_events():
     return seed_macro_events()
@@ -290,6 +294,8 @@ scheduler.add_job(lambda: _run_stock_job("ingest_short_interest", job_ingest_sho
                   CronTrigger(hour=7, minute=0, day_of_week="mon-fri"), id="ingest_short_interest")
 scheduler.add_job(lambda: _run_stock_job("ingest_earnings", job_ingest_earnings),
                   CronTrigger(hour=6, minute=0, day_of_week="mon-fri"), id="ingest_earnings")
+scheduler.add_job(lambda: _run_stock_job("ingest_corporate_actions", job_ingest_corporate_actions),
+                  CronTrigger(hour=6, minute=15, day_of_week="mon-fri"), id="ingest_corporate_actions")
 scheduler.add_job(lambda: _run_stock_job("seed_macro_events", job_seed_macro_events),
                   CronTrigger(hour=6, minute=30, day_of_week="mon-fri"), id="seed_macro_events")
 scheduler.add_job(lambda: _run_stock_job("enrich_fred", job_enrich_fred),
@@ -580,6 +586,7 @@ def run_job_manual(job_name: str):
         "crypto_momentum": job_crypto_momentum,
         "generate_newsletter": job_generate_newsletter,
         "send_newsletter": job_send_newsletter,
+        "ingest_corporate_actions": job_ingest_corporate_actions,
     }
 
     fn = job_map.get(job_name)

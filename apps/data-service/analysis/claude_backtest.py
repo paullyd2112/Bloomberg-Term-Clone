@@ -742,11 +742,20 @@ def _score_with_claude(
 ) -> StockSignal | CryptoSignal | None:
     try:
         if asset_type == "stock":
+            user_prompt = stocks_prompt.build_user_prompt(context)
+            benchmarks = context.get("market_benchmarks") or {}
+            if benchmarks:
+                bench_lines = ["", "Broad market context:"]
+                for sym, bm in benchmarks.items():
+                    if bm.get("price") is not None:
+                        chg = f"{bm['change_24h']:+.2f}%" if bm.get("change_24h") is not None else "N/A"
+                        bench_lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg})")
+                user_prompt += "\n" + "\n".join(bench_lines)
             return claude_client.chat.completions.create(
                 model=MODEL,
                 max_tokens=MAX_TOKENS,
                 system=stocks_prompt.SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": stocks_prompt.build_user_prompt(context)}],
+                messages=[{"role": "user", "content": user_prompt}],
                 response_model=StockSignal,
             )
         elif asset_type == "crypto":

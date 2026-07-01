@@ -92,13 +92,9 @@ def build_user_prompt(context: dict) -> str:
         for h in context["news_headlines"]:
             lines.append(f"  - {h}")
 
-    benchmarks = context.get("market_benchmarks", {})
-    if benchmarks:
-        lines += ["", "Broad market:"]
-        for sym, bm in benchmarks.items():
-            if bm.get("price") is not None:
-                chg = f"{bm['change_24h']:+.2f}%" if bm.get("change_24h") is not None else "N/A"
-                lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg})")
+    # Broad market benchmarks are identical across every ticker scored this
+    # run, so they're sent as a separate cached system content block (see
+    # scoring/engine.py _format_market_context) instead of duplicated here.
 
     lines += ["", "Based on this options flow, generate a directional signal for the underlying stock."]
     return "\n".join(lines)

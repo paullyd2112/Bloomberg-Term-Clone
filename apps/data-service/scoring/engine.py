@@ -267,6 +267,26 @@ def _get_short_interest_context(ticker: str) -> dict | None:
         return None
 
 
+def _get_corporate_actions_context(ticker: str) -> list[dict] | None:
+    """Return upcoming/recent corporate actions (splits, dividends, spinoffs,
+    mergers) for a ticker, most relevant to a swing-trade horizon."""
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
+        result = (
+            supabase.table("corporate_actions")
+            .select("ca_type, ex_date, cash_amount, old_rate, new_rate")
+            .eq("ticker", ticker)
+            .gte("ex_date", cutoff)
+            .order("ex_date", desc=False)
+            .limit(5)
+            .execute()
+        )
+        return result.data or None
+    except Exception as e:
+        logger.warning("corporate actions context failed for {}: {}", ticker, e)
+        return None
+
+
 # ─── Macro context ───────────────────────────────────────────────────────────
 
 def _get_market_benchmark() -> dict:
@@ -325,6 +345,29 @@ def _get_upcoming_macro(days: int = 2) -> list[str]:
         lines.append(f"{event_date} — {name} ({importance}){detail}")
 
     return lines
+
+
+def _format_market_context(benchmarks: dict, macro_events: list[str] | None = None) -> str:
+    """Render the shared benchmark/macro block once so it can be cached as its
+    own system content block instead of being duplicated in every per-ticker
+    user prompt within a scoring run."""
+    lines = ["Broad market & macro context (shared across every asset scored this run):"]
+
+    if benchmarks:
+        lines.append("")
+        lines.append("Benchmarks:")
+        for sym, bm in benchmarks.items():
+            if bm.get("price") is not None:
+                chg = f"{bm['change_24h']:+.2f}%" if bm.get("change_24h") is not None else "N/A"
+                lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg})")
+
+    if macro_events:
+        lines.append("")
+        lines.append("Upcoming macro events (next 48h):")
+        for m in macro_events:
+            lines.append(f"  - {m}")
+
+    return "\n".join(lines)
 
 
 # ─── Accuracy penalty ────────────────────────────────────────────────────────
@@ -426,10 +469,22 @@ def _write_signal(asset_type: str, identifier: str, price: float | None, signal,
 
 # ─── Core scoring function ────────────────────────────────────────────────────
 
-def score_asset(asset_type: str, identifier: str, model_override: str | None = None) -> dict | None:
+def score_asset(
+    asset_type: str,
+    identifier: str,
+    model_override: str | None = None,
+    benchmarks: dict | None = None,
+    macro_events: list[str] | None = None,
+) -> dict | None:
     """
     Build context from Supabase, call Claude via Instructor,
     write validated signal. Returns signal dict or None if skipped.
+
+    `benchmarks`/`macro_events` can be preloaded once by a calling loop
+    (score_stocks, score_crypto) and passed in, since they're identical
+    across every ticker scored in the same run — avoids refetching from
+    Supabase per ticker and lets the shared context be cached as its own
+    system content block instead of duplicated in every user prompt.
     """
     # Skip if scored recently
     use_model = model_override or MODEL
@@ -456,9 +511,13 @@ def score_asset(asset_type: str, identifier: str, model_override: str | None = N
 
     # ── Build asset-specific context & call Claude ──────────────────────────
 
-    # Fetch macro context once, share across asset types
-    benchmarks  = _get_market_benchmark()
-    macro_events = _get_upcoming_macro(days=2)
+    # Reuse preloaded macro context if the caller supplied it (score_stocks/
+    # score_crypto fetch this once per run); otherwise fetch fresh for
+    # standalone callers (on-demand scoring, crypto momentum scan).
+    if benchmarks is None:
+        benchmarks = _get_market_benchmark()
+    if macro_events is None:
+        macro_events = _get_upcoming_macro(days=2)
 
     try:
         if asset_type == "stock":
@@ -471,13 +530,16 @@ def score_asset(asset_type: str, identifier: str, model_override: str | None = N
                 "earnings_context":     _get_earnings_context(identifier),
                 "options_context":      _get_options_context(identifier),
                 "short_interest_context": _get_short_interest_context(identifier),
-                "market_benchmarks":    benchmarks,
-                "upcoming_macro":       macro_events,
+                "corporate_actions":     _get_corporate_actions_context(identifier),
             }
             signal: StockSignal = client.chat.completions.create(
                 model=use_model,
                 max_tokens=MAX_TOKENS,
-                system=[{"type": "text", "text": stocks_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+                system=[
+                    {"type": "text", "text": stocks_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": _format_market_context(benchmarks, macro_events),
+                     "cache_control": {"type": "ephemeral"}},
+                ],
                 messages=[{"role": "user", "content": stocks_prompt.build_user_prompt(context)}],
                 response_model=StockSignal,
             )
@@ -491,13 +553,15 @@ def score_asset(asset_type: str, identifier: str, model_override: str | None = N
                 "fear_greed":          _get_fear_greed(),
                 "market_cap":          meta.get("market_cap"),
                 "news_headlines":      news,
-                "market_benchmarks":   benchmarks,
-                "upcoming_macro":      macro_events,
             }
             signal: CryptoSignal = client.chat.completions.create(
                 model=use_model,
                 max_tokens=MAX_TOKENS,
-                system=[{"type": "text", "text": crypto_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+                system=[
+                    {"type": "text", "text": crypto_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": _format_market_context(benchmarks, macro_events),
+                     "cache_control": {"type": "ephemeral"}},
+                ],
                 messages=[{"role": "user", "content": crypto_prompt.build_user_prompt(context)}],
                 response_model=CryptoSignal,
             )
@@ -601,6 +665,12 @@ def score_stocks() -> str:
     scan_results = scan_stocks(use_movers=True)
     core_always_score = {"AAPL", "NVDA", "TSLA", "GOOGL", "META", "AMZN", "MSFT", "SPY", "QQQ"}
 
+    # Fetch once per run — identical for every ticker scored below, so this
+    # also lets the Claude call cache the shared block instead of paying
+    # full price on it for every single ticker.
+    benchmarks   = _get_market_benchmark()
+    macro_events = _get_upcoming_macro(days=2)
+
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
 
@@ -609,7 +679,7 @@ def score_stocks() -> str:
 
         if ticker in core_always_score:
             try:
-                result = score_asset("stock", ticker)
+                result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -635,7 +705,7 @@ def score_stocks() -> str:
             continue
 
         try:
-            result = score_asset("stock", ticker)
+            result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -649,7 +719,7 @@ def score_stocks() -> str:
     for core_ticker in core_always_score:
         if not any(s["ticker"] == core_ticker for s in scan_results):
             try:
-                result = score_asset("stock", core_ticker)
+                result = score_asset("stock", core_ticker, benchmarks=benchmarks, macro_events=macro_events)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -672,6 +742,9 @@ def score_stocks_event_only() -> str:
 
     scan_results = scan_stocks(use_movers=True, event_only=True)
 
+    benchmarks   = _get_market_benchmark()
+    macro_events = _get_upcoming_macro(days=2)
+
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
 
@@ -692,7 +765,7 @@ def score_stocks_event_only() -> str:
             continue
 
         try:
-            result = score_asset("stock", ticker)
+            result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -740,6 +813,9 @@ def score_crypto() -> str:
         return "failed to fetch identifiers"
 
     fg = _get_fear_greed()
+    benchmarks   = _get_market_benchmark()
+    macro_events = _get_upcoming_macro(days=2)
+
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
     tier_skipped = 0
@@ -750,7 +826,7 @@ def score_crypto() -> str:
 
         if sym in CORE_CRYPTO:
             try:
-                result = score_asset("crypto", sym)
+                result = score_asset("crypto", sym, benchmarks=benchmarks, macro_events=macro_events)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -778,7 +854,7 @@ def score_crypto() -> str:
             continue
 
         try:
-            result = score_asset("crypto", sym)
+            result = score_asset("crypto", sym, benchmarks=benchmarks, macro_events=macro_events)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -979,15 +1055,17 @@ def score_options_flow() -> str:
             "flow":              flows[:15],
             "aggregate":         agg,
             "news_headlines":    news,
-            "market_benchmarks": benchmarks,
         }
 
         try:
             signal: OptionsFlowSignal = client.chat.completions.create(
                 model=MODEL,
                 max_tokens=MAX_TOKENS,
-                system=[{"type": "text", "text": options_prompt.SYSTEM_PROMPT,
-                         "cache_control": {"type": "ephemeral"}}],
+                system=[
+                    {"type": "text", "text": options_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": _format_market_context(benchmarks),
+                     "cache_control": {"type": "ephemeral"}},
+                ],
                 messages=[{"role": "user", "content": options_prompt.build_user_prompt(context)}],
                 response_model=OptionsFlowSignal,
             )
