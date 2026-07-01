@@ -20,11 +20,11 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Plebs — Hedge fund tools. Retail prices.",
-  description: "AI-powered trading signals for stocks and crypto. Unusual options flow, morning briefing, per-asset accuracy — Wall Street's toolkit, finally for everyone.",
+  title: "Plebs · Hedge fund tools. Retail prices.",
+  description: "AI-powered trading signals for stocks, crypto & prediction markets. Unusual options flow, morning briefing, per-asset accuracy. Wall Street's toolkit, finally for everyone.",
   openGraph: {
-    title: "Plebs — Hedge fund tools. Retail prices.",
-    description: "AI-powered trading signals for stocks and crypto.",
+    title: "Plebs · Hedge fund tools. Retail prices.",
+    description: "AI-powered trading signals for stocks, crypto & prediction markets.",
     images: [{ url: "/logo.png", width: 500, height: 200 }],
   },
   twitter: {
@@ -39,7 +39,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="bg-black">
+    <html lang="en" className="bg-background">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

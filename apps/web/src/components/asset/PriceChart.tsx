@@ -25,8 +25,8 @@ export default function PriceChart({
     if (!containerRef.current || data.length === 0) return;
 
     const up = data.length < 2 || data[data.length - 1].value >= data[0].value;
-    const lineColor = up ? "#4ade80" : "#f87171";
-    const topColor = up ? "rgba(74, 222, 128, 0.25)" : "rgba(248, 113, 113, 0.25)";
+    const lineColor = up ? "#10b981" : "#f87171";
+    const topColor = up ? "rgba(16, 185, 129, 0.22)" : "rgba(248, 113, 113, 0.22)";
 
     const chartHeight = containerRef.current.clientWidth < 500 ? 220 : 280;
 
@@ -37,15 +37,15 @@ export default function PriceChart({
         fontFamily: "ui-monospace, monospace",
       },
       grid: {
-        vertLines: { color: "rgba(63, 63, 70, 0.2)" },
-        horzLines: { color: "rgba(63, 63, 70, 0.2)" },
+        vertLines: { color: "rgba(255, 255, 255, 0.04)" },
+        horzLines: { color: "rgba(255, 255, 255, 0.04)" },
       },
       timeScale: {
-        borderColor: "#27272a",
+        borderColor: "rgba(255, 255, 255, 0.08)",
         timeVisible: true,
         secondsVisible: false,
       },
-      rightPriceScale: { borderColor: "#27272a" },
+      rightPriceScale: { borderColor: "rgba(255, 255, 255, 0.08)" },
       crosshair: { mode: 0 },
       width: containerRef.current.clientWidth,
       height: chartHeight,

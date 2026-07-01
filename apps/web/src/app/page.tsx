@@ -10,30 +10,35 @@ import {
   ArrowUpRight,
   CircleCheck,
   ShieldCheck,
+  Plus,
 } from "lucide-react";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import TickerBar from "@/components/TickerBar";
 import LiveSignalFeed from "@/components/LiveSignalFeed";
+import Reveal from "@/components/landing/Reveal";
+import BrowserFrame from "@/components/landing/showcase/BrowserFrame";
+import DashboardShot from "@/components/landing/showcase/DashboardShot";
+import AssetShot from "@/components/landing/showcase/AssetShot";
 
 export const metadata: Metadata = {
-  title: "Plebs — Hedge fund tools. Retail prices.",
+  title: "Plebs · Hedge fund tools. Retail prices.",
   description:
-    "Real-time AI signals for stocks and crypto. Congressional trade tracker, options flow, morning briefing — Wall Street's toolkit, finally for everyone.",
+    "Real-time AI signals for stocks, crypto, and prediction markets. Congressional trade tracker, options flow, morning briefing. Wall Street's toolkit, finally for everyone.",
 };
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 
 function Nav() {
   return (
-    <nav className="fixed top-0 inset-x-0 z-50 border-b border-white/[0.06] bg-black/70 backdrop-blur-xl">
+    <nav className="fixed top-0 inset-x-0 z-50 border-b border-white/[0.06] bg-background/70 backdrop-blur-xl">
       <div className="max-w-6xl mx-auto px-5 sm:px-8 h-14 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2" aria-label="Plebs home">
-          <span className="text-lg font-semibold tracking-tight text-white">
+          <span className="text-lg font-semibold tracking-tightest text-white">
             Plebs<span className="text-emerald-400">.</span>
           </span>
         </Link>
 
-        <div className="hidden md:flex items-center gap-8 text-sm text-zinc-400">
+        <div className="hidden md:flex items-center gap-8 text-sm text-secondary-foreground">
           <a href="#terminal" className="hover:text-white transition-colors">The terminal</a>
           <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
           <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
@@ -42,7 +47,7 @@ function Nav() {
         <div className="flex items-center gap-1 sm:gap-3">
           <Link
             href="/login"
-            className="text-sm text-zinc-400 hover:text-white transition-colors px-2 sm:px-3 py-1.5"
+            className="text-sm text-secondary-foreground hover:text-white transition-colors px-2 sm:px-3 py-1.5"
           >
             Log in
           </Link>
@@ -63,7 +68,7 @@ function Nav() {
 
 function SectionLabel({ index, children }: { index: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+    <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
       <span className="text-emerald-400">{index}</span>
       <span className="h-px w-8 bg-white/15" />
       <span>{children}</span>
@@ -73,6 +78,8 @@ function SectionLabel({ index, children }: { index: string; children: React.Reac
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
+const COVERAGE = ["Stocks", "Crypto", "Kalshi", "Polymarket", "Congress"];
+
 function Hero() {
   return (
     <section className="relative px-5 sm:px-8 overflow-hidden">
@@ -81,10 +88,10 @@ function Hero() {
         <div className="absolute -top-20 left-1/4 h-[480px] w-[680px] -translate-x-1/2 rounded-full bg-emerald-500/[0.08] blur-[130px]" />
       </div>
 
-      <div className="relative max-w-6xl mx-auto pt-28 sm:pt-32 pb-20">
+      <div className="relative max-w-6xl mx-auto pt-28 sm:pt-32 pb-16">
         <div className="grid lg:grid-cols-12 gap-12 lg:gap-10 items-center">
           {/* Left — editorial copy */}
-          <div className="lg:col-span-6">
+          <div className="lg:col-span-6 animate-fade-up">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs mb-7">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
@@ -93,17 +100,17 @@ function Hero() {
               <span className="font-mono uppercase tracking-[0.18em] text-[10px] text-emerald-400">
                 Live
               </span>
-              <span className="text-zinc-500">Live</span>
+              <span className="text-muted-foreground">Markets open · signals updating</span>
             </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-semibold text-white leading-[1.04] tracking-tight text-balance">
+            <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-semibold text-white leading-[1.03] tracking-tightest text-balance">
               Hedge fund tools.
               <br />
-              <span className="text-emerald-400">Retail prices.</span>
+              <span className="text-gradient-emerald">Retail prices.</span>
             </h1>
 
-            <p className="mt-6 text-lg text-zinc-400 max-w-md leading-relaxed text-pretty">
-              Real-time AI signals across stocks and crypto —
+            <p className="mt-6 text-lg text-secondary-foreground max-w-md leading-relaxed text-pretty">
+              Real-time AI signals across stocks, crypto, and prediction markets,
               plus options flow, congressional trades, and a morning briefing. One terminal.
             </p>
 
@@ -123,16 +130,59 @@ function Hero() {
               </Link>
             </div>
 
-            <p className="mt-5 font-mono text-[11px] uppercase tracking-wider text-zinc-600">
-              Credit card required · Cancel anytime
-            </p>
+            {/* Coverage bar */}
+            <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">
+                Covering
+              </span>
+              {COVERAGE.map((c) => (
+                <span
+                  key={c}
+                  className="font-mono text-[11px] text-zinc-500"
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
           </div>
 
           {/* Right — live panel */}
-          <div className="lg:col-span-6">
+          <div className="lg:col-span-6 animate-fade-up [animation-delay:120ms]">
             <LiveSignalFeed />
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Product showcase ───────────────────────────────────────────────────────────
+
+function Showcase() {
+  return (
+    <section id="terminal" className="relative px-5 sm:px-8 pt-8 pb-24">
+      {/* ambient glow behind the shot */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] glow-ambient" />
+
+      <div className="relative max-w-6xl mx-auto">
+        <Reveal className="max-w-2xl mb-10">
+          <SectionLabel index="01">The terminal</SectionLabel>
+          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
+            The whole desk, on one screen
+          </h2>
+          <p className="text-secondary-foreground mt-4 leading-relaxed">
+            Signals, confidence, and reasoning in a single view. This is the
+            live terminal you get the moment you sign in.
+          </p>
+        </Reveal>
+
+        <Reveal delay={80} className="relative">
+          <BrowserFrame className="glow-green">
+            <DashboardShot />
+          </BrowserFrame>
+          {/* reflection fade at the bottom */}
+          <div className="pointer-events-none absolute inset-x-0 -bottom-px h-24 bg-gradient-to-t from-background to-transparent" />
+        </Reveal>
       </div>
     </section>
   );
@@ -150,92 +200,115 @@ function Stats() {
 
   return (
     <section className="px-5 sm:px-8">
-      <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 divide-x divide-white/[0.06]">
+      <Reveal className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 border-t border-l border-white/[0.06]">
         {items.map((item) => (
-          <div key={item.label} className="py-10 px-6 first:pl-0">
-            <div className="font-mono text-3xl sm:text-4xl font-semibold text-white tracking-tight tabular-nums">
+          <div key={item.label} className="py-10 px-6 border-b border-r border-white/[0.06]">
+            <div className="font-mono text-3xl sm:text-4xl font-semibold text-white tracking-tightest tabular-nums">
               {item.value}
             </div>
-            <div className="text-zinc-500 text-sm mt-2">{item.label}</div>
+            <div className="text-muted-foreground text-sm mt-2">{item.label}</div>
           </div>
         ))}
-      </div>
+      </Reveal>
     </section>
   );
 }
 
-// ─── Features ─────────────────────────────────────────────────────────────────
+// ─── Features (bento) ────────────────────────────────────────────────────────────
 
 const FEATURES = [
   {
     icon: Zap,
     title: "Real-time AI signals",
-    desc: "Model-driven analysis across stocks and crypto. BUY, SELL, or HOLD — each with a confidence score and the reasoning behind it.",
-    wide: true,
+    desc: "Model-driven analysis across stocks, crypto, and Polymarket / Kalshi contracts. BUY, SELL, YES, NO, each with a confidence score and the reasoning behind it.",
+    span: "lg:col-span-3",
   },
   {
     icon: Landmark,
     title: "Congressional trades",
-    desc: "STOCK Act disclosures for every House and Senate member — surfaced before the headlines.",
+    desc: "STOCK Act disclosures for every House and Senate member, surfaced before the headlines.",
+    span: "lg:col-span-2",
   },
   {
     icon: Waves,
-    title: "Unusual options flow",
-    desc: "Unusual sweeps and large block trades flagged automatically. Follow the smart money early.",
+    title: "Options & dark pool flow",
+    desc: "Unusual sweeps and block trades flagged in real time. Follow the smart money early.",
+    span: "lg:col-span-2",
   },
   {
     icon: Sunrise,
     title: "Morning briefing",
-    desc: "An AI-written market brief in your inbox at 7a ET — top signals, macro, and risk.",
+    desc: "An AI-written market brief in your inbox at 7a ET. Top signals, macro, and risk.",
+    span: "lg:col-span-2",
   },
   {
     icon: Wallet,
     title: "Portfolio tracker",
     desc: "Log entries, track P&L, and measure your positions against the signals that called them.",
+    span: "lg:col-span-3",
   },
   {
     icon: Target,
     title: "Accuracy per asset",
-    desc: "Every signal is tracked to outcome, so you see real win rates per ticker — not vibes.",
+    desc: "Every signal is tracked to outcome, so you see real win rates per ticker, not vibes.",
+    span: "lg:col-span-3",
   },
 ];
 
 function Features() {
   return (
-    <section id="terminal" className="py-24 px-5 sm:px-8">
+    <section className="py-24 px-5 sm:px-8">
       <div className="max-w-6xl mx-auto">
-        <div className="max-w-2xl mb-14">
-          <SectionLabel index="01">The terminal</SectionLabel>
-          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tight text-balance">
+        <Reveal className="max-w-2xl mb-12">
+          <SectionLabel index="02">What you get</SectionLabel>
+          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
             The institutional stack, in one tab
           </h2>
-          <p className="text-zinc-500 mt-4 leading-relaxed">
-            Stop juggling six subscriptions. Signals, flow, filings, and briefings —
+          <p className="text-secondary-foreground mt-4 leading-relaxed">
+            Stop juggling six subscriptions. Signals, flow, filings, and briefings:
             the full toolkit, priced for retail.
           </p>
-        </div>
+        </Reveal>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-white/[0.06] rounded-2xl overflow-hidden border border-white/[0.06]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+          {/* Visual anchor cell */}
+          <Reveal className="sm:col-span-2 lg:col-span-3 lg:row-span-2">
+            <div className="group relative h-full overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] transition-all duration-300 hover:border-white/[0.12]">
+              <div className="border-b border-white/[0.06] px-6 pt-6 pb-2">
+                <h3 className="text-white font-medium">Asset intelligence</h3>
+                <p className="text-muted-foreground text-sm mt-1 leading-relaxed">
+                  Price action, AI score, and flow for every ticker.
+                </p>
+              </div>
+              <div className="px-4 pb-4 pt-2">
+                <div className="rounded-xl border border-white/[0.06] bg-background overflow-hidden">
+                  <AssetShot />
+                </div>
+              </div>
+            </div>
+          </Reveal>
+
           {FEATURES.map((f, i) => {
             const Icon = f.icon;
             return (
-              <div
+              <Reveal
                 key={f.title}
-                className={`group relative bg-zinc-950 p-7 hover:bg-zinc-900/50 transition-colors ${
-                  f.wide ? "sm:col-span-2 lg:col-span-1" : ""
-                }`}
+                delay={i * 40}
+                className={`sm:col-span-1 ${f.span}`}
               >
-                <div className="flex items-start justify-between mb-5">
-                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
-                    <Icon className="h-5 w-5" />
+                <div className="group relative h-full rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.12] hover:bg-white/[0.04]">
+                  <div className="flex items-start justify-between mb-5">
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-700/30 bg-emerald-500/10 text-emerald-400 transition-colors group-hover:bg-emerald-500/15">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <span className="font-mono text-[11px] text-zinc-700 tabular-nums">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
                   </div>
-                  <span className="font-mono text-[11px] text-zinc-700 tabular-nums">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
+                  <h3 className="text-white font-medium mb-2">{f.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{f.desc}</p>
                 </div>
-                <h3 className="text-white font-medium mb-2">{f.title}</h3>
-                <p className="text-zinc-500 text-sm leading-relaxed">{f.desc}</p>
-              </div>
+              </Reveal>
             );
           })}
         </div>
@@ -256,7 +329,7 @@ const PLANS = [
     cta:       "Start 14-day trial",
     href:      "/signup",
     features: [
-      "Real-time AI signals — stocks & crypto",
+      "Real-time AI signals for stocks & crypto",
       "Unlimited watchlist",
       "Unusual options flow",
       "Congressional trade tracker",
@@ -269,13 +342,15 @@ const PLANS = [
     name:      "Elite",
     price:     "$80",
     period:    "/mo",
-    blurb:     "The real alpha — your own AI analyst and personalized briefings.",
+    blurb:     "The real alpha: prediction markets and your own AI analyst.",
     highlight: true,
     cta:       "Start 14-day trial",
     href:      "/signup",
     features: [
       "Everything in Pro",
-      "Pleby — your AI trading analyst, on call",
+      "Prediction-market signals (Kalshi + Polymarket)",
+      "AI finds mispriced contracts",
+      "Pleby, your AI trading analyst, on call",
       "Personalised morning briefing",
       "On-demand AI analysis — score any ticker",
     ],
@@ -286,66 +361,67 @@ function Pricing() {
   return (
     <section id="pricing" className="py-24 px-5 sm:px-8">
       <div className="max-w-5xl mx-auto">
-        <div className="max-w-2xl mb-14">
-          <SectionLabel index="02">Pricing</SectionLabel>
-          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tight">
+        <Reveal className="max-w-2xl mb-12">
+          <SectionLabel index="03">Pricing</SectionLabel>
+          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest">
             Two tiers. The signals pay for themselves.
           </h2>
-        </div>
+        </Reveal>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {PLANS.map((plan) => (
-            <div
-              key={plan.name}
-              className={`relative rounded-2xl p-8 border ${
-                plan.highlight
-                  ? "border-emerald-600/40 bg-emerald-500/[0.03] glow-green"
-                  : "border-white/10 bg-zinc-950 ring-hairline"
-              }`}
-            >
-              {plan.highlight && (
-                <span className="absolute -top-3 left-8 bg-emerald-500 text-black text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">
-                  Most popular
-                </span>
-              )}
-
-              <div className="flex items-baseline justify-between">
-                <div className="text-zinc-300 font-medium">{plan.name}</div>
-                <div className="flex items-baseline gap-1">
-                  <span className="font-mono text-4xl font-semibold text-white tracking-tight">
-                    {plan.price}
-                  </span>
-                  <span className="text-zinc-500 text-sm">{plan.period}</span>
-                </div>
-              </div>
-
-              <p className="text-zinc-500 text-sm mt-3 leading-relaxed">{plan.blurb}</p>
-
-              <Link
-                href={plan.href}
-                className={`block w-full text-center py-2.5 rounded-lg font-semibold text-sm my-7 transition-colors ${
+          {PLANS.map((plan, i) => (
+            <Reveal key={plan.name} delay={i * 80}>
+              <div
+                className={`relative h-full rounded-2xl p-8 border transition-all duration-300 ${
                   plan.highlight
-                    ? "bg-emerald-500 hover:bg-emerald-400 text-black"
-                    : "border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] text-zinc-200"
+                    ? "border-emerald-600/40 bg-emerald-500/[0.03] glow-green"
+                    : "border-white/10 bg-white/[0.02] ring-hairline hover:-translate-y-0.5 hover:border-white/20"
                 }`}
               >
-                {plan.cta}
-              </Link>
+                {plan.highlight && (
+                  <span className="absolute -top-3 left-8 bg-emerald-500 text-black text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">
+                    Most popular
+                  </span>
+                )}
 
-              <ul className="space-y-3">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2.5 text-sm text-zinc-400">
-                    <CircleCheck className="h-4 w-4 mt-0.5 flex-shrink-0 text-emerald-400" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-            </div>
+                <div className="flex items-baseline justify-between">
+                  <div className="text-zinc-300 font-medium">{plan.name}</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="font-mono text-4xl font-semibold text-white tracking-tightest">
+                      {plan.price}
+                    </span>
+                    <span className="text-muted-foreground text-sm">{plan.period}</span>
+                  </div>
+                </div>
+
+                <p className="text-muted-foreground text-sm mt-3 leading-relaxed">{plan.blurb}</p>
+
+                <Link
+                  href={plan.href}
+                  className={`block w-full text-center py-2.5 rounded-lg font-semibold text-sm my-7 transition-colors ${
+                    plan.highlight
+                      ? "bg-emerald-500 hover:bg-emerald-400 text-black"
+                      : "border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] text-zinc-200"
+                  }`}
+                >
+                  {plan.cta}
+                </Link>
+
+                <ul className="space-y-3">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5 text-sm text-secondary-foreground">
+                      <CircleCheck className="h-4 w-4 mt-0.5 flex-shrink-0 text-emerald-400" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
           ))}
         </div>
 
-        <p className="text-center text-zinc-500 text-sm mt-8">
-          14-day trial — credit card required, cancel anytime. Prefer to pay once?{" "}
+        <p className="text-center text-muted-foreground text-sm mt-8">
+          14-day free trial, credit card required, cancel anytime. Prefer to pay once?{" "}
           <Link href="/signup" className="text-emerald-400 hover:text-emerald-300 underline underline-offset-4 transition-colors">
             Lifetime access from $399
           </Link>
@@ -356,7 +432,7 @@ function Pricing() {
   );
 }
 
-// ─── FAQ ─────────────────────────────────────────────────────────────────────
+// ─── FAQ ──────────────────────────────────────────────────────────────────────
 
 const FAQS = [
   {
@@ -381,23 +457,32 @@ const FAQS = [
   },
 ];
 
-function FAQ() {
+function Faq() {
   return (
     <section id="faq" className="py-24 px-5 sm:px-8">
       <div className="max-w-3xl mx-auto">
-        <div className="mb-14">
-          <SectionLabel index="03">FAQ</SectionLabel>
-          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tight">
-            Common questions
+        <Reveal className="max-w-2xl mb-12">
+          <SectionLabel index="04">FAQ</SectionLabel>
+          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest">
+            Questions, answered.
           </h2>
-        </div>
+        </Reveal>
 
-        <div className="space-y-px rounded-2xl overflow-hidden border border-white/[0.06]">
-          {FAQS.map((faq) => (
-            <div key={faq.q} className="bg-zinc-950 p-6 sm:p-7">
-              <h3 className="text-white font-medium text-[15px]">{faq.q}</h3>
-              <p className="text-zinc-400 text-sm leading-relaxed mt-2">{faq.a}</p>
-            </div>
+        <div className="flex flex-col gap-3">
+          {FAQS.map((item, i) => (
+            <Reveal key={item.q} delay={i * 60}>
+              <details className="group rounded-2xl border border-white/[0.06] bg-white/[0.02] ring-hairline transition-colors open:border-white/[0.12] open:bg-white/[0.03]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5 text-left [&::-webkit-details-marker]:hidden">
+                  <span className="text-base font-medium text-white text-pretty">{item.q}</span>
+                  <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-zinc-400 transition-all duration-300 group-open:rotate-45 group-open:border-emerald-500/40 group-open:text-emerald-400">
+                    <Plus className="h-4 w-4" strokeWidth={2} />
+                  </span>
+                </summary>
+                <p className="px-6 pb-6 pt-0 text-secondary-foreground leading-relaxed text-pretty">
+                  {item.a}
+                </p>
+              </details>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -410,14 +495,14 @@ function FAQ() {
 function CTAStrip() {
   return (
     <section className="py-24 px-5 sm:px-8">
-      <div className="relative max-w-5xl mx-auto rounded-3xl border border-white/[0.08] bg-zinc-950 overflow-hidden ring-hairline">
+      <Reveal className="relative max-w-5xl mx-auto rounded-3xl border border-white/[0.08] bg-white/[0.02] overflow-hidden ring-hairline">
         <div className="pointer-events-none absolute -top-24 left-1/2 h-[320px] w-[680px] -translate-x-1/2 rounded-full bg-emerald-500/[0.10] blur-[120px]" />
 
         <div className="relative px-6 sm:px-12 py-16 text-center">
-          <h2 className="text-3xl sm:text-4xl font-semibold text-white tracking-tight text-balance">
+          <h2 className="text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
             Trade with an edge tomorrow morning.
           </h2>
-          <p className="text-zinc-400 mt-4">14-day trial. Real-time signals from day one.</p>
+          <p className="text-secondary-foreground mt-4">14-day trial. Real-time signals from day one.</p>
 
           <Link
             href="/signup"
@@ -428,8 +513,8 @@ function CTAStrip() {
           </Link>
 
           <div className="mt-12 pt-10 border-t border-white/[0.06] max-w-md mx-auto">
-            <p className="text-zinc-500 text-sm mb-4 leading-relaxed">
-              Not ready? Get the free daily newsletter — markets in plain English,
+            <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
+              Not ready? Get the free daily newsletter. Markets in plain English,
               every weekday at 7a ET.
             </p>
             <NewsletterSignup />
@@ -440,35 +525,97 @@ function CTAStrip() {
             Not financial advice.
           </p>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
+const FOOTER_COLS = [
+  {
+    heading: "Product",
+    links: [
+      { label: "The terminal", href: "#terminal" },
+      { label: "Pricing", href: "#pricing" },
+      { label: "FAQ", href: "#faq" },
+      { label: "Dashboard", href: "/dashboard" },
+    ],
+  },
+  {
+    heading: "Company",
+    links: [
+      { label: "Log in", href: "/login" },
+      { label: "Start free", href: "/signup" },
+      { label: "Newsletter", href: "/#pricing" },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { label: "Terms", href: "/terms" },
+      { label: "Privacy", href: "/privacy" },
+      { label: "Unsubscribe", href: "/unsubscribe" },
+    ],
+  },
+];
+
 function Footer() {
   return (
-    <footer className="border-t border-white/[0.06] py-10 px-5 sm:px-8">
-      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="text-base font-semibold text-white tracking-tight">
-          plebs<span className="text-emerald-400">.finance</span>
+    <footer className="border-t border-white/[0.06] px-5 sm:px-8">
+      <div className="max-w-6xl mx-auto py-14">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
+          {/* Brand */}
+          <div className="col-span-2 md:col-span-1">
+            <div className="text-base font-semibold text-white tracking-tightest">
+              plebs<span className="text-emerald-400">.finance</span>
+            </div>
+            <p className="mt-3 text-sm text-muted-foreground leading-relaxed max-w-xs">
+              Hedge fund tools. Retail prices.
+            </p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-wider text-emerald-400">
+                Live
+              </span>
+            </div>
+          </div>
+
+          {FOOTER_COLS.map((col) => (
+            <div key={col.heading}>
+              <h3 className="font-mono text-[11px] uppercase tracking-[0.18em] text-zinc-600 mb-4">
+                {col.heading}
+              </h3>
+              <ul className="space-y-2.5">
+                {col.links.map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      href={link.href}
+                      className="text-sm text-secondary-foreground hover:text-white transition-colors"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
-        <div className="flex items-center gap-6 text-xs text-zinc-500">
-          <Link href="/dashboard" className="hover:text-zinc-200 transition-colors">Dashboard</Link>
-          <Link href="/terms"     className="hover:text-zinc-200 transition-colors">Terms</Link>
-          <Link href="/privacy"   className="hover:text-zinc-200 transition-colors">Privacy</Link>
-          <Link href="/glossary"  className="hover:text-zinc-200 transition-colors">Glossary</Link>
+
+        <div className="mt-12 pt-8 border-t border-white/[0.06] flex flex-col gap-4">
+          <p className="text-[11px] text-zinc-600 leading-relaxed max-w-3xl">
+            Plebs.Finance provides AI-generated market analysis for informational purposes only.
+            Nothing on this platform constitutes financial, investment, or trading advice.
+            Always do your own research and consult a licensed financial advisor before making investment decisions.
+            Past performance of AI signals does not guarantee future results.
+          </p>
+          <div className="font-mono text-xs text-zinc-600">
+            © {new Date().getFullYear()} Plebs · Not financial advice
+          </div>
         </div>
-        <div className="font-mono text-xs text-zinc-600">
-          © {new Date().getFullYear()} Plebs · Not financial advice
-        </div>
-        <p className="text-[11px] text-zinc-600 text-center max-w-2xl leading-relaxed">
-          Plebs.finance provides AI-generated market analysis for informational purposes only.
-          Nothing on this platform constitutes financial, investment, or trading advice.
-          Always do your own research and consult a licensed financial advisor before making investment decisions.
-          Past performance of AI signals does not guarantee future results.
-        </p>
       </div>
     </footer>
   );
@@ -478,17 +625,18 @@ function Footer() {
 
 export default function LandingPage() {
   return (
-    <div className="font-sans bg-black min-h-screen antialiased selection:bg-emerald-500/30 selection:text-white">
+    <div className="font-sans bg-background min-h-screen antialiased selection:bg-emerald-500/30 selection:text-white">
       <Nav />
       <div className="pt-14">
         <TickerBar showStatus={false} />
       </div>
       <main>
         <Hero />
+        <Showcase />
         <Stats />
         <Features />
         <Pricing />
-        <FAQ />
+        <Faq />
         <CTAStrip />
       </main>
       <Footer />

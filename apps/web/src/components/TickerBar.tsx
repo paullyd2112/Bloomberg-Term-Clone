@@ -84,19 +84,23 @@ function fmt(price: number): string {
 function Item({ item }: { item: TickerItem }) {
   const change = item.change_24h;
   const positive = change != null && change >= 0;
-  const changeColor = positive ? "text-emerald-400" : "text-red-400";
-  const bgColor = positive ? "bg-emerald-500/10" : "bg-red-500/10";
 
   return (
-    <div className="inline-flex items-center gap-2 px-5 sm:px-6 whitespace-nowrap">
-      <span className="font-mono text-[12px] font-semibold text-zinc-300 tracking-wide">{item.identifier}</span>
-      <span className="font-mono text-[12px] text-zinc-400 tabular-nums">${fmt(item.price)}</span>
+    <div className="inline-flex items-center gap-2.5 pl-5 whitespace-nowrap">
+      <span className="font-mono text-[12px] font-semibold text-zinc-200 tracking-wide">{item.identifier}</span>
+      <span className="font-mono text-[12px] text-zinc-500 tabular-nums">${fmt(item.price)}</span>
       {change != null && (
-        <span className={`font-mono text-[10px] font-medium tabular-nums ${changeColor}`}>
-          {positive ? "+" : ""}{Math.abs(change).toFixed(2)}%
+        <span
+          className={`inline-flex items-center font-mono text-[10px] font-semibold tabular-nums rounded px-1.5 py-0.5 ${
+            positive
+              ? "text-emerald-400 bg-emerald-500/10"
+              : "text-red-400 bg-red-500/10"
+          }`}
+        >
+          {positive ? "+" : "\u2212"}{Math.abs(change).toFixed(2)}%
         </span>
       )}
-      <span className="text-white/[0.06] ml-1">|</span>
+      <span className="ml-3 h-3.5 w-px bg-white/[0.08]" />
     </div>
   );
 }

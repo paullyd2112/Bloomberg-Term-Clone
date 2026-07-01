@@ -2,22 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   Design tokens — refined dark terminal system
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Background ramp: cool near-black base with real elevation levels */
+  --background: #0a0b0d;
+  --surface-1: #101215; /* cards / lowest elevation */
+  --surface-2: #15171c; /* raised panels */
+  --surface-3: #1b1e24; /* popovers / highest */
+
+  /* Hairlines */
+  --line: rgba(255, 255, 255, 0.06);
+  --line-strong: rgba(255, 255, 255, 0.1);
+
+  /* Text ramp */
+  --foreground: #f4f5f6;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+
+  /* Emerald accent ramp */
+  --accent: #10b981;
+  --accent-bright: #34d399;
+  --accent-dim: rgba(16, 185, 129, 0.12);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--line);
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Premium selection + focus + scrollbar treatments */
+::selection {
+  background: rgba(16, 185, 129, 0.28);
+  color: #fff;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 4px rgba(16, 185, 129, 0.6);
+  border-radius: 4px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+  background-clip: content-box;
 }
 
 @layer utilities {
@@ -31,12 +84,33 @@ body {
     display: none;
   }
 
+  /* Tight, optical heading tracking for premium display type */
+  .tracking-tightest {
+    letter-spacing: -0.03em;
+  }
+
+  /* Emerald-tinted text gradient for hero accents */
+  .text-gradient-emerald {
+    background: linear-gradient(180deg, #fff 0%, #d1fae5 60%, #6ee7b7 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
   /* Faint terminal grid backdrop */
   .bg-grid {
     background-image:
       linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
     background-size: 56px 56px;
+  }
+
+  /* Finer grid for product-shot surfaces */
+  .bg-grid-fine {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 28px 28px;
   }
 
   /* Radial mask that fades the grid toward the edges */
@@ -50,12 +124,35 @@ body {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
 
+  /* Layered elevation shadow for raised surfaces */
+  .elevate {
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+      0 1px 2px 0 rgba(0, 0, 0, 0.4),
+      0 8px 24px -12px rgba(0, 0, 0, 0.7);
+  }
+  .elevate-lg {
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+      0 2px 4px 0 rgba(0, 0, 0, 0.4),
+      0 24px 60px -20px rgba(0, 0, 0, 0.8);
+  }
+
   /* Soft emerald ambient glow — restrained, premium */
   .glow-green {
     box-shadow:
       inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
       0 0 0 1px rgba(16, 185, 129, 0.18),
       0 24px 80px -32px rgba(16, 185, 129, 0.35);
+  }
+
+  /* Large ambient radial glow for hero/showcase backdrops */
+  .glow-ambient {
+    background: radial-gradient(
+      ellipse 50% 50% at 50% 50%,
+      rgba(16, 185, 129, 0.16) 0%,
+      transparent 70%
+    );
   }
 
   /* Hairline divider that fades at both ends */
@@ -67,5 +164,69 @@ body {
       rgba(255, 255, 255, 0.08) 80%,
       transparent
     );
+  }
+
+  /* Shimmer sweep for premium skeleton loaders */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.06),
+      transparent
+    );
+    animation: shimmer 1.8s infinite;
+  }
+}
+
+/* ============================================================
+   Motion — restrained, premium micro-interactions
+   ============================================================ */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Scroll-reveal: hidden until in view, then eased into place */
+.reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .shimmer::after {
+    animation: none;
   }
 }

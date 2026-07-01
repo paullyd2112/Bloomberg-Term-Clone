@@ -17,7 +17,7 @@ export default async function DashboardLayout({
   const profile = await getUserProfile();
 
   return (
-    <div className="flex h-screen bg-black text-white overflow-hidden">
+    <div className="flex h-screen bg-background text-white overflow-hidden">
       {/* Ambient background glow */}
       <div className="pointer-events-none fixed inset-0 z-0">
         <div className="absolute -top-40 left-1/4 w-[600px] h-[400px] bg-emerald-500/[0.04] blur-[150px] rounded-full" />

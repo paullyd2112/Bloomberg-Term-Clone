@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { SECTOR_MAP } from "@/lib/sectors";
+import SectionHeader from "@/components/ui/SectionHeader";
 
 type SectorStats = {
   sector: string;
@@ -90,10 +91,7 @@ export default async function SectorHeatmap() {
 
   return (
     <section>
-      <h2 className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.15em] text-zinc-500 mb-3">
-        <span className="text-emerald-400/60">●</span>
-        Sector ratings (7d)
-      </h2>
+      <SectionHeader divider className="mb-4">Sector ratings (7d)</SectionHeader>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {sectors.map((s) => (
           <div
