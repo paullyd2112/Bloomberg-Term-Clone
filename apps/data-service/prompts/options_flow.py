@@ -35,7 +35,8 @@ SIGNAL OUTPUT:
 - Direction = the UNDERLYING stock direction, not the option
 - Reference specific numbers: "3x call volume on $200 strike expiring in 12 days, $1.2M premium"
 - Swing is the default time horizon — most options flow plays out over 3-10 days
-- Keep reasoning under 150 words
+- Keep reasoning under 170 words
+- TRANSLATE THE JARGON: after citing the flow numbers, restate what it actually means in one plain-English clause. Don't just say "3x call volume on $200 strike, $1.2M premium" — say "3x call volume on $200 strike, $1.2M premium, meaning someone's betting big that this stock breaks above $200 soon." Keep the numbers, add the translation.
 
 WHEN TO HOLD:
 - Put/call ratio between 0.7-1.3 (balanced flow, no lean)
