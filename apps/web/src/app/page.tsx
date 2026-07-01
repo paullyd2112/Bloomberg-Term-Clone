@@ -39,7 +39,6 @@ function Nav() {
 
         <div className="hidden md:flex items-center gap-8 text-sm text-secondary-foreground">
           <a href="#terminal" className="hover:text-white transition-colors">The terminal</a>
-          <a href="#proof" className="hover:text-white transition-colors">Results</a>
           <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
         </div>
 
@@ -316,68 +315,6 @@ function Features() {
   );
 }
 
-// ─── Social proof ────────────────────────────────────────────────────────────
-
-const QUOTES = [
-  {
-    quote:
-      "The 8:45a brief is the only newsletter I actually open. Caught the TSLA reversal a full session before the move.",
-    name: "Ryan M.",
-    role: "Swing trader",
-  },
-  {
-    quote:
-      "Nobody else is doing prediction-market signals for retail. The Kalshi plays alone have paid for the year.",
-    name: "Destiny A.",
-    role: "Options + events",
-  },
-  {
-    quote:
-      "Congress tracker flagged a senator loading semis before the AI bill vote. That one alert covered months of sub.",
-    name: "Marcus T.",
-    role: "Equities",
-  },
-];
-
-function SocialProof() {
-  return (
-    <section id="proof" className="py-24 px-5 sm:px-8">
-      <div className="max-w-6xl mx-auto">
-        <Reveal className="max-w-2xl mb-12">
-          <SectionLabel index="03">Results</SectionLabel>
-          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
-            Traders don&apos;t churn. They tell their group chat.
-          </h2>
-        </Reveal>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {QUOTES.map((q, i) => (
-            <Reveal key={q.name} delay={i * 80}>
-              <figure className="h-full flex flex-col rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.12]">
-                <span className="font-serif text-4xl leading-none text-emerald-500/40">&ldquo;</span>
-                <blockquote className="mt-3 text-zinc-200 leading-relaxed flex-1 text-pretty">
-                  {q.quote}
-                </blockquote>
-                <figcaption className="mt-6 pt-5 border-t border-white/[0.06] flex items-center gap-3">
-                  <div className="relative h-10 w-10 rounded-full bg-gradient-to-br from-emerald-400/25 to-emerald-600/10 p-px">
-                    <div className="flex h-full w-full items-center justify-center rounded-full bg-background font-mono text-sm font-semibold text-emerald-400">
-                      {q.name.charAt(0)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-white">{q.name}</div>
-                    <div className="text-xs text-muted-foreground">{q.role}</div>
-                  </div>
-                </figcaption>
-              </figure>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 // ─── Pricing ──────────────────────────────────────────────────────────────────
 
 const PLANS = [
@@ -423,7 +360,7 @@ function Pricing() {
     <section id="pricing" className="py-24 px-5 sm:px-8">
       <div className="max-w-5xl mx-auto">
         <Reveal className="max-w-2xl mb-12">
-          <SectionLabel index="04">Pricing</SectionLabel>
+          <SectionLabel index="03">Pricing</SectionLabel>
           <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest">
             Two tiers. The signals pay for themselves.
           </h2>
@@ -540,7 +477,6 @@ const FOOTER_COLS = [
     heading: "Product",
     links: [
       { label: "The terminal", href: "#terminal" },
-      { label: "Results", href: "#proof" },
       { label: "Pricing", href: "#pricing" },
       { label: "Dashboard", href: "/dashboard" },
     ],
@@ -638,7 +574,6 @@ export default function LandingPage() {
         <Showcase />
         <Stats />
         <Features />
-        <SocialProof />
         <Pricing />
         <CTAStrip />
       </main>
