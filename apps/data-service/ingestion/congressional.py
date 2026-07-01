@@ -346,8 +346,7 @@ def ingest_congressional() -> str:
     if not all_rows:
         sources_tried.append("finnhub(0)")
         all_rows = _fetch_fmp_all()
-        if all_rows:
-            sources_tried.append(f"fmp({len(all_rows)})")
+        sources_tried.append(f"fmp({len(all_rows)})")
 
     all_rows = _dedup(all_rows)
     source_log = ", ".join(sources_tried)
