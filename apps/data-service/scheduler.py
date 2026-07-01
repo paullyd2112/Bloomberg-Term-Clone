@@ -155,7 +155,7 @@ def job_uptime_check():
 
     global _uptime_fail_count
 
-    _resend.api_key = os.environ.get("RESEND_API_KEY", "")
+    _resend.api_key = os.environ.get("RESEND_API_KEY", "") or os.environ.get("RESEND_API_KEY_", "")
     down_urls = []
 
     for url in UPTIME_URLS:
