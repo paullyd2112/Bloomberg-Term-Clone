@@ -300,8 +300,16 @@ def ingest_prediction_markets() -> str:
     all_records = kalshi_records + polymarket_records
 
     if not all_records:
-        logger.warning("No prediction market records fetched — both APIs may be down")
-        return "0 records written"
+        kalshi_note = (
+            "no credentials"
+            if not (KALSHI_API_KEY and KALSHI_PRIVATE_KEY)
+            else "0 markets after fetch/filter — check logs for fetch errors"
+        )
+        logger.warning(
+            "No prediction market records fetched — Kalshi: {}, Polymarket: 0 markets after fetch/filter",
+            kalshi_note,
+        )
+        return f"0 records written (Kalshi: {kalshi_note}, Polymarket: 0 after fetch/filter)"
 
     written    = 0
     batch_size = 100
