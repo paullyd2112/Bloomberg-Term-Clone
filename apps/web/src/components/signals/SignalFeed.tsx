@@ -99,12 +99,16 @@ export default function SignalFeed({ signals }: { signals: Signal[] }) {
           No signals for this day yet.
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-1 xl:grid-cols-2">
+        <div className="rounded-xl border border-white/[0.06] overflow-hidden">
           {filtered.map((signal) => (
             <SignalCard key={signal.id} signal={signal} />
           ))}
         </div>
       )}
+
+      <p className="text-[11px] text-zinc-700 leading-tight pt-1">
+        AI analysis only — not financial advice. Do your own research.
+      </p>
     </div>
   );
 }

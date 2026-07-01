@@ -18,126 +18,95 @@ export type Signal = {
 };
 
 const DIRECTION_STYLE: Record<string, string> = {
-  BUY:  "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  SELL: "bg-red-500/15 text-red-400 border-red-500/30",
-  HOLD: "bg-white/[0.06] text-zinc-400 border-white/10",
+  BUY:  "text-emerald-400",
+  SELL: "text-red-400",
+  HOLD: "text-zinc-500",
 };
 
 const OUTCOME_STYLE: Record<string, string> = {
   WIN:     "text-emerald-400",
   LOSS:    "text-red-400",
   NEUTRAL: "text-zinc-400",
-  PENDING: "text-zinc-600",
+  PENDING: "text-zinc-700",
 };
 
 const HORIZON_LABEL: Record<string, string> = {
-  intraday:     "Intraday",
-  swing:        "Swing",
-  longterm:     "Long-term",
-  before_close: "Before close",
+  intraday:     "INTRA",
+  swing:        "SWING",
+  longterm:     "LONG",
+  before_close: "CLOSE",
 };
+
+function confidenceColor(c: number): string {
+  return c >= 75 ? "text-emerald-400" : c >= 50 ? "text-amber-400" : "text-zinc-500";
+}
 
 export default function SignalCard({ signal }: { signal: Signal }) {
   const dirStyle = DIRECTION_STYLE[signal.direction] ?? DIRECTION_STYLE.HOLD;
   const timeAgo  = formatDistanceToNow(new Date(signal.created_at), { addSuffix: true });
 
   return (
-    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5 space-y-3 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all">
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span
-            className={clsx(
-              "flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg border",
-              dirStyle,
-            )}
-          >
-            {signal.direction}
-          </span>
-          <Link
-            href={`/dashboard/asset/${signal.asset_type}/${encodeURIComponent(signal.identifier)}`}
-            className="font-mono font-semibold text-white hover:text-emerald-400 truncate transition-colors"
-          >
-            {signal.identifier}
-          </Link>
-          <span className="text-[11px] text-zinc-600 capitalize hidden sm:block">
-            {signal.asset_type}
-          </span>
-        </div>
+    <div className="group flex items-center gap-3 px-3 py-2.5 border-b border-white/[0.05] last:border-b-0 hover:bg-white/[0.03] transition-colors">
+      <span className={clsx("w-9 flex-shrink-0 text-xs font-bold tabular-nums", dirStyle)}>
+        {signal.direction}
+      </span>
 
-        <div className="flex items-center gap-2.5 flex-shrink-0">
-          {signal.outcome !== "PENDING" && (
-            <span className={clsx("text-xs font-medium", OUTCOME_STYLE[signal.outcome])}>
-              {signal.outcome}
-            </span>
-          )}
-          <span className="text-[11px] text-zinc-600">{timeAgo}</span>
-        </div>
-      </div>
+      <Link
+        href={`/dashboard/asset/${signal.asset_type}/${encodeURIComponent(signal.identifier)}`}
+        className="w-20 flex-shrink-0 font-mono font-semibold text-white hover:text-emerald-400 truncate transition-colors"
+      >
+        {signal.identifier}
+      </Link>
 
-      {/* Confidence bar */}
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-          <div
-            className={clsx(
-              "h-full rounded-full transition-all",
-              signal.confidence >= 75
-                ? "bg-emerald-500"
-                : signal.confidence >= 50
-                ? "bg-amber-500"
-                : "bg-zinc-500",
-            )}
-            style={{ width: `${signal.confidence}%` }}
-          />
-        </div>
-        <div className="group relative">
-          <span className="text-xs text-zinc-400 w-8 text-right tabular-nums cursor-help">
-            {signal.confidence}%
-          </span>
-          <div className="hidden group-hover:block absolute bottom-full right-0 mb-1.5 w-52 bg-zinc-800 border border-white/10 text-zinc-300 text-[11px] rounded-lg px-3 py-2 shadow-xl z-50">
-            Model certainty in this signal direction, based on technical indicators, sentiment, and market context.
-          </div>
-        </div>
-      </div>
+      <span
+        className={clsx(
+          "w-10 flex-shrink-0 text-xs font-mono tabular-nums text-right",
+          confidenceColor(signal.confidence),
+        )}
+      >
+        {signal.confidence}%
+      </span>
 
-      {/* Reasoning — clickable to signal detail */}
+      <span className="w-12 flex-shrink-0 text-[10px] font-mono text-zinc-600 tracking-wide hidden sm:block">
+        {HORIZON_LABEL[signal.time_horizon] ?? signal.time_horizon}
+      </span>
+
+      {signal.price_at_signal != null && (
+        <span className="w-20 flex-shrink-0 text-xs font-mono text-zinc-500 text-right hidden sm:block">
+          ${Number(signal.price_at_signal).toLocaleString()}
+        </span>
+      )}
+
       <Link
         href={`/signal/${signal.id}`}
-        className="block text-sm text-zinc-300 leading-relaxed line-clamp-3 hover:text-zinc-100 transition-colors cursor-pointer"
+        className="flex-1 min-w-0 text-sm text-zinc-400 truncate hover:text-zinc-200 transition-colors"
       >
         {signal.reasoning}
       </Link>
 
-      {/* News context */}
-      {signal.news_context && signal.news_context.length > 0 && (
-        <div className="space-y-1">
-          {signal.news_context.slice(0, 3).map((item, i) => (
-            <p key={i} className="text-[11px] text-zinc-500 leading-snug truncate">
-              • {item}
-            </p>
-          ))}
-        </div>
+      {signal.outcome !== "PENDING" && (
+        <span
+          className={clsx(
+            "w-14 flex-shrink-0 text-[11px] font-medium text-right hidden md:block",
+            OUTCOME_STYLE[signal.outcome],
+          )}
+        >
+          {signal.outcome}
+        </span>
       )}
 
-      {/* Footer */}
-      <div className="flex items-center justify-between gap-2 pt-1">
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] text-zinc-500">
-            {HORIZON_LABEL[signal.time_horizon] ?? signal.time_horizon}
-          </span>
-          {signal.price_at_signal != null && (
-            <span className="text-[11px] text-zinc-500 font-mono">
-              @ ${Number(signal.price_at_signal).toLocaleString()}
-            </span>
-          )}
-        </div>
-        <ShareButton signalId={signal.id} ticker={signal.identifier} direction={signal.direction} confidence={signal.confidence} />
-      </div>
+      <span className="w-16 flex-shrink-0 text-[11px] text-zinc-600 text-right hidden lg:block">
+        {timeAgo}
+      </span>
 
-      {/* Disclaimer */}
-      <p className="text-[10px] text-zinc-700 leading-tight">
-        AI analysis only — not financial advice. Do your own research.
-      </p>
+      <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        <ShareButton
+          signalId={signal.id}
+          ticker={signal.identifier}
+          direction={signal.direction}
+          confidence={signal.confidence}
+        />
+      </div>
     </div>
   );
 }

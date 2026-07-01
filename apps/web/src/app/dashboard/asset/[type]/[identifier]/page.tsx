@@ -219,7 +219,7 @@ export default async function AssetPage({ params }: PageProps) {
               <div className="text-sm text-zinc-500 py-8 text-center">No signals yet for {identifier}.</div>
             )
           ) : (
-            <div className="space-y-3">
+            <div className="rounded-xl border border-white/[0.06] overflow-hidden">
               {signals.map((s) => (
                 <SignalCard key={s.id} signal={s} />
               ))}

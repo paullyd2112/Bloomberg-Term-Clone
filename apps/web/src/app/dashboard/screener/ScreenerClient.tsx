@@ -194,7 +194,7 @@ export default function ScreenerClient() {
           No signals match your filters.
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-1 xl:grid-cols-2">
+        <div className="rounded-xl border border-white/[0.06] overflow-hidden">
           {filtered.map((s) => (
             <SignalCard key={s.id} signal={s} />
           ))}
