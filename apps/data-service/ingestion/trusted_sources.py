@@ -54,6 +54,10 @@ TRUSTED_SOURCES: set[str] = {
     "Axios",
     "Politico",
 
+    # Geopolitics / defense
+    "Al Jazeera",
+    "Defense News",
+
     # Industry
     "SEC",
     "Federal Reserve",
