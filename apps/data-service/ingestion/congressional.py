@@ -94,6 +94,7 @@ def _efd_get_csrf_and_agree(client: httpx.Client) -> str | None:
     try:
         agree_resp = client.post(
             EFD_LANDING_URL,
+            headers={"Referer": EFD_LANDING_URL, "Origin": EFD_ROOT},
             data={"csrfmiddlewaretoken": csrf_token, "prohibition_agreement": "1"},
         )
         agree_resp.raise_for_status()
