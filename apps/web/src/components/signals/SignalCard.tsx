@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { clsx } from "clsx";
-import { formatDistanceToNow } from "date-fns";
 import ShareButton from "./ShareButton";
 
 export type Signal = {
@@ -17,127 +16,153 @@ export type Signal = {
   outcome: "WIN" | "LOSS" | "NEUTRAL" | "PENDING";
 };
 
-const DIRECTION_STYLE: Record<string, string> = {
-  BUY:  "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  SELL: "bg-red-500/15 text-red-400 border-red-500/30",
-  HOLD: "bg-white/[0.06] text-zinc-400 border-white/10",
+const DIRECTION_TEXT: Record<string, string> = {
+  BUY:  "text-emerald-400",
+  SELL: "text-red-400",
+  HOLD: "text-zinc-500",
 };
 
-const OUTCOME_STYLE: Record<string, string> = {
+const DIRECTION_ACCENT: Record<string, string> = {
+  BUY:  "border-l-emerald-500/50 group-hover:border-l-emerald-400",
+  SELL: "border-l-red-500/50 group-hover:border-l-red-400",
+  HOLD: "border-l-zinc-700 group-hover:border-l-zinc-600",
+};
+
+const OUTCOME_TEXT: Record<string, string> = {
   WIN:     "text-emerald-400",
   LOSS:    "text-red-400",
   NEUTRAL: "text-zinc-400",
-  PENDING: "text-zinc-600",
+  PENDING: "text-zinc-700",
 };
 
-const HORIZON_LABEL: Record<string, string> = {
-  intraday:     "Intraday",
-  swing:        "Swing",
-  longterm:     "Long-term",
-  before_close: "Before close",
+const HORIZON_SHORT: Record<string, string> = {
+  intraday:     "INTRA",
+  swing:        "SWING",
+  longterm:     "LONG",
+  before_close: "CLOSE",
 };
+
+const TYPE_LABEL: Record<string, string> = {
+  stock:      "Equity",
+  crypto:     "Crypto",
+  prediction: "Prediction",
+};
+
+function timeAgo(iso: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d`;
+  return `${Math.floor(d / 7)}w`;
+}
+
+function confColors(c: number): { text: string; bar: string } {
+  if (c >= 75) return { text: "text-emerald-400", bar: "bg-emerald-500" };
+  if (c >= 50) return { text: "text-amber-400", bar: "bg-amber-500" };
+  return { text: "text-zinc-500", bar: "bg-zinc-600" };
+}
 
 export default function SignalCard({ signal }: { signal: Signal }) {
-  const dirStyle = DIRECTION_STYLE[signal.direction] ?? DIRECTION_STYLE.HOLD;
-  const timeAgo  = formatDistanceToNow(new Date(signal.created_at), { addSuffix: true });
+  const conf = confColors(signal.confidence);
+  const horizon = HORIZON_SHORT[signal.time_horizon] ?? signal.time_horizon.slice(0, 5).toUpperCase();
+  const typeLabel = TYPE_LABEL[signal.asset_type] ?? signal.asset_type;
+  const priceStr =
+    signal.price_at_signal != null
+      ? `$${Number(signal.price_at_signal).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+      : "—";
 
   return (
-    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5 space-y-3 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all">
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span
-            className={clsx(
-              "flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg border",
-              dirStyle,
-            )}
-          >
-            {signal.direction}
-          </span>
-          <Link
-            href={`/dashboard/asset/${signal.asset_type}/${encodeURIComponent(signal.identifier)}`}
-            className="font-mono font-semibold text-white hover:text-emerald-400 truncate transition-colors"
-          >
-            {signal.identifier}
-          </Link>
-          <span className="text-[11px] text-zinc-600 capitalize hidden sm:block">
-            {signal.asset_type}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2.5 flex-shrink-0">
-          {signal.outcome !== "PENDING" && (
-            <span className={clsx("text-xs font-medium", OUTCOME_STYLE[signal.outcome])}>
-              {signal.outcome}
-            </span>
-          )}
-          <span className="text-[11px] text-zinc-600">{timeAgo}</span>
-        </div>
-      </div>
-
-      {/* Confidence bar */}
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-          <div
-            className={clsx(
-              "h-full rounded-full transition-all",
-              signal.confidence >= 75
-                ? "bg-emerald-500"
-                : signal.confidence >= 50
-                ? "bg-amber-500"
-                : "bg-zinc-500",
-            )}
-            style={{ width: `${signal.confidence}%` }}
-          />
-        </div>
-        <div className="group relative">
-          <span className="text-xs text-zinc-400 w-8 text-right tabular-nums cursor-help">
-            {signal.confidence}%
-          </span>
-          <div className="hidden group-hover:block absolute bottom-full right-0 mb-1.5 w-52 bg-zinc-800 border border-white/10 text-zinc-300 text-[11px] rounded-lg px-3 py-2 shadow-xl z-50">
-            Model certainty in this signal direction, based on technical indicators, sentiment, and market context.
-          </div>
-        </div>
-      </div>
-
-      {/* Reasoning — clickable to signal detail */}
+    <div
+      className={clsx(
+        "group relative flex items-center gap-3 sm:gap-4 border-l-2 py-3 pl-3 pr-3 sm:pl-4 sm:pr-4 transition-colors hover:bg-white/[0.025]",
+        DIRECTION_ACCENT[signal.direction] ?? DIRECTION_ACCENT.HOLD,
+      )}
+    >
+      {/* Full-row click target → signal detail (siblings with z-10 stay clickable) */}
       <Link
         href={`/signal/${signal.id}`}
-        className="block text-sm text-zinc-300 leading-relaxed line-clamp-3 hover:text-zinc-100 transition-colors cursor-pointer"
+        aria-label={`${signal.direction} ${signal.identifier} at ${signal.confidence}% confidence — view details`}
+        className="absolute inset-0 z-0"
+      />
+
+      {/* Direction */}
+      <span
+        className={clsx(
+          "relative z-10 w-10 flex-shrink-0 font-mono text-[11px] font-bold tracking-wide",
+          DIRECTION_TEXT[signal.direction] ?? DIRECTION_TEXT.HOLD,
+        )}
       >
-        {signal.reasoning}
-      </Link>
+        {signal.direction}
+      </span>
 
-      {/* News context */}
-      {signal.news_context && signal.news_context.length > 0 && (
-        <div className="space-y-1">
-          {signal.news_context.slice(0, 3).map((item, i) => (
-            <p key={i} className="text-[11px] text-zinc-500 leading-snug truncate">
-              • {item}
-            </p>
-          ))}
-        </div>
-      )}
-
-      {/* Footer */}
-      <div className="flex items-center justify-between gap-2 pt-1">
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] text-zinc-500">
-            {HORIZON_LABEL[signal.time_horizon] ?? signal.time_horizon}
-          </span>
-          {signal.price_at_signal != null && (
-            <span className="text-[11px] text-zinc-500 font-mono">
-              @ ${Number(signal.price_at_signal).toLocaleString()}
-            </span>
-          )}
-        </div>
-        <ShareButton signalId={signal.id} ticker={signal.identifier} direction={signal.direction} confidence={signal.confidence} />
+      {/* Ticker + type */}
+      <div className="relative z-10 flex w-[4.5rem] min-w-0 flex-shrink-0 items-baseline gap-1.5 sm:w-32">
+        <Link
+          href={`/dashboard/asset/${signal.asset_type}/${encodeURIComponent(signal.identifier)}`}
+          className="truncate font-mono text-sm font-semibold text-white transition-colors hover:text-emerald-400"
+        >
+          {signal.identifier}
+        </Link>
+        <span className="hidden flex-shrink-0 text-[10px] uppercase tracking-wider text-zinc-600 lg:inline">
+          {typeLabel}
+        </span>
       </div>
 
-      {/* Disclaimer */}
-      <p className="text-[10px] text-zinc-700 leading-tight">
-        AI analysis only — not financial advice. Do your own research.
+      {/* Confidence */}
+      <div className="relative z-10 flex w-14 flex-shrink-0 items-center gap-2 sm:w-[4.75rem]">
+        <div className="hidden h-1 flex-1 overflow-hidden rounded-full bg-white/[0.08] sm:block">
+          <div className={clsx("h-full rounded-full", conf.bar)} style={{ width: `${signal.confidence}%` }} />
+        </div>
+        <span className={clsx("font-mono text-xs font-bold tabular-nums", conf.text)}>
+          {signal.confidence}
+          <span className="text-[10px] font-medium opacity-60">%</span>
+        </span>
+      </div>
+
+      {/* Horizon */}
+      <span className="relative z-10 hidden w-14 flex-shrink-0 font-mono text-[10px] uppercase tracking-wider text-zinc-500 md:block">
+        {horizon}
+      </span>
+
+      {/* Price */}
+      <span className="relative z-10 hidden w-20 flex-shrink-0 text-right font-mono text-xs tabular-nums text-zinc-400 sm:block">
+        {priceStr}
+      </span>
+
+      {/* Reasoning — recedes, click-through to detail via overlay */}
+      <p className="min-w-0 flex-1 truncate text-[13px] leading-tight text-zinc-400">
+        {signal.reasoning}
       </p>
+
+      {/* Outcome */}
+      <span
+        className={clsx(
+          "relative z-10 hidden w-12 flex-shrink-0 text-right font-mono text-[10px] font-semibold uppercase tracking-wider lg:block",
+          OUTCOME_TEXT[signal.outcome],
+        )}
+        aria-hidden={signal.outcome === "PENDING"}
+      >
+        {signal.outcome === "PENDING" ? "" : signal.outcome}
+      </span>
+
+      {/* Timestamp */}
+      <span className="relative z-10 hidden w-10 flex-shrink-0 text-right font-mono text-[10px] tabular-nums text-zinc-600 lg:block">
+        {timeAgo(signal.created_at)}
+      </span>
+
+      {/* Share — floats in on hover over the timestamp */}
+      <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 bg-background/80 pl-2 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <ShareButton
+          signalId={signal.id}
+          ticker={signal.identifier}
+          direction={signal.direction}
+          confidence={signal.confidence}
+        />
+      </div>
     </div>
   );
 }

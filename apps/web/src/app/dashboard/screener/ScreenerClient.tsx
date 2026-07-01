@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
-import SignalCard, { type Signal } from "@/components/signals/SignalCard";
+import SignalList from "@/components/signals/SignalList";
+import { type Signal } from "@/components/signals/SignalCard";
 
 type AssetFilter     = "all" | "stock" | "crypto";
 type DirectionFilter = "all" | "BUY" | "SELL";
@@ -194,11 +195,7 @@ export default function ScreenerClient() {
           No signals match your filters.
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-1 xl:grid-cols-2">
-          {filtered.map((s) => (
-            <SignalCard key={s.id} signal={s} />
-          ))}
-        </div>
+        <SignalList signals={filtered} />
       )}
     </div>
   );

@@ -227,19 +227,19 @@ const FEATURES = [
     icon: Landmark,
     title: "Congressional trades",
     desc: "STOCK Act disclosures for every House and Senate member, surfaced before the headlines.",
-    span: "lg:col-span-2",
+    span: "lg:col-span-3",
   },
   {
     icon: Waves,
     title: "Options & dark pool flow",
     desc: "Unusual sweeps and block trades flagged in real time. Follow the smart money early.",
-    span: "lg:col-span-2",
+    span: "lg:col-span-3",
   },
   {
     icon: Sunrise,
     title: "Morning briefing",
     desc: "An AI-written market brief in your inbox at 7a ET. Top signals, macro, and risk.",
-    span: "lg:col-span-2",
+    span: "lg:col-span-3",
   },
   {
     icon: Wallet,
@@ -270,7 +270,7 @@ function Features() {
           </p>
         </Reveal>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 lg:auto-rows-fr gap-3">
           {/* Visual anchor cell */}
           <Reveal className="sm:col-span-2 lg:col-span-3 lg:row-span-2">
             <div className="group relative h-full overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] transition-all duration-300 hover:border-white/[0.12]">

@@ -3,7 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserTier } from "@/lib/user";
 import { canAccessFeature } from "@/lib/tier";
-import SignalCard from "@/components/signals/SignalCard";
+import SignalList from "@/components/signals/SignalList";
 import type { Signal } from "@/components/signals/SignalCard";
 import WatchlistToggle from "@/components/watchlist/WatchlistToggle";
 import AccuracyBadge from "@/components/asset/AccuracyBadge";
@@ -220,11 +220,7 @@ export default async function AssetPage({ params }: PageProps) {
               <div className="text-sm text-zinc-500 py-8 text-center">No signals yet for {identifier}.</div>
             )
           ) : (
-            <div className="space-y-3">
-              {signals.map((s) => (
-                <SignalCard key={s.id} signal={s} />
-              ))}
-            </div>
+            <SignalList signals={signals} />
           )}
         </div>
 
