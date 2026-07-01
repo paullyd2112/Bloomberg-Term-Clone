@@ -21,6 +21,7 @@ from ingestion.earnings import ingest_earnings
 from ingestion.macro_events import seed_macro_events
 from ingestion.fred import enrich_macro_events
 from ingestion.news import ingest_news
+from ingestion.tech_news import ingest_tech_news
 from ingestion.crypto_momentum import ingest_momentum_coins
 from scoring.engine import score_stocks, score_stocks_event_only, score_crypto, score_prediction_markets, score_options_flow
 from scoring.resolver import resolve_outcomes, evaluate_alerts
@@ -115,6 +116,9 @@ def job_score_options_flow():
 
 def job_ingest_news():
     return ingest_news()
+
+def job_ingest_tech_news():
+    return ingest_tech_news()
 
 def job_crypto_momentum():
     return ingest_momentum_coins()
@@ -301,6 +305,10 @@ scheduler.add_job(lambda: _run_job("ingest_insider_trades", job_ingest_insider_t
 # Market news — ingest at 6:45am ET weekdays, before newsletter generation
 scheduler.add_job(lambda: _run_job("ingest_news", job_ingest_news),
                   CronTrigger(hour=6, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_news")
+# AI/tech industry news (RSS, no API key) — same window, gives the newsletter
+# model-launch and product-news coverage Finnhub's finance-wire feed misses
+scheduler.add_job(lambda: _run_job("ingest_tech_news", job_ingest_tech_news),
+                  CronTrigger(hour=6, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_tech_news")
 
 # Newsletter — generate at 7:00am, send via Resend at 7:15am ET weekdays, retry at 7:45am
 scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newsletter),
@@ -560,6 +568,7 @@ def run_job_manual(job_name: str):
         "resolve_outcomes": job_resolve_outcomes,
         "refresh_asset_accuracy": job_refresh_asset_accuracy,
         "ingest_news": job_ingest_news,
+        "ingest_tech_news": job_ingest_tech_news,
         "ingest_stocks": job_ingest_stocks,
         "ingest_crypto": job_ingest_crypto,
         "ingest_prediction_markets": job_ingest_prediction_markets,

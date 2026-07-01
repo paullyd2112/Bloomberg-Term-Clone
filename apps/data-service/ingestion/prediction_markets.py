@@ -24,7 +24,7 @@ NEWS_API_KEY       = os.environ.get("NEWS_API_KEY", "")
 KALSHI_API_KEY     = os.environ.get("KALSHI_API_KEY", "")
 KALSHI_PRIVATE_KEY = os.environ.get("KALSHI_PRIVATE_KEY", "")
 
-KALSHI_BASE        = "https://trading-api.kalshi.com/trade-api/v2"
+KALSHI_BASE        = "https://api.elections.kalshi.com/trade-api/v2"
 KALSHI_MARKETS_PATH = "/trade-api/v2/markets"
 POLYMARKET_URL     = "https://clob.polymarket.com/markets"
 NEWSAPI_URL        = "https://newsapi.org/v2/everything"
@@ -32,6 +32,7 @@ NEWSAPI_URL        = "https://newsapi.org/v2/everything"
 KALSHI_MIN_VOLUME     = 100
 POLYMARKET_MIN_VOLUME = 100
 REQUEST_TIMEOUT       = 15.0
+MAX_PAGES             = 50   # hard cap so a pagination cursor that never terminates can't hang the job forever
 
 
 # ─── Kalshi RSA-PSS auth ──────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ async def _fetch_kalshi(client: httpx.AsyncClient) -> list[dict]:
     records = []
     cursor  = None
 
-    while True:
+    for page in range(MAX_PAGES):
         params: dict = {"status": "open", "limit": 200}
         if cursor:
             params["cursor"] = cursor
@@ -123,6 +124,8 @@ async def _fetch_kalshi(client: httpx.AsyncClient) -> list[dict]:
         cursor = data.get("cursor")
         if not cursor:
             break
+    else:
+        logger.warning("Kalshi: hit the {}-page cap without exhausting pagination", MAX_PAGES)
 
     logger.info("Kalshi: fetched {} open markets", len(records))
     return records
@@ -132,7 +135,7 @@ async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
     records     = []
     next_cursor = ""
 
-    while True:
+    for page in range(MAX_PAGES):
         params: dict = {"active": "true"}
         if next_cursor:
             params["next_cursor"] = next_cursor
@@ -190,6 +193,9 @@ async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
         next_cursor = data.get("next_cursor", "")
         if not next_cursor or next_cursor == "LTE=":
             break
+    else:
+        logger.warning("Polymarket: hit the {}-page cap without exhausting pagination — "
+                        "cursor may not be terminating correctly", MAX_PAGES)
 
     logger.info("Polymarket: fetched {} active markets", len(records))
     return records

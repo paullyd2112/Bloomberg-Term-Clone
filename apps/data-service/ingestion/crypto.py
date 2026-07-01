@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 from supabase_client import supabase
 from ingestion.trusted_sources import is_trusted_source
 from ingestion.alpaca_client import fetch_crypto_bars
+from ingestion.crypto_news import ingest_crypto_news_rss
 
 load_dotenv()
 
@@ -630,8 +631,12 @@ def ingest_crypto() -> str:
                     logger.error("{}: OHLCV-only fallback failed — {}", sym, e)
                     failed += 1
 
-    # General crypto news
+    # General crypto news — Finnhub (broad) + named RSS outlets (CoinDesk, Decrypt, The Block)
     news_count = _fetch_and_store_crypto_news()
+    try:
+        ingest_crypto_news_rss()
+    except Exception as e:
+        logger.warning("Crypto RSS news ingestion failed: {}", e)
 
     summary = (
         f"{success} coins ingested, {failed} failed, "
