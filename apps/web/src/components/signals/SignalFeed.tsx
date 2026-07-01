@@ -3,7 +3,8 @@
 import { useState, useMemo } from "react";
 import { clsx } from "clsx";
 import { ChevronDown } from "lucide-react";
-import SignalCard, { type Signal } from "./SignalCard";
+import SignalList from "./SignalList";
+import { type Signal } from "./SignalCard";
 
 const TABS = [
   { id: "all",    label: "All" },
@@ -99,11 +100,7 @@ export default function SignalFeed({ signals }: { signals: Signal[] }) {
           No signals for this day yet.
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-1 xl:grid-cols-2">
-          {filtered.map((signal) => (
-            <SignalCard key={signal.id} signal={signal} />
-          ))}
-        </div>
+        <SignalList signals={filtered} />
       )}
     </div>
   );

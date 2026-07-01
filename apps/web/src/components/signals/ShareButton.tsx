@@ -148,19 +148,14 @@ export default function ShareButton({ signalId, ticker, direction, confidence }:
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen((o) => !o)}
-        title="Share signal"
-        className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors flex items-center gap-1"
+        title={copied ? "Link copied" : "Share signal"}
+        aria-label="Share signal"
+        className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-white"
       >
         {copied ? (
-          <span className="flex items-center gap-1 text-emerald-400">
-            <Check className="h-3 w-3" />
-            Copied!
-          </span>
+          <Check className="h-3.5 w-3.5 text-emerald-400" />
         ) : (
-          <>
-            <Share2 className="h-3 w-3" />
-            <span>Share</span>
-          </>
+          <Share2 className="h-3.5 w-3.5" />
         )}
       </button>
 
