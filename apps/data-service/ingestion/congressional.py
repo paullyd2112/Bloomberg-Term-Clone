@@ -1,17 +1,22 @@
 """
 Congressional trades ingestion — multi-source.
-Primary: Senate Stock Watcher (free, GitHub-hosted JSON from efdsearch.senate.gov).
-Secondary: Finnhub /stock/congressional-trading (premium).
-Tertiary: FMP /v4/senate-trading-rss-feed + house-disclosure-rss-feed (premium v4).
+Primary: direct scraper against efdsearch.senate.gov (free, official source — the
+         Senate Stock Watcher/other third-party feeds have all gone stale or paid).
+Secondary: Senate Stock Watcher's static JSON (kept as a harmless fallback; dead
+           since ~Dec 2020 but costs nothing to still try).
+Tertiary: Finnhub /stock/congressional-trading (premium).
+Quaternary: FMP /v4/senate-trading-rss-feed + house-disclosure-rss-feed (premium v4).
 Runs daily at 8:00am ET via scheduler.
 """
 
 import os
+import re
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 import sentry_sdk
+from bs4 import BeautifulSoup
 from loguru import logger
 from dotenv import load_dotenv
 
@@ -28,6 +33,16 @@ SENATE_WATCHER_URL = (
     "https://raw.githubusercontent.com/"
     "timothycarambat/senate-stock-watcher-data/master/aggregate/all_transactions.json"
 )
+
+# ── efdsearch.senate.gov scraper constants ──────────────────────────────────
+EFD_ROOT         = "https://efdsearch.senate.gov"
+EFD_LANDING_URL  = f"{EFD_ROOT}/search/home/"
+EFD_SEARCH_URL   = f"{EFD_ROOT}/search/report/data/"
+EFD_PTR_TYPE     = "[11]"   # "Periodic Transaction Report" — the STOCK Act trade-disclosure filing type
+EFD_PDF_PREFIX   = "/search/view/paper/"  # paper-filed reports are scanned PDFs — skipped, not OCR'd
+EFD_BATCH_SIZE   = 100
+EFD_MAX_RUNTIME_S = 120  # wall-clock budget so a slow/hanging report page can't stall the whole run
+EFD_USER_AGENT   = "PlebsFinance/1.0 (congressional trade disclosure aggregator; contact: paulsolomonaqua@gmail.com)"
 
 
 def _fmp_key() -> str:
@@ -57,7 +72,182 @@ def _normalize_transaction(raw: str) -> str | None:
     return None
 
 
-# ── Senate Stock Watcher source (primary, free) ─────────────────────────────
+# ── efdsearch.senate.gov scraper (primary, free, official source) ──────────
+
+def _efd_get_csrf_and_agree(client: httpx.Client) -> bool:
+    """Load the landing page, extract the CSRF token, and accept the required
+    legal agreement — efdsearch.senate.gov blocks all search requests for a
+    session until this is done."""
+    try:
+        resp = client.get(EFD_LANDING_URL)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        token_input = soup.find(attrs={"name": "csrfmiddlewaretoken"})
+        if not token_input or not token_input.get("value"):
+            return False
+        csrf_token = token_input["value"]
+
+        agree_resp = client.post(
+            EFD_LANDING_URL,
+            data={"csrfmiddlewaretoken": csrf_token, "prohibition_agreement": "1"},
+        )
+        agree_resp.raise_for_status()
+        return "csrftoken" in client.cookies
+    except Exception as e:
+        logger.warning("congressional: EFD session bootstrap failed — {}", e)
+        return False
+
+
+def _efd_search_ptrs(client: httpx.Client, start_date: date) -> list[list]:
+    """Page through Periodic Transaction Report filings since start_date.
+    Returns raw DataTables rows: [first, last, _, link_html, date_received]."""
+    rows: list[list] = []
+    offset = 0
+    csrf_token = client.cookies.get("csrftoken", "")
+
+    while True:
+        try:
+            resp = client.post(
+                EFD_SEARCH_URL,
+                headers={"X-CSRFToken": csrf_token, "Referer": EFD_LANDING_URL},
+                data={
+                    "report_types": EFD_PTR_TYPE,
+                    "submitted_start_date": start_date.strftime("%m/%d/%Y 00:00:00"),
+                    "submitted_end_date": "",
+                    "start": str(offset),
+                    "length": str(EFD_BATCH_SIZE),
+                },
+            )
+            resp.raise_for_status()
+            batch = resp.json().get("data") or []
+        except Exception as e:
+            logger.warning("congressional: EFD search page at offset {} failed — {}", offset, e)
+            break
+
+        rows.extend(batch)
+        if len(batch) < EFD_BATCH_SIZE:
+            break
+        offset += EFD_BATCH_SIZE
+
+    return rows
+
+
+def _efd_parse_report_link(link_html: str) -> str | None:
+    """Extract the href from the anchor tag in a search result row."""
+    m = re.search(r'href="([^"]+)"', link_html or "")
+    return m.group(1) if m else None
+
+
+def _efd_fetch_report_transactions(client: httpx.Client, report_url: str) -> list[dict]:
+    """Fetch and parse one PTR filing's transaction table.
+    Column layout (positional, matches efdsearch's report template):
+    [owner, tx_date, notif_date, ticker, asset_name, asset_type, order_type, tx_amount]."""
+    resp = client.get(report_url)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
+    tbody = soup.find("tbody")
+    if not tbody:
+        return []
+
+    txs = []
+    for tr in tbody.find_all("tr"):
+        cols = [td.get_text(strip=True) for td in tr.find_all("td")]
+        if len(cols) < 8:
+            continue
+        txs.append({
+            "tx_date":    cols[1],
+            "ticker":     cols[3],
+            "order_type": cols[6],
+            "tx_amount":  cols[7],
+        })
+    return txs
+
+
+def _fetch_senate_efd() -> list[dict]:
+    """Scrape efdsearch.senate.gov directly for Periodic Transaction Reports —
+    the official, always-current source now that Senate Stock Watcher's static
+    feed has gone stale. Paper-filed (scanned PDF) reports are skipped, matching
+    the same tradeoff every open-source scraper for this site makes."""
+    cutoff = date.today() - timedelta(days=LOOKBACK_DAYS)
+    rows: list[dict] = []
+    start = datetime.now(timezone.utc)
+
+    try:
+        with httpx.Client(
+            timeout=30, headers={"User-Agent": EFD_USER_AGENT}, follow_redirects=True,
+        ) as client:
+            if not _efd_get_csrf_and_agree(client):
+                logger.warning("congressional: EFD session bootstrap failed — skipping EFD source")
+                return []
+
+            search_rows = _efd_search_ptrs(client, cutoff)
+            logger.info("congressional: EFD search returned {} PTR filings", len(search_rows))
+
+            skipped_pdf = 0
+            for row in search_rows:
+                if (datetime.now(timezone.utc) - start).total_seconds() > EFD_MAX_RUNTIME_S:
+                    logger.warning(
+                        "congressional: EFD hit {}s runtime budget — stopping early with partial results",
+                        EFD_MAX_RUNTIME_S,
+                    )
+                    break
+                if len(row) < 5:
+                    continue
+
+                first, last, _unused, link_html, date_received = row[0], row[1], row[2], row[3], row[4]
+                politician = f"{first} {last}".strip()
+
+                href = _efd_parse_report_link(link_html)
+                if not href:
+                    continue
+                if href.startswith(EFD_PDF_PREFIX):
+                    skipped_pdf += 1
+                    continue
+
+                report_date = _parse_watcher_date(date_received)
+
+                try:
+                    txs = _efd_fetch_report_transactions(client, f"{EFD_ROOT}{href}")
+                except Exception as e:
+                    logger.debug("congressional: EFD report parse failed for {} — {}", politician, e)
+                    continue
+
+                for tx in txs:
+                    ticker = (tx["ticker"] or "").strip().upper()
+                    if not ticker or ticker in ("--", "N/A"):
+                        continue
+                    txn = _normalize_transaction(tx["order_type"])
+                    if txn is None:
+                        continue
+                    trade_date = _parse_watcher_date(tx["tx_date"])
+                    if not trade_date or trade_date < cutoff:
+                        continue
+
+                    rows.append({
+                        "politician":   politician,
+                        "party":        "",
+                        "ticker":       ticker,
+                        "transaction":  txn,
+                        "amount_range": tx["tx_amount"].strip(),
+                        "trade_date":   trade_date.isoformat(),
+                        "report_date":  report_date.isoformat() if report_date else None,
+                    })
+
+                time.sleep(0.5)
+
+            if skipped_pdf:
+                logger.info("congressional: EFD skipped {} paper-filed (PDF) reports", skipped_pdf)
+
+    except Exception as e:
+        logger.error("congressional: EFD scraper failed — {}", e)
+        sentry_sdk.capture_exception(e)
+        return []
+
+    logger.info("congressional: EFD scraper parsed {} trades", len(rows))
+    return rows
+
+
+# ── Senate Stock Watcher source (secondary, free but stale) ─────────────────
 
 def _parse_watcher_date(raw: str) -> date | None:
     """Parse MM/DD/YYYY or YYYY-MM-DD date strings."""
@@ -329,12 +519,20 @@ def _get_existing_keys() -> set[tuple]:
 def ingest_congressional() -> str:
     sources_tried = []
 
-    # 1. Senate Stock Watcher (free, government data)
-    all_rows = _fetch_senate_watcher()
+    # 1. efdsearch.senate.gov direct scraper (free, official, always-current)
+    all_rows = _fetch_senate_efd()
     if all_rows:
-        sources_tried.append(f"senate_watcher({len(all_rows)})")
+        sources_tried.append(f"efd({len(all_rows)})")
 
-    # 2. Finnhub (premium, per-ticker)
+    # 2. Senate Stock Watcher (free, but its static feed has been stale since
+    #    ~Dec 2020 — kept only as a harmless zero-cost fallback)
+    if not all_rows:
+        sources_tried.append("efd(0)")
+        all_rows = _fetch_senate_watcher()
+        if all_rows:
+            sources_tried.append(f"senate_watcher({len(all_rows)})")
+
+    # 3. Finnhub (premium, per-ticker)
     if not all_rows:
         sources_tried.append("senate_watcher(0)")
         tickers = _get_tracked_tickers()
@@ -342,7 +540,7 @@ def ingest_congressional() -> str:
         if all_rows:
             sources_tried.append(f"finnhub({len(all_rows)})")
 
-    # 3. FMP (premium, bulk)
+    # 4. FMP (premium, bulk)
     if not all_rows:
         sources_tried.append("finnhub(0)")
         all_rows = _fetch_fmp_all()
