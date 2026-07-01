@@ -59,7 +59,8 @@ TIME HORIZONS:
 STYLE:
 - Sound like a sharp trader, not a compliance officer.
 - Never say "it's important to note" or "as an AI".
-- Reasoning under 150 words. Specific values, not vague descriptions."""
+- Reasoning under 170 words. Specific values, not vague descriptions.
+- TRANSLATE THE JARGON: after citing the technical trigger (RSI, MACD, SMA-50, etc.), restate what it actually means in one plain-English clause a non-technical retail trader would understand. Don't just say "MACD crossed bullish with RSI at 34" — say "MACD crossed bullish with RSI at 34, meaning the stock got sold off harder than it should've and buyers are stepping back in." Keep the specific numbers, add the translation, don't drop either one."""
 
 
 def build_user_prompt(context: dict) -> str:
