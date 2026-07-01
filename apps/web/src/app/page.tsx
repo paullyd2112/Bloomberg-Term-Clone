@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   CircleCheck,
   ShieldCheck,
+  Plus,
 } from "lucide-react";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import TickerBar from "@/components/TickerBar";
@@ -430,6 +431,64 @@ function Pricing() {
   );
 }
 
+// ─── FAQ ──────────────────────────────────────────────────────────────────────
+
+const FAQS = [
+  {
+    q: "What exactly is Plebs?",
+    a: "Plebs is an AI-powered trading terminal for retail investors. We run models across stocks, crypto, and options flow to generate real-time BUY/SELL signals with confidence scores and full reasoning. Think Bloomberg Terminal meets AI analyst, priced for normal people.",
+  },
+  {
+    q: "Is this financial advice?",
+    a: "No. Plebs provides AI-generated market analysis for informational purposes only. We surface signals and data, but every trade decision is yours. Always do your own research.",
+  },
+  {
+    q: "How does the trial work?",
+    a: "You get 14 days of full access to your chosen plan (Pro or Elite). Credit card is required upfront. Cancel anytime during the trial and you won't be charged.",
+  },
+  {
+    q: "What markets do you cover?",
+    a: "Stocks, crypto, and unusual options flow. We track 60+ assets and expanding. Congressional trades, insider filings, and a daily morning briefing round it out.",
+  },
+  {
+    q: "How accurate are the signals?",
+    a: "Every signal is tracked to outcome. You can see real win rates per ticker on the dashboard. No cherry-picking, no hiding misses. Full transparency is the whole point.",
+  },
+];
+
+function Faq() {
+  return (
+    <section id="faq" className="py-24 px-5 sm:px-8">
+      <div className="max-w-3xl mx-auto">
+        <Reveal className="max-w-2xl mb-12">
+          <SectionLabel index="04">FAQ</SectionLabel>
+          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest">
+            Questions, answered.
+          </h2>
+        </Reveal>
+
+        <div className="flex flex-col gap-3">
+          {FAQS.map((item, i) => (
+            <Reveal key={item.q} delay={i * 60}>
+              <details className="group rounded-2xl border border-white/[0.06] bg-white/[0.02] ring-hairline transition-colors open:border-white/[0.12] open:bg-white/[0.03]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5 text-left [&::-webkit-details-marker]:hidden">
+                  <span className="text-base font-medium text-white text-pretty">{item.q}</span>
+                  <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-zinc-400 transition-all duration-300 group-open:rotate-45 group-open:border-emerald-500/40 group-open:text-emerald-400">
+                    <Plus className="h-4 w-4" strokeWidth={2} />
+                  </span>
+                </summary>
+                <p className="px-6 pb-6 pt-0 text-secondary-foreground leading-relaxed text-pretty">
+                  {item.a}
+                </p>
+              </details>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ─── CTA strip ────────────────────────────────────────────────────────────────
 
 function CTAStrip() {
@@ -478,6 +537,7 @@ const FOOTER_COLS = [
     links: [
       { label: "The terminal", href: "#terminal" },
       { label: "Pricing", href: "#pricing" },
+      { label: "FAQ", href: "#faq" },
       { label: "Dashboard", href: "/dashboard" },
     ],
   },
@@ -575,6 +635,7 @@ export default function LandingPage() {
         <Stats />
         <Features />
         <Pricing />
+        <Faq />
         <CTAStrip />
       </main>
       <Footer />
