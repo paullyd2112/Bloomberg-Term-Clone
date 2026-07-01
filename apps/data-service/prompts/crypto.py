@@ -82,19 +82,10 @@ def build_user_prompt(context: dict) -> str:
     if context.get("market_cap"):
         lines.append(f"  Market cap: ${context['market_cap']:,.0f}")
 
-    benchmarks = context.get("market_benchmarks", {})
-    if benchmarks:
-        lines += ["", "Traditional market context:"]
-        for sym, bm in benchmarks.items():
-            if bm.get("price") is not None:
-                chg = f"{bm['change_24h']:+.2f}%" if bm.get("change_24h") is not None else "N/A"
-                lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg})")
-
-    macro = context.get("upcoming_macro", [])
-    if macro:
-        lines += ["", "Upcoming macro events (next 48h):"]
-        for m in macro:
-            lines.append(f"  - {m}")
+    # Traditional-market benchmarks + upcoming macro events are identical
+    # across every coin scored this run, so they're sent as a separate
+    # cached system content block (see scoring/engine.py
+    # _format_market_context) instead of being duplicated here per coin.
 
     if context.get("news_headlines"):
         lines += ["", "Recent crypto news:"]

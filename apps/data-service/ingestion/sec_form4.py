@@ -8,7 +8,7 @@ Runs daily at 8:15am ET via scheduler.
 
 import os
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 import sentry_sdk
@@ -24,6 +24,8 @@ FMP_BASE      = "https://financialmodelingprep.com/api/v4"
 LOOKBACK_DAYS = 60
 FMP_MAX_PAGES = 8
 EDGAR_IDENTITY = os.environ.get("EDGAR_IDENTITY", "bloomberg-terminal-clone noreply@example.com")
+EDGAR_FILINGS_PER_TICKER = 5     # recent Form 4s per ticker — enough for "recent activity", not exhaustive history
+EDGAR_MAX_RUNTIME_S = 180        # hard wall-clock budget so one slow ticker can't stall the whole job
 
 
 def _fmp_key() -> str:
@@ -58,8 +60,17 @@ def _fetch_edgar(tickers: list[str]) -> list[dict]:
     cutoff = date.today() - timedelta(days=LOOKBACK_DAYS)
     rows: list[dict] = []
     errors = 0
+    start = datetime.now(timezone.utc)
 
     for ticker in tickers:
+        elapsed = (datetime.now(timezone.utc) - start).total_seconds()
+        if elapsed > EDGAR_MAX_RUNTIME_S:
+            logger.warning(
+                "insider_trades: EDGAR hit {}s runtime budget after {} tickers — stopping early with partial results",
+                EDGAR_MAX_RUNTIME_S, tickers.index(ticker),
+            )
+            break
+
         try:
             company = Company(ticker)
             filings = company.get_filings(form="4")
@@ -70,7 +81,7 @@ def _fetch_edgar(tickers: list[str]) -> list[dict]:
             if not recent:
                 continue
 
-            for filing in recent[:20]:
+            for filing in recent[:EDGAR_FILINGS_PER_TICKER]:
                 try:
                     form4 = filing.obj()
                 except Exception:
