@@ -841,6 +841,38 @@ def accuracy_dashboard():
             ] if len(ranked) > 5 else [],
         }
 
+    # Options-flow-driven signals are written as regular "stock" signals (see
+    # _write_options_signal) with a "[Options flow] " reasoning prefix rather
+    # than a distinct asset_type, so they're indistinguishable from ordinary
+    # stock signals in asset_accuracy, which aggregates by (identifier,
+    # asset_type) and loses that distinction. Query signals directly instead
+    # of the pre-aggregated table to isolate them. This is live forward
+    # tracking, not a backtest -- there's no historical options-chain data in
+    # this pipeline to backtest against (see CLAUDE.md launch checklist).
+    try:
+        of_result = (
+            supabase.table("signals")
+            .select("outcome")
+            .like("reasoning", "[Options flow]%")
+            .eq("is_backtest", False)
+            .execute()
+        )
+        of_rows     = of_result.data or []
+        of_wins     = sum(1 for r in of_rows if r["outcome"] == "WIN")
+        of_losses   = sum(1 for r in of_rows if r["outcome"] == "LOSS")
+        of_decisive = of_wins + of_losses
+        options_flow_accuracy = {
+            "total_signals": len(of_rows),
+            "wins":          of_wins,
+            "losses":        of_losses,
+            "pending":       sum(1 for r in of_rows if r["outcome"] == "PENDING"),
+            "win_rate":      round(of_wins / of_decisive * 100, 1) if of_decisive else None,
+            "note": ("Live forward-tracked accuracy, not backtested — no historical "
+                     "options-chain data exists in this pipeline to backtest against."),
+        }
+    except Exception as e:
+        options_flow_accuracy = {"error": str(e)}
+
     return jsonify({
         "overall": {
             "total_signals":   total_signals,
@@ -852,6 +884,7 @@ def accuracy_dashboard():
             "tracked_assets":  len(rows),
         },
         "by_asset_class": by_class,
+        "options_flow":   options_flow_accuracy,
         "last_updated": rows[0].get("last_updated") if rows else None,
     })
 
