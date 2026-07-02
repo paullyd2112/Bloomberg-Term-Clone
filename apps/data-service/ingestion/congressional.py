@@ -230,6 +230,11 @@ def _fetch_senate_efd() -> tuple[list[dict], str]:
                     continue
 
                 first, last, _unused, link_html, date_received = row[0], row[1], row[2], row[3], row[4]
+                # efdsearch's own name cells occasionally carry a trailing comma
+                # (e.g. "Moran," instead of "Moran") — strip stray punctuation
+                # from each part before joining.
+                first = (first or "").strip().rstrip(",").strip()
+                last = (last or "").strip().rstrip(",").strip()
                 politician = f"{first} {last}".strip()
 
                 href = _efd_parse_report_link(link_html)
