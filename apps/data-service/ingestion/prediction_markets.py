@@ -1,10 +1,11 @@
 """
-Prediction markets ingestion — Kalshi + Polymarket.
+Prediction markets ingestion — Polymarket (Kalshi temporarily disabled).
 Runs every 30 minutes via scheduler.
 """
 
 import asyncio
 import base64
+import json
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -24,15 +25,47 @@ NEWS_API_KEY       = os.environ.get("NEWS_API_KEY", "")
 KALSHI_API_KEY     = os.environ.get("KALSHI_API_KEY", "")
 KALSHI_PRIVATE_KEY = os.environ.get("KALSHI_PRIVATE_KEY", "")
 
+# Kalshi's RSA-PSS signing handshake fails in production with credentials
+# confirmed present -- root cause unresolved without server-side log access.
+# Disabled (not removed) so this is a one-line flip once debugged, rather than
+# a rebuild. Polymarket has no auth at all, so it's a far smaller failure
+# surface and is carrying prediction markets alone for now.
+KALSHI_ENABLED = False
+
 KALSHI_BASE        = "https://api.elections.kalshi.com/trade-api/v2"
 KALSHI_MARKETS_PATH = "/trade-api/v2/markets"
-POLYMARKET_URL     = "https://clob.polymarket.com/markets"
+# Gamma API: Polymarket's public, unauthenticated market-listing API. The CLOB
+# API this used to hit (clob.polymarket.com) is for order-book/trading, not
+# bulk market discovery, and uses a different pagination scheme entirely.
+POLYMARKET_URL       = "https://gamma-api.polymarket.com/markets"
+POLYMARKET_PAGE_SIZE = 100
 NEWSAPI_URL        = "https://newsapi.org/v2/everything"
 
 KALSHI_MIN_VOLUME     = 100
 POLYMARKET_MIN_VOLUME = 100
 REQUEST_TIMEOUT       = 15.0
 MAX_PAGES             = 50   # hard cap so a pagination cursor that never terminates can't hang the job forever
+
+
+def _first(item: dict, *keys: str):
+    for k in keys:
+        if item.get(k) is not None:
+            return item[k]
+    return None
+
+
+def _parse_json_list(value) -> list:
+    """Gamma often returns outcomes/outcomePrices as JSON-encoded strings
+    rather than native arrays -- handle both rather than assume one."""
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, list) else []
+        except (ValueError, TypeError):
+            return []
+    return []
 
 
 # ─── Kalshi RSA-PSS auth ──────────────────────────────────────────────────────
@@ -132,70 +165,94 @@ async def _fetch_kalshi(client: httpx.AsyncClient) -> list[dict]:
 
 
 async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
-    records     = []
-    next_cursor = ""
+    """Fetch active markets from Polymarket's Gamma API. Field names below are
+    best-effort from public documentation, not verified against a live
+    response from this environment (network policy blocks polymarket.com
+    here) -- the full raw item is kept in metadata.raw so any mismatch is
+    fixable from real production data instead of guessed twice."""
+    records = []
+    offset  = 0
 
     for page in range(MAX_PAGES):
-        params: dict = {"active": "true"}
-        if next_cursor:
-            params["next_cursor"] = next_cursor
-
         try:
-            resp = await client.get(POLYMARKET_URL, params=params, timeout=REQUEST_TIMEOUT)
+            resp = await client.get(
+                POLYMARKET_URL,
+                params={"active": "true", "closed": "false", "limit": POLYMARKET_PAGE_SIZE, "offset": offset},
+                timeout=REQUEST_TIMEOUT,
+            )
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
-            logger.error("Polymarket fetch error: {}", e)
+            logger.error("Polymarket fetch error at offset {}: {}", offset, e)
             sentry_sdk.capture_exception(e)
             break
 
-        markets = data.get("data", [])
+        # Gamma's /markets has returned both a bare list and a {"data": [...],
+        # "has_more": ...} envelope across versions -- handle either shape.
+        if isinstance(data, list):
+            markets  = data
+            has_more = len(markets) >= POLYMARKET_PAGE_SIZE
+        else:
+            markets  = data.get("data") or data.get("markets") or []
+            has_more = data.get("has_more", len(markets) >= POLYMARKET_PAGE_SIZE)
+
         if not markets:
             break
 
         for m in markets:
-            if not m.get("active"):
+            if _first(m, "active") is False:
                 continue
 
-            volume = float(m.get("volume", 0) or 0)
+            volume_raw = _first(m, "volume", "volume24hr", "volumeNum")
+            try:
+                volume = float(volume_raw) if volume_raw is not None else 0.0
+            except (TypeError, ValueError):
+                volume = 0.0
             if volume < POLYMARKET_MIN_VOLUME:
                 continue
 
-            tokens    = m.get("tokens", [])
+            outcomes       = _parse_json_list(_first(m, "outcomes"))
+            outcome_prices = _parse_json_list(_first(m, "outcomePrices"))
             yes_price = None
             no_price  = None
-            for token in tokens:
-                outcome = (token.get("outcome") or "").upper()
-                if outcome == "YES":
-                    yes_price = token.get("price")
-                elif outcome == "NO":
-                    no_price = token.get("price")
+            for outcome_name, price in zip(outcomes, outcome_prices):
+                try:
+                    price_f = float(price)
+                except (TypeError, ValueError):
+                    continue
+                label = (outcome_name or "").strip().upper()
+                if label == "YES":
+                    yes_price = price_f
+                elif label == "NO":
+                    no_price = price_f
 
             if yes_price is None:
                 continue
 
+            identifier = str(_first(m, "conditionId", "condition_id", "id") or "")
+
             records.append({
                 "asset_type": "prediction",
-                "identifier": m.get("condition_id", ""),
-                "price":      float(yes_price),
+                "identifier": identifier,
+                "price":      yes_price,
                 "volume":     volume,
                 "change_24h": None,
                 "metadata": {
                     "source":    "polymarket",
-                    "title":     m.get("question", ""),
+                    "title":     _first(m, "question") or "",
                     "yes_price": yes_price,
                     "no_price":  no_price,
-                    "end_date":  m.get("end_date_iso", ""),
-                    "category":  m.get("category", ""),
+                    "end_date":  _first(m, "endDate", "end_date_iso") or "",
+                    "category":  _first(m, "category") or "",
+                    "raw":       m,
                 },
             })
 
-        next_cursor = data.get("next_cursor", "")
-        if not next_cursor or next_cursor == "LTE=":
+        if not has_more or len(markets) < POLYMARKET_PAGE_SIZE:
             break
+        offset += POLYMARKET_PAGE_SIZE
     else:
-        logger.warning("Polymarket: hit the {}-page cap without exhausting pagination — "
-                        "cursor may not be terminating correctly", MAX_PAGES)
+        logger.warning("Polymarket: hit the {}-page cap without exhausting pagination", MAX_PAGES)
 
     logger.info("Polymarket: fetched {} active markets", len(records))
     return records
@@ -203,10 +260,12 @@ async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
 
 async def _fetch_both() -> tuple[list[dict], list[dict]]:
     async with httpx.AsyncClient() as client:
-        return await asyncio.gather(
-            _fetch_kalshi(client),
-            _fetch_polymarket(client),
-        )
+        if KALSHI_ENABLED:
+            return await asyncio.gather(
+                _fetch_kalshi(client),
+                _fetch_polymarket(client),
+            )
+        return [], await _fetch_polymarket(client)
 
 
 # ─── News ─────────────────────────────────────────────────────────────────────
@@ -291,25 +350,28 @@ def fetch_recent_news_for_market(title: str, identifier: str) -> int:
 
 def ingest_prediction_markets() -> str:
     """
-    Fetch Kalshi + Polymarket concurrently, upsert to raw_prices,
-    fetch news for top markets. Returns summary string for scheduler log.
+    Fetch Polymarket (Kalshi disabled — see KALSHI_ENABLED), upsert to
+    raw_prices, fetch news for top markets. Returns summary string for
+    scheduler log.
     """
     logger.info("Starting prediction markets ingestion")
 
     kalshi_records, polymarket_records = asyncio.run(_fetch_both())
     all_records = kalshi_records + polymarket_records
 
+    if not KALSHI_ENABLED:
+        kalshi_label = "disabled"
+    elif not (KALSHI_API_KEY and KALSHI_PRIVATE_KEY):
+        kalshi_label = "no credentials"
+    else:
+        kalshi_label = str(len(kalshi_records))
+
     if not all_records:
-        kalshi_note = (
-            "no credentials"
-            if not (KALSHI_API_KEY and KALSHI_PRIVATE_KEY)
-            else "0 markets after fetch/filter — check logs for fetch errors"
-        )
         logger.warning(
             "No prediction market records fetched — Kalshi: {}, Polymarket: 0 markets after fetch/filter",
-            kalshi_note,
+            kalshi_label,
         )
-        return f"0 records written (Kalshi: {kalshi_note}, Polymarket: 0 after fetch/filter)"
+        return f"0 records written (Kalshi: {kalshi_label}, Polymarket: 0 after fetch/filter)"
 
     written    = 0
     batch_size = 100
@@ -326,7 +388,7 @@ def ingest_prediction_markets() -> str:
 
     summary = (
         f"{written} raw_prices written "
-        f"({len(kalshi_records)} Kalshi, {len(polymarket_records)} Polymarket), "
+        f"(Kalshi: {kalshi_label}, {len(polymarket_records)} Polymarket), "
         f"{news_count} news items"
     )
     logger.info("Prediction markets ingestion complete — {}", summary)
