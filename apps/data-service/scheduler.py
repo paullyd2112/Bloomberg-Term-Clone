@@ -596,6 +596,7 @@ def run_job_manual(job_name: str):
         "generate_newsletter": job_generate_newsletter,
         "send_newsletter": job_send_newsletter,
         "ingest_corporate_actions": job_ingest_corporate_actions,
+        "send_elite_briefings": job_send_elite_briefings,
     }
 
     fn = job_map.get(job_name)
