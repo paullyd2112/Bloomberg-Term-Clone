@@ -78,6 +78,25 @@ def _get_user_signals(user_id: str, top_signals: list[dict]) -> list[dict]:
 
 
 # ─── HTML renderers ───────────────────────────────────────────────────────────
+#
+# Outlook desktop renders HTML email with Microsoft Word's engine, not a real
+# browser — it ignores `max-width` on <div>s (breaks centering), is
+# inconsistent about `background` on <div>/<p> (breaks card backgrounds), and
+# has no flexbox support. Every "card" below is built as a <table
+# bgcolor="..."> instead of a styled <div>, since Outlook honors table
+# background/padding reliably. `border-radius` is allowed to degrade to
+# square corners in Outlook — cosmetic only, not a layout break.
+
+def _card(inner_html: str, padding: str = "20px 22px", extra_style: str = "") -> str:
+    """Outlook-safe card: bgcolor attribute (not just CSS) + table layout."""
+    return f"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#111113"
+           style="background-color:#111113;border:1px solid #1e1e22;border-radius:10px;{extra_style}">
+      <tr><td style="padding:{padding};">
+        {inner_html}
+      </td></tr>
+    </table>"""
+
 
 def _md_to_html(text: str) -> str:
     """Convert markdown links and bold to styled HTML for email."""
@@ -103,8 +122,7 @@ def _story_html(story: dict) -> str:
     could_mean    = _md_to_html(story.get("could_mean", ""))
     watch         = _md_to_html(story.get("watch", ""))
 
-    return f"""
-    <div style="margin-bottom:28px;background:#111113;border:1px solid #1e1e22;border-radius:10px;padding:20px 22px;">
+    inner = f"""
       <div style="margin-bottom:8px;">
         <span style="display:inline-block;background:#22c55e18;color:#22c55e;border:1px solid #22c55e44;border-radius:4px;padding:3px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;">{category}</span>
       </div>
@@ -124,8 +142,9 @@ def _story_html(story: dict) -> str:
       <div>
         <span style="font-size:10px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.08em;">What to watch</span>
         <div style="color:#d4d4d8;font-size:14px;line-height:1.75;margin-top:5px;">{watch}</div>
-      </div>
-    </div>"""
+      </div>"""
+
+    return f'<div style="margin-bottom:28px;">{_card(inner)}</div>'
 
 
 MONO = "'SF Mono','Menlo','Consolas',monospace"
@@ -164,12 +183,11 @@ def _signals_html(signals: list[dict]) -> str:
             <span style="color:#52525b;font-size:11px;text-transform:uppercase;">&nbsp;{horizon}</span>
           </td>
         </tr>"""
-    return f"""
-    <div style="margin:24px 0;padding:20px;background:#111113;border-radius:10px;border:1px solid #1e1e22;">
+    inner = f"""
       <div style="font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Your signals today</div>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">{rows}</table>
-      <a href="{APP_URL}/dashboard" style="display:inline-block;margin-top:12px;color:#22c55e;font-size:12px;font-weight:600;text-decoration:none;">Full signal feed &rarr;</a>
-    </div>"""
+      <a href="{APP_URL}/dashboard" style="display:inline-block;margin-top:12px;color:#22c55e;font-size:12px;font-weight:600;text-decoration:none;">Full signal feed &rarr;</a>"""
+    return f'<div style="margin:24px 0;">{_card(inner)}</div>'
 
 
 def _options_html(options: list[dict]) -> str:
@@ -188,11 +206,10 @@ def _options_html(options: list[dict]) -> str:
           <td style="padding:6px 0;border-bottom:1px solid #1e1e22;color:{color};font-size:12px;font-weight:700;text-align:center;">{option_type}</td>
           <td style="padding:6px 0;border-bottom:1px solid #1e1e22;color:#71717a;font-size:12px;text-align:right;">vol {volume:,} / OI {oi:,}</td>
         </tr>"""
-    return f"""
-    <div style="margin:16px 0;padding:20px;background:#111113;border-radius:10px;border:1px solid #1e1e22;">
+    inner = f"""
       <div style="font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Unusual options flow</div>
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">{rows}</table>
-    </div>"""
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">{rows}</table>"""
+    return f'<div style="margin:16px 0;">{_card(inner)}</div>'
 
 
 def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
@@ -213,12 +230,37 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
         paid_block  = _signals_html(top_signals) + _options_html(options)
 
     free_cta = "" if is_paid else f"""
-    <div style="margin:28px 0;padding:22px;background:#111113;border:1px solid #1e1e22;border-radius:10px;text-align:center;">
-      <div style="color:#f4f4f5;font-weight:700;font-size:15px;margin-bottom:6px;">Want the full signal feed?</div>
-      <div style="color:#a1a1aa;font-size:13px;margin-bottom:16px;">Real-time AI signals, options flow, congressional trades. Start your trial.</div>
-      <a href="{APP_URL}/signup" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:13px;padding:10px 24px;border-radius:8px;text-decoration:none;">Try Plebs free &rarr;</a>
+    <div style="margin:28px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#111113"
+             style="background-color:#111113;border:1px solid #1e1e22;border-radius:10px;">
+        <tr><td style="padding:22px;text-align:center;">
+          <div style="color:#f4f4f5;font-weight:700;font-size:15px;margin-bottom:6px;">Want the full signal feed?</div>
+          <div style="color:#a1a1aa;font-size:13px;margin-bottom:16px;">Real-time AI signals, options flow, congressional trades. Start your trial.</div>
+          <a href="{APP_URL}/signup" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:13px;padding:10px 24px;border-radius:8px;text-decoration:none;">Try Plebs free &rarr;</a>
+        </td></tr>
+      </table>
     </div>"""
 
+    closing_block = f"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#111113"
+           style="background-color:#111113;border-radius:8px;margin:28px 0;">
+      <tr>
+        <td width="3" bgcolor="#22c55e" style="background-color:#22c55e;font-size:1px;line-height:1px;">&nbsp;</td>
+        <td style="padding:16px 20px;color:#a1a1aa;font-size:14px;line-height:1.65;">{closing}</td>
+      </tr>
+    </table>"""
+
+    opening_block = f"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+      <tr>
+        <td width="3" bgcolor="#22c55e" style="background-color:#22c55e;font-size:1px;line-height:1px;opacity:0.4;">&nbsp;</td>
+        <td style="padding-left:14px;color:#a1a1aa;font-size:15px;line-height:1.7;">{opening}</td>
+      </tr>
+    </table>"""
+
+    # Outlook (Word engine) ignores max-width on <div>s, so the centered
+    # column falls back to the full body width without the mso conditional
+    # table below enforcing an actual fixed-width table.
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -226,10 +268,16 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
 <meta name="supported-color-schemes" content="dark">
+<!--[if mso]>
+<style type="text/css">table {{border-collapse:collapse;}}</style>
+<![endif]-->
 </head>
 <body style="margin:0;padding:0;background-color:#0a0a0c;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0c;">
 <tr><td align="center">
+<!--[if mso]>
+<table role="presentation" align="center" width="620" cellpadding="0" cellspacing="0"><tr><td>
+<![endif]-->
   <div style="max-width:620px;margin:0 auto;padding:36px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:left;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
       <tr>
@@ -240,18 +288,21 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
       </tr>
     </table>
     <h1 style="color:#f4f4f5;font-size:22px;font-weight:700;margin:0 0 16px;line-height:1.35;">{subject_line}</h1>
-    <p style="color:#a1a1aa;font-size:15px;line-height:1.7;margin:0 0 28px;border-left:3px solid #22c55e44;padding-left:14px;">{opening}</p>
+    {opening_block}
     <div style="padding-top:8px;">
       {stories_html}
     </div>
     {paid_block}
     {free_cta}
-    <p style="color:#a1a1aa;font-size:14px;line-height:1.65;margin:28px 0;padding:16px 20px;background:#111113;border-radius:8px;border-left:3px solid #22c55e33;">{closing}</p>
+    {closing_block}
     <div style="border-top:1px solid #1e1e22;padding-top:18px;text-align:center;font-size:11px;color:#52525b;">
       Plebs.finance · Not financial advice ·
       <a href="{APP_URL}/unsubscribe" style="color:#71717a;">Unsubscribe</a>
     </div>
   </div>
+<!--[if mso]>
+</td></tr></table>
+<![endif]-->
 </td></tr>
 </table>
 </body>

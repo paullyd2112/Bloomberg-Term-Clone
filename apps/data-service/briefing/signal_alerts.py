@@ -133,23 +133,18 @@ def _render_email(signal: dict) -> tuple[str, str, str]:
 
     asset_url = f"{APP_URL}/dashboard/asset/{asset_type}/{identifier}"
 
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark">
-<meta name="supported-color-schemes" content="dark">
-</head>
-<body style="margin:0;padding:0;background-color:#09090b;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#09090b;">
-<tr><td align="center">
-  <div style="max-width:560px;margin:0 auto;padding:32px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:left;">
-    <div style="font-size:20px;font-weight:800;color:#fff;margin-bottom:28px;letter-spacing:-0.01em;">
-      plebs<span style="color:#22c55e;">.finance</span>
-    </div>
+    # Two-cell colored-<td> bar, not nested divs — the classic Outlook-safe
+    # progress bar pattern, since Outlook won't reliably size/color nested
+    # <div>s but does honor table cell widths + bgcolor.
+    confidence_bar = f"""
+      <table role="presentation" cellpadding="0" cellspacing="0" width="56" style="width:56px;">
+        <tr>
+          <td width="{confidence}%" bgcolor="{bar_color}" style="background-color:{bar_color};font-size:1px;line-height:5px;">&nbsp;</td>
+          <td width="{100 - confidence}%" bgcolor="#27272a" style="background-color:#27272a;font-size:1px;line-height:5px;">&nbsp;</td>
+        </tr>
+      </table>"""
 
-    <div style="background:#111113;border:1px solid #1e1e22;border-radius:10px;padding:24px;margin-bottom:20px;">
+    card_inner = f"""
       <div style="font-family:{MONO};font-size:26px;font-weight:800;color:{color};margin-bottom:10px;">
         {direction} {identifier}
       </div>
@@ -157,11 +152,7 @@ def _render_email(signal: dict) -> tuple[str, str, str]:
       <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:18px;">
         <tr>
           <td style="font-family:{MONO};font-size:20px;font-weight:700;color:{bar_color};padding-right:8px;">{confidence}%</td>
-          <td style="width:60px;">
-            <div style="height:5px;width:56px;background:#27272a;border-radius:3px;overflow:hidden;">
-              <div style="height:5px;width:{confidence}%;background:{bar_color};border-radius:3px;"></div>
-            </div>
-          </td>
+          <td style="width:60px;">{confidence_bar}</td>
         </tr>
       </table>
 
@@ -169,8 +160,36 @@ def _render_email(signal: dict) -> tuple[str, str, str]:
         {_horizon_label(horizon)} &middot; Entry {_fmt_price(price)}
       </div>
 
-      {_chunk_reasoning(reasoning)}
+      {_chunk_reasoning(reasoning)}"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<!--[if mso]>
+<style type="text/css">table {{border-collapse:collapse;}}</style>
+<![endif]-->
+</head>
+<body style="margin:0;padding:0;background-color:#09090b;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#09090b;">
+<tr><td align="center">
+<!--[if mso]>
+<table role="presentation" align="center" width="560" cellpadding="0" cellspacing="0"><tr><td>
+<![endif]-->
+  <div style="max-width:560px;margin:0 auto;padding:32px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:left;">
+    <div style="font-size:20px;font-weight:800;color:#fff;margin-bottom:28px;letter-spacing:-0.01em;">
+      plebs<span style="color:#22c55e;">.finance</span>
     </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#111113"
+           style="background-color:#111113;border:1px solid #1e1e22;border-radius:10px;margin-bottom:20px;">
+      <tr><td style="padding:24px;">
+        {card_inner}
+      </td></tr>
+    </table>
 
     <a href="{asset_url}" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:14px;text-decoration:none;padding:10px 20px;border-radius:6px;margin:0 0 24px;">
       View {identifier} on Plebs →
@@ -182,6 +201,9 @@ def _render_email(signal: dict) -> tuple[str, str, str]:
       Not financial advice — always do your own research.
     </p>
   </div>
+<!--[if mso]>
+</td></tr></table>
+<![endif]-->
 </td></tr>
 </table>
 </body>

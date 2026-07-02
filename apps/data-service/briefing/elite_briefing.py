@@ -202,11 +202,14 @@ def _render_email(summary_html: str, signals: list[dict], watchlist: list[dict])
     if signals:
         rows = "".join(_signal_row_html(s) for s in signals[:8])
         signals_table = f"""
-        <div style="margin:24px 0;padding:20px;background:#18181b;border-radius:10px;border:1px solid #27272a;">
-          <div style="font-size:11px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Your watchlist signals</div>
-          <table style="width:100%;border-collapse:collapse;">{rows}</table>
-          <a href="{APP_URL}/dashboard" style="display:inline-block;margin-top:12px;color:#22c55e;font-size:12px;font-weight:600;text-decoration:none;">Full signal feed →</a>
-        </div>"""
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#18181b"
+               style="background-color:#18181b;border-radius:10px;border:1px solid #27272a;margin:24px 0;">
+          <tr><td style="padding:20px;">
+            <div style="font-size:11px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Your watchlist signals</div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">{rows}</table>
+            <a href="{APP_URL}/dashboard" style="display:inline-block;margin-top:12px;color:#22c55e;font-size:12px;font-weight:600;text-decoration:none;">Full signal feed →</a>
+          </td></tr>
+        </table>"""
 
     email_html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -215,10 +218,16 @@ def _render_email(summary_html: str, signals: list[dict], watchlist: list[dict])
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
 <meta name="supported-color-schemes" content="dark">
+<!--[if mso]>
+<style type="text/css">table {{border-collapse:collapse;}}</style>
+<![endif]-->
 </head>
 <body style="margin:0;padding:0;background-color:#09090b;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#09090b;">
 <tr><td align="center">
+<!--[if mso]>
+<table role="presentation" align="center" width="600" cellpadding="0" cellspacing="0"><tr><td>
+<![endif]-->
   <div style="max-width:600px;margin:0 auto;padding:32px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:left;">
     <div style="margin-bottom:20px;">
       <div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.01em;">
@@ -238,15 +247,21 @@ def _render_email(summary_html: str, signals: list[dict], watchlist: list[dict])
 
     {signals_table}
 
-    <div style="margin-top:24px;padding:16px;background:#18181b;border-radius:10px;border:1px solid #27272a;text-align:center;">
-      <a href="{APP_URL}/dashboard/watchlist" style="color:#22c55e;font-weight:600;font-size:13px;text-decoration:none;">Manage your watchlist →</a>
-    </div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#18181b"
+           style="background-color:#18181b;border-radius:10px;border:1px solid #27272a;margin-top:24px;">
+      <tr><td style="padding:16px;text-align:center;">
+        <a href="{APP_URL}/dashboard/watchlist" style="color:#22c55e;font-weight:600;font-size:13px;text-decoration:none;">Manage your watchlist →</a>
+      </td></tr>
+    </table>
 
     <div style="border-top:1px solid #27272a;padding-top:16px;margin-top:24px;text-align:center;font-size:11px;color:#3f3f46;">
       Plebs.finance · Elite personalized briefing · Not financial advice ·
       <a href="{APP_URL}/unsubscribe" style="color:#52525b;">Unsubscribe</a>
     </div>
   </div>
+<!--[if mso]>
+</td></tr></table>
+<![endif]-->
 </td></tr>
 </table>
 </body>
