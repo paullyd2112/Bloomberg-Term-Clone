@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { Briefcase, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
@@ -123,7 +124,9 @@ export default async function PortfolioPage() {
             <span className="tabular-nums text-zinc-300">{stats.closed}</span> closed
           </p>
         </div>
-        <AddPositionModal />
+        <Suspense fallback={null}>
+          <AddPositionModal />
+        </Suspense>
       </div>
 
       {/* Stats */}

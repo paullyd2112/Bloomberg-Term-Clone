@@ -31,7 +31,7 @@ function formatDayLabel(dateStr: string): string {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-export default function SignalFeed({ signals }: { signals: Signal[] }) {
+export default function SignalFeed({ signals, canLogPosition }: { signals: Signal[]; canLogPosition?: boolean }) {
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [selectedDay, setSelectedDay] = useState<string>("all");
 
@@ -100,7 +100,7 @@ export default function SignalFeed({ signals }: { signals: Signal[] }) {
           No signals for this day yet.
         </div>
       ) : (
-        <SignalList signals={filtered} />
+        <SignalList signals={filtered} canLogPosition={canLogPosition} />
       )}
     </div>
   );

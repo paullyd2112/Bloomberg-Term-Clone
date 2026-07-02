@@ -11,6 +11,11 @@ const TERMS = [
       "Whether an instrument is a stock or cryptocurrency.",
   },
   {
+    term: "Call",
+    definition:
+      "An options contract that profits if the underlying asset's price rises above the strike price. Shown in green in the options flow table.",
+  },
+  {
     term: "Confidence Score",
     definition:
       "The model's certainty (0–100%) in a signal's direction, derived from technical indicators, sentiment analysis, and market context. Higher scores indicate stronger conviction but do not guarantee outcomes.",
@@ -26,9 +31,19 @@ const TERMS = [
       "The signal's recommended action: BUY (bullish) or SELL (bearish).",
   },
   {
+    term: "Expiry",
+    definition:
+      "The date an options contract becomes worthless if not exercised. Shown per trade in the options flow table.",
+  },
+  {
     term: "HOLD",
     definition:
       "A neutral signal indicating no strong directional conviction at the time of analysis.",
+  },
+  {
+    term: "MACD",
+    definition:
+      "Moving Average Convergence/Divergence — a momentum indicator comparing two moving averages, used by the scoring engine and sometimes referenced directly in a signal's AI-generated reasoning.",
   },
   {
     term: "News Context",
@@ -46,14 +61,44 @@ const TERMS = [
       "The resolved result of a signal: WIN (price moved in the predicted direction), LOSS (price moved against), NEUTRAL (no significant move), or PENDING (not yet resolved).",
   },
   {
+    term: "Premium",
+    definition:
+      "The price paid for an options contract, shown per trade in the options flow table (in thousands of dollars).",
+  },
+  {
+    term: "Put",
+    definition:
+      "An options contract that profits if the underlying asset's price falls below the strike price. Shown in red in the options flow table.",
+  },
+  {
+    term: "RSI (Relative Strength Index)",
+    definition:
+      "A 0–100 momentum indicator shown on the asset page. Above 70 is generally read as overbought, below 30 as oversold.",
+  },
+  {
     term: "Signal",
     definition:
       "An AI-generated trade idea with a direction, confidence score, reasoning, and time horizon. Every signal is tracked to outcome.",
   },
   {
+    term: "Strike",
+    definition:
+      "The price at which an options contract can be exercised. Shown per trade in the options flow table.",
+  },
+  {
     term: "Time Horizon",
     definition:
       "The expected duration for a signal: Intraday (same day), Swing (days to weeks), or Long-term (weeks to months).",
+  },
+  {
+    term: "Unusual (Options Flow)",
+    definition:
+      "A trade flagged when its size or premium is meaningfully larger than typical activity for that contract — one signal institutions may be positioning ahead of a move. Marked with a lightning icon in the options flow table.",
+  },
+  {
+    term: "Volume Ratio",
+    definition:
+      "Today's trading volume divided by its recent average. Above roughly 1.5–2x is generally considered elevated. Shown on the asset page as \"Vol Ratio.\"",
   },
   {
     term: "Watchlist",

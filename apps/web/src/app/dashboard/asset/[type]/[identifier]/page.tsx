@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getUserTier } from "@/lib/user";
+import { getUser, getUserTier, getUserProfile } from "@/lib/user";
 import { canAccessFeature } from "@/lib/tier";
 import SignalList from "@/components/signals/SignalList";
 import type { Signal } from "@/components/signals/SignalCard";
@@ -168,6 +168,8 @@ export default async function AssetPage({ params }: PageProps) {
 
   const user = await getUser();
   const tier = await getUserTier();
+  const profile = await getUserProfile();
+  const beginnerMode = profile?.trading_experience === "beginner";
   const canSeeOptions = canAccessFeature(tier, "real_time");
   const canScoreOnDemand = canAccessFeature(tier, "on_demand_scoring");
 
@@ -211,6 +213,7 @@ export default async function AssetPage({ params }: PageProps) {
         <KeyStatsGrid
           metadata={price.metadata as Record<string, unknown> | null}
           change24h={price.change_24h}
+          beginnerMode={beginnerMode}
         />
       )}
 
@@ -232,7 +235,7 @@ export default async function AssetPage({ params }: PageProps) {
               <div className="text-sm text-zinc-500 py-8 text-center">No signals yet for {identifier}.</div>
             )
           ) : (
-            <SignalList signals={signals} />
+            <SignalList signals={signals} canLogPosition={canAccessFeature(tier, "portfolio")} />
           )}
         </div>
 
@@ -291,7 +294,7 @@ export default async function AssetPage({ params }: PageProps) {
               <SectionHeader>Options flow</SectionHeader>
               {canSeeOptions ? (
                 options.length > 0 ? (
-                  <OptionsFlowTable rows={options} />
+                  <OptionsFlowTable rows={options} beginnerMode={beginnerMode} />
                 ) : (
                   <p className="text-xs text-zinc-600">No unusual flow recorded.</p>
                 )
@@ -362,9 +365,11 @@ function EarningsBadge({ reportDate, reportTime }: { reportDate: string; reportT
 function KeyStatsGrid({
   metadata,
   change24h,
+  beginnerMode,
 }: {
   metadata: Record<string, unknown> | null;
   change24h: number | null;
+  beginnerMode?: boolean;
 }) {
   const rsi = metadata?.rsi_14 != null ? Number(metadata.rsi_14) : null;
   const volumeRatio = metadata?.volume_ratio != null ? Number(metadata.volume_ratio) : null;
@@ -385,32 +390,49 @@ function KeyStatsGrid({
     rsi == null ? null : rsi > 70 ? "Overbought" : rsi < 30 ? "Oversold" : "Neutral";
 
   return (
-    <div className="grid grid-cols-3 gap-3">
-      {rsi != null && (
-        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-3 text-center">
-          <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">RSI (14)</p>
-          <p className={`text-lg font-bold font-mono tabular-nums ${rsiColor}`}>
-            {rsi.toFixed(1)}
-          </p>
-          <p className={`text-[10px] mt-0.5 ${rsiColor}`}>{rsiLabel}</p>
-        </div>
-      )}
-      {volumeRatio != null && (
-        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-3 text-center">
-          <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Vol Ratio</p>
-              <p className={`text-lg font-bold font-mono tabular-nums ${volumeRatio > 2 ? "text-amber-400" : "text-white"}`}>
-            {volumeRatio.toFixed(2)}x
-          </p>
-          <p className="text-[10px] text-zinc-600 mt-0.5">vs avg</p>
-        </div>
-      )}
-      {change24h != null && (
-        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-3 text-center">
-          <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">24h Change</p>
-          <p className={`text-lg font-bold font-mono tabular-nums ${change24h >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-            {change24h >= 0 ? "+" : ""}{Number(change24h).toFixed(2)}%
-          </p>
-        </div>
+    <div className="space-y-2">
+      <div className="grid grid-cols-3 gap-3">
+        {rsi != null && (
+          <div
+            className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-3 text-center"
+            title="RSI (Relative Strength Index): 0-100 momentum indicator. Above 70 = overbought, below 30 = oversold."
+          >
+            <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">RSI (14)</p>
+            <p className={`text-lg font-bold font-mono tabular-nums ${rsiColor}`}>
+              {rsi.toFixed(1)}
+            </p>
+            <p className={`text-[10px] mt-0.5 ${rsiColor}`}>{rsiLabel}</p>
+          </div>
+        )}
+        {volumeRatio != null && (
+          <div
+            className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-3 text-center"
+            title="Volume Ratio: today's volume divided by the recent average. Above ~1.5-2x is elevated."
+          >
+            <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Vol Ratio</p>
+                <p className={`text-lg font-bold font-mono tabular-nums ${volumeRatio > 2 ? "text-amber-400" : "text-white"}`}>
+              {volumeRatio.toFixed(2)}x
+            </p>
+            <p className="text-[10px] text-zinc-600 mt-0.5">vs avg</p>
+          </div>
+        )}
+        {change24h != null && (
+          <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-3 text-center">
+            <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">24h Change</p>
+            <p className={`text-lg font-bold font-mono tabular-nums ${change24h >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {change24h >= 0 ? "+" : ""}{Number(change24h).toFixed(2)}%
+            </p>
+          </div>
+        )}
+      </div>
+      {beginnerMode && (rsi != null || volumeRatio != null) && (
+        <p className="text-[11px] text-zinc-500 leading-relaxed">
+          {rsi != null && "RSI above 70 usually means overbought, below 30 oversold. "}
+          {volumeRatio != null && "Vol ratio above 1.5-2x means unusually high trading activity. "}
+          <a href="/glossary" className="text-emerald-400/80 hover:text-emerald-300 underline underline-offset-2">
+            More terms →
+          </a>
+        </p>
       )}
     </div>
   );

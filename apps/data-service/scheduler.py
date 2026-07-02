@@ -345,7 +345,7 @@ scheduler.add_job(lambda: _run_job("refresh_asset_accuracy", job_refresh_asset_a
 
 # Alerts — every 30 min
 scheduler.add_job(lambda: _run_job("evaluate_alerts", job_evaluate_alerts),
-                  IntervalTrigger(minutes=30), id="evaluate_alerts")
+                  IntervalTrigger(minutes=5), id="evaluate_alerts")
 
 # Uptime monitor — every 5 min, alerts via Resend if web app is down
 scheduler.add_job(lambda: _run_job("uptime_check", job_uptime_check),

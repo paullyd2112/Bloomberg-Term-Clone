@@ -195,7 +195,9 @@ export default function ScreenerClient() {
           No signals match your filters.
         </div>
       ) : (
-        <SignalList signals={filtered} />
+        // Screener already requires pro/elite (canAccessFeature("screener")
+        // matches "portfolio" exactly), so logging is always available here.
+        <SignalList signals={filtered} canLogPosition />
       )}
     </div>
   );

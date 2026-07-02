@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import { AlertTriangle, Clock, Settings, LogOut } from "lucide-react";
+import { AlertTriangle, Clock, Settings, LogOut, BookOpen } from "lucide-react";
 import type { Tier } from "@/lib/tier";
 import { createClient } from "@/lib/supabase/client";
 import SearchBar from "@/components/SearchBar";
@@ -49,6 +49,14 @@ export default function TopBar({ user, tier, trialEndsAt }: { user: User; tier: 
       </div>
 
       <div className="flex items-center gap-2 flex-shrink-0">
+        <a
+          href="/glossary"
+          className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-white rounded-lg px-2 py-1.5 hover:bg-white/[0.04] transition-colors"
+          aria-label="Glossary"
+        >
+          <BookOpen className="h-4 w-4" />
+          <span className="hidden sm:inline">Glossary</span>
+        </a>
         <a
           href="/dashboard/settings"
           className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-white rounded-lg px-2 py-1.5 hover:bg-white/[0.04] transition-colors"

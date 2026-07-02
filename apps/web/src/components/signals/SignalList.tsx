@@ -5,7 +5,7 @@ import SignalCard, { type Signal } from "./SignalCard";
  * A single bordered container with hairline dividers between rows —
  * scannable like a data grid, not a stack of cards.
  */
-export default function SignalList({ signals }: { signals: Signal[] }) {
+export default function SignalList({ signals, canLogPosition }: { signals: Signal[]; canLogPosition?: boolean }) {
   return (
     <div>
       {/* Column header — aligns with SignalCard's fixed-width columns */}
@@ -22,7 +22,7 @@ export default function SignalList({ signals }: { signals: Signal[] }) {
 
       <div className="divide-y divide-white/[0.06] overflow-hidden rounded-b-xl">
         {signals.map((s) => (
-          <SignalCard key={s.id} signal={s} />
+          <SignalCard key={s.id} signal={s} canLogPosition={canLogPosition} />
         ))}
       </div>
 

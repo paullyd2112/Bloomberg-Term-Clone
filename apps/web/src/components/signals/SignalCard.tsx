@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { clsx } from "clsx";
+import { Wallet } from "lucide-react";
 import ShareButton from "./ShareButton";
 
 export type Signal = {
@@ -66,7 +67,7 @@ function confColors(c: number): { text: string; bar: string } {
   return { text: "text-zinc-500", bar: "bg-zinc-600" };
 }
 
-export default function SignalCard({ signal }: { signal: Signal }) {
+export default function SignalCard({ signal, canLogPosition }: { signal: Signal; canLogPosition?: boolean }) {
   const conf = confColors(signal.confidence);
   const horizon = HORIZON_SHORT[signal.time_horizon] ?? signal.time_horizon.slice(0, 5).toUpperCase();
   const typeLabel = TYPE_LABEL[signal.asset_type] ?? signal.asset_type;
@@ -74,6 +75,16 @@ export default function SignalCard({ signal }: { signal: Signal }) {
     signal.price_at_signal != null
       ? `$${Number(signal.price_at_signal).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
       : "—";
+
+  const showLogButton =
+    canLogPosition &&
+    (signal.direction === "BUY" || signal.direction === "SELL") &&
+    signal.price_at_signal != null &&
+    (signal.asset_type === "stock" || signal.asset_type === "crypto");
+
+  const logHref = showLogButton
+    ? `/dashboard/portfolio?log=1&asset_type=${signal.asset_type}&identifier=${encodeURIComponent(signal.identifier)}&direction=${signal.direction === "BUY" ? "LONG" : "SHORT"}&entry_price=${signal.price_at_signal}&signal_id=${signal.id}`
+    : null;
 
   return (
     <div
@@ -154,8 +165,18 @@ export default function SignalCard({ signal }: { signal: Signal }) {
         {timeAgo(signal.created_at)}
       </span>
 
-      {/* Share — floats in on hover over the timestamp */}
-      <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 bg-background/80 pl-2 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+      {/* Log-to-portfolio + Share — float in on hover over the timestamp */}
+      <div className="absolute right-2 top-1/2 z-20 flex -translate-y-1/2 items-center gap-1 bg-background/80 pl-2 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        {logHref && (
+          <Link
+            href={logHref}
+            aria-label={`Log this ${signal.direction} on ${signal.identifier} to your portfolio`}
+            title="Log this call to your portfolio"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-white/[0.08] hover:text-emerald-400"
+          >
+            <Wallet className="h-3.5 w-3.5" />
+          </Link>
+        )}
         <ShareButton
           signalId={signal.id}
           ticker={signal.identifier}

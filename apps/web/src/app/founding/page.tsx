@@ -81,19 +81,20 @@ function FoundingContent() {
   return (
     <main className="flex-1 flex flex-col items-center justify-center px-4 py-16">
         {/* Badge */}
-        <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold px-4 py-1.5 rounded-full mb-8">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-          Founding member pricing — not available on the main site
+        <div className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/10 text-zinc-300 text-xs font-semibold px-4 py-1.5 rounded-full mb-8">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          Direct checkout — skip the trial
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-extrabold text-white text-center mb-3">
-          Lock in your price. Forever.
+          Skip the trial. Start today.
         </h1>
         <p className="text-zinc-400 text-center max-w-md mb-2">
-          Founding members pay today&apos;s price for life. When we raise prices — and we will — you never pay more.
+          Same price as our standard Pro and Elite plans — this just skips the
+          14-day trial and starts your access (and billing) right away.
         </p>
         <p className="text-zinc-600 text-sm text-center mb-12">
-          No trial period. Access starts immediately. Cancel anytime.
+          Cancel anytime.
         </p>
 
         {/* Plan cards */}
@@ -115,9 +116,7 @@ function FoundingContent() {
 
               <div>
                 <div className="text-base font-bold text-white">{plan.name}</div>
-                <div className="text-xs text-zinc-500 mt-0.5 flex items-center gap-1.5">
-                  <span className="text-amber-400 text-[10px] font-semibold uppercase tracking-wide">Price locked forever</span>
-                </div>
+                <div className="text-xs text-zinc-500 mt-0.5">No trial — billing starts immediately</div>
               </div>
 
               <div>
@@ -125,7 +124,7 @@ function FoundingContent() {
                   ${plan.price}
                   <span className="text-sm font-normal text-zinc-400">/mo</span>
                 </div>
-                <div className="text-xs text-zinc-600 mt-0.5">Billed monthly · Cancel anytime</div>
+                <div className="text-xs text-zinc-600 mt-0.5">Same price as the standard plan · Billed monthly · Cancel anytime</div>
               </div>
 
               <ul className="space-y-1.5 flex-1">
