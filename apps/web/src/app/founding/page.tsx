@@ -3,13 +3,13 @@
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { TIER_FEATURES } from "@/lib/tier";
+import { TIER_FEATURES, PRICING } from "@/lib/tier";
 
 const PLANS = [
   {
     key:         "founding_pro" as const,
     name:        "Founding Pro",
-    price:       40,
+    price:       PRICING.pro.monthly,
     tier:        "pro"   as const,
     highlighted: false,
     features:    TIER_FEATURES.pro,
@@ -17,7 +17,7 @@ const PLANS = [
   {
     key:         "founding_elite" as const,
     name:        "Founding Elite",
-    price:       80,
+    price:       PRICING.elite.monthly,
     tier:        "elite" as const,
     highlighted: true,
     features:    TIER_FEATURES.elite,
@@ -26,9 +26,11 @@ const PLANS = [
 
 function CheckoutButton({ plan, ref: influencerRef }: { plan: "founding_pro" | "founding_elite"; ref: string | null }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
 
   async function handleCheckout() {
     setLoading(true);
+    setError(null);
     try {
       const body: Record<string, string> = { plan };
       if (influencerRef) body.ref = influencerRef;
@@ -38,25 +40,37 @@ function CheckoutButton({ plan, ref: influencerRef }: { plan: "founding_pro" | "
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify(body),
       });
+
+      if (res.status === 401) {
+        setError("Create an account first, then come back to this page to lock in the price.");
+        setLoading(false);
+        return;
+      }
+
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
       } else {
+        setError(data.error ?? "Something went wrong. Try again.");
         setLoading(false);
       }
     } catch {
+      setError("Something went wrong. Try again.");
       setLoading(false);
     }
   }
 
   return (
-    <button
-      onClick={handleCheckout}
-      disabled={loading}
-      className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold text-sm py-3 rounded-xl transition-colors"
-    >
-      {loading ? "Redirecting…" : "Lock in founding price →"}
-    </button>
+    <div className="space-y-2">
+      <button
+        onClick={handleCheckout}
+        disabled={loading}
+        className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold text-sm py-3 rounded-xl transition-colors"
+      >
+        {loading ? "Redirecting…" : "Lock in founding price →"}
+      </button>
+      {error && <p className="text-xs text-red-400 text-center">{error}</p>}
+    </div>
   );
 }
 

@@ -58,7 +58,7 @@ const TERMS = [
   {
     term: "Watchlist",
     definition:
-      "A personal list of assets you want to monitor. Free tier allows up to 5 assets.",
+      "A personal list of assets you want to monitor. Unlimited on Pro and Elite.",
   },
   {
     term: "Win Rate",

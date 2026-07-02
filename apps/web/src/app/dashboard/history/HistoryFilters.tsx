@@ -6,12 +6,19 @@ import { clsx } from "clsx";
 const ASSET_TYPES = ["all", "stock", "crypto"] as const;
 const OUTCOMES    = ["all", "WIN", "LOSS", "NEUTRAL"] as const;
 const HORIZONS    = ["all", "intraday", "swing", "longterm"] as const;
+const SOURCES     = ["live", "backtest", "all"] as const;
 
 const HORIZON_LABELS: Record<string, string> = {
   all:       "All",
   intraday:  "Intraday",
   swing:     "Swing",
   longterm:  "Long-term",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  live:     "Live",
+  backtest: "Backtest",
+  all:      "All",
 };
 
 export default function HistoryFilters() {
@@ -21,10 +28,11 @@ export default function HistoryFilters() {
   const activeAsset   = searchParams.get("asset")   ?? "all";
   const activeOutcome = searchParams.get("outcome")  ?? "all";
   const activeHorizon = searchParams.get("horizon")  ?? "all";
+  const activeSource  = searchParams.get("source")   ?? "live";
 
-  function setFilter(key: string, value: string) {
+  function setFilter(key: string, value: string, defaultValue: string) {
     const params = new URLSearchParams(searchParams.toString());
-    if (value === "all") {
+    if (value === defaultValue) {
       params.delete(key);
     } else {
       params.set(key, value);
@@ -34,13 +42,22 @@ export default function HistoryFilters() {
 
   return (
     <div className="flex flex-wrap gap-4">
+      {/* Source — defaults to Live; backtest simulations are opt-in */}
+      <FilterGroup
+        label="Source"
+        options={SOURCES}
+        active={activeSource}
+        displayFn={(v) => SOURCE_LABELS[v] ?? v}
+        onChange={(v) => setFilter("source", v, "live")}
+      />
+
       {/* Asset type */}
       <FilterGroup
         label="Asset"
         options={ASSET_TYPES}
         active={activeAsset}
         displayFn={(v) => v === "all" ? "All" : v.charAt(0).toUpperCase() + v.slice(1)}
-        onChange={(v) => setFilter("asset", v)}
+        onChange={(v) => setFilter("asset", v, "all")}
       />
 
       {/* Outcome */}
@@ -49,7 +66,7 @@ export default function HistoryFilters() {
         options={OUTCOMES}
         active={activeOutcome}
         displayFn={(v) => v === "all" ? "All" : v}
-        onChange={(v) => setFilter("outcome", v)}
+        onChange={(v) => setFilter("outcome", v, "all")}
       />
 
       {/* Horizon */}
@@ -58,7 +75,7 @@ export default function HistoryFilters() {
         options={HORIZONS}
         active={activeHorizon}
         displayFn={(v) => HORIZON_LABELS[v] ?? v}
-        onChange={(v) => setFilter("horizon", v)}
+        onChange={(v) => setFilter("horizon", v, "all")}
       />
     </div>
   );

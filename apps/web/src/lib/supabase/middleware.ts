@@ -59,5 +59,29 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Standing CC-gate: no free-tier browsing of the product, ever. This is
+  // the backstop for the auth/callback redirect above — it catches anyone
+  // who bails mid-checkout and comes back later via a bookmark, a password
+  // login (which never touches /auth/callback), or a lapsed subscription.
+  // /dashboard/upgrade itself must stay reachable — it's the plan picker.
+  const requiresActivePlan =
+    pathname === "/onboarding" ||
+    (pathname.startsWith("/dashboard") && pathname !== "/dashboard/upgrade");
+
+  if (user && requiresActivePlan) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("tier")
+      .eq("id", user.id)
+      .single();
+
+    if ((profile?.tier ?? "free") === "free") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard/upgrade";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+  }
+
   return supabaseResponse;
 }

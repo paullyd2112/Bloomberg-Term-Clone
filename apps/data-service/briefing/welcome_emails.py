@@ -1,9 +1,13 @@
 """
-Welcome email sequence — 4 emails sent over the 7-day trial.
-  Day 0 (immediate): Welcome + getting started
-  Day 2: Feature spotlight — signals & options flow
-  Day 4: Feature spotlight — congressional trades & briefing
-  Day 6: Trial ending soon — convert to paid
+Welcome email sequence — 4 emails sent over the 14-day trial.
+  Day 0  (immediate): Welcome + getting started
+  Day 3:  Feature spotlight — signals & options flow
+  Day 7:  Feature spotlight — congressional trades & briefing
+  Day 13: Trial ending tomorrow — convert to paid
+
+Trial length and displayed prices here must match apps/web/src/lib/tier.ts
+(TRIAL_DAYS, PRICING) — that TS file is the source of truth for the web app;
+these constants mirror it since this service can't import TS directly.
 """
 
 import os
@@ -20,6 +24,11 @@ resend.api_key = os.environ.get("RESEND_API_KEY", "") or os.environ.get("RESEND_
 FROM_ADDRESS = "Paul at Plebs <paul@plebs.finance>"
 APP_URL      = os.environ.get("NEXT_PUBLIC_APP_URL", "https://plebs.finance")
 
+TRIAL_DAYS       = 14
+SEND_DAYS        = (0, 3, 7, TRIAL_DAYS - 1)   # last touchpoint = trial ends tomorrow
+PRO_MONTHLY      = 40
+PRO_LIFETIME     = 299
+
 
 # ─── Email templates ──────────────────────────────────────────────────────────
 
@@ -34,7 +43,7 @@ def _email_day0(name: str) -> tuple[str, str, str]:
       plebs<span style="color:#22c55e;">.finance</span>
     </div>
     <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 12px;">
-      Welcome{f", {name}" if name else ""} — your 7-day trial is live.
+      Welcome{f", {name}" if name else ""} — your {TRIAL_DAYS}-day trial is live.
     </h1>
     <p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:0 0 24px;">
       You now have full access to everything Plebs offers. Here's where to start:
@@ -66,7 +75,7 @@ def _email_day0(name: str) -> tuple[str, str, str]:
   </div>
 </body>
 </html>"""
-    text = f"""Welcome{f", {name}" if name else ""} — your 7-day trial is live.
+    text = f"""Welcome{f", {name}" if name else ""} — your {TRIAL_DAYS}-day trial is live.
 
 Start here:
 → Open your dashboard: {APP_URL}/dashboard
@@ -79,7 +88,7 @@ Not financial advice. Unsubscribe: {APP_URL}/unsubscribe"""
     return subject, html, text
 
 
-def _email_day2(name: str) -> tuple[str, str, str]:
+def _email_features_1(name: str) -> tuple[str, str, str]:
     subject = "The two features most traders miss on Plebs"
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -93,7 +102,7 @@ def _email_day2(name: str) -> tuple[str, str, str]:
       Two features worth checking out
     </h1>
     <p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:0 0 24px;">
-      Day 2 of your trial. Most users find these two the most valuable:
+      Day 3 of your trial. Most users find these two the most valuable:
     </p>
     <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:20px;margin-bottom:16px;">
       <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">⚡ Signal accuracy per asset</div>
@@ -118,7 +127,7 @@ def _email_day2(name: str) -> tuple[str, str, str]:
   </div>
 </body>
 </html>"""
-    text = f"""Two features worth checking out — Day 2 of your trial.
+    text = f"""Two features worth checking out — Day 3 of your trial.
 
 Signal accuracy per asset:
 Every signal gets tracked against actual outcomes. See win rates per ticker.
@@ -132,7 +141,7 @@ Not financial advice. Unsubscribe: {APP_URL}/unsubscribe"""
     return subject, html, text
 
 
-def _email_day4(name: str) -> tuple[str, str, str]:
+def _email_features_2(name: str) -> tuple[str, str, str]:
     subject = "Congressional trades + your morning briefing"
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -168,7 +177,7 @@ def _email_day4(name: str) -> tuple[str, str, str]:
   </div>
 </body>
 </html>"""
-    text = f"""Congressional trades + your morning briefing — Day 4.
+    text = f"""Congressional trades + your morning briefing — Day 7.
 
 Congressional trade tracker:
 Every STOCK Act disclosure in one feed.
@@ -182,7 +191,7 @@ Not financial advice. Unsubscribe: {APP_URL}/unsubscribe"""
     return subject, html, text
 
 
-def _email_day6(name: str, tier: str) -> tuple[str, str, str]:
+def _email_trial_ending(name: str, tier: str) -> tuple[str, str, str]:
     subject = "Your trial ends tomorrow — here's what happens next"
     is_pro   = tier in ("pro", "elite")
     html = f"""<!DOCTYPE html>
@@ -207,14 +216,14 @@ def _email_day6(name: str, tier: str) -> tuple[str, str, str]:
           <div style="color:#fff;font-weight:600;font-size:15px;">Pro</div>
           <div style="color:#71717a;font-size:13px;">Signals, options flow, briefing, congressional trades</div>
         </div>
-        <div style="color:#22c55e;font-weight:800;font-size:18px;">$79<span style="font-size:12px;font-weight:400;color:#52525b;">/mo</span></div>
+        <div style="color:#22c55e;font-weight:800;font-size:18px;">${PRO_MONTHLY}<span style="font-size:12px;font-weight:400;color:#52525b;">/mo</span></div>
       </div>
       <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">
         <div style="flex:1;">
           <div style="color:#fff;font-weight:600;font-size:15px;">Lifetime Pro</div>
           <div style="color:#71717a;font-size:13px;">Pay once, access forever</div>
         </div>
-        <div style="color:#22c55e;font-weight:800;font-size:18px;">$399<span style="font-size:12px;font-weight:400;color:#52525b;"> once</span></div>
+        <div style="color:#22c55e;font-weight:800;font-size:18px;">${PRO_LIFETIME}<span style="font-size:12px;font-weight:400;color:#52525b;"> once</span></div>
       </div>
       <a href="{APP_URL}/dashboard/upgrade" style="display:block;text-align:center;background:#22c55e;color:#000;font-weight:700;font-size:14px;padding:12px;border-radius:8px;text-decoration:none;">
         Upgrade now →
@@ -234,8 +243,8 @@ def _email_day6(name: str, tier: str) -> tuple[str, str, str]:
 
 {"You're already subscribed — nothing changes." if is_pro else f"Upgrade to keep access: {APP_URL}/dashboard/upgrade"}
 
-Pro: $79/mo
-Lifetime Pro: $399 once
+Pro: ${PRO_MONTHLY}/mo
+Lifetime Pro: ${PRO_LIFETIME} once
 
 Questions? support@plebs.finance
 
@@ -287,7 +296,7 @@ def send_welcome_sequence() -> str:
             continue
 
         day = (today - signup_date).days
-        if day not in (0, 2, 4, 6):
+        if day not in SEND_DAYS:
             continue
 
         try:
@@ -304,12 +313,12 @@ def send_welcome_sequence() -> str:
 
         if day == 0:
             subject, html, text = _email_day0(name)
-        elif day == 2:
-            subject, html, text = _email_day2(name)
-        elif day == 4:
-            subject, html, text = _email_day4(name)
+        elif day == 3:
+            subject, html, text = _email_features_1(name)
+        elif day == 7:
+            subject, html, text = _email_features_2(name)
         else:
-            subject, html, text = _email_day6(name, tier)
+            subject, html, text = _email_trial_ending(name, tier)
 
         if _send(email, subject, html, text):
             sent += 1

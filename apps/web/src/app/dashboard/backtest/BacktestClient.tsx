@@ -226,9 +226,15 @@ export default function BacktestClient() {
         <div className="space-y-4">
           {results.total_trades === 0 ? (
             <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-6 text-center text-zinc-500 text-sm">
-              No resolved signals found matching these filters.
+              No live signals have resolved to a win or loss under these filters.
               <br />
-              <span className="text-xs text-zinc-600 mt-1 block">Try widening the date range or lowering the confidence threshold.</span>
+              <span className="text-xs text-zinc-600 mt-1 block">
+                This runs only against live, non-backtest calls — if the engine hasn&apos;t had
+                signals age past their evaluation window yet, no filter combination will
+                change that. Try widening the date range or lowering the confidence
+                threshold first; if it&apos;s still empty, there&apos;s just nothing resolved
+                yet system-wide.
+              </span>
             </div>
           ) : (
             <>

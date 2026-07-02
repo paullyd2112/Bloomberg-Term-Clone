@@ -2,6 +2,24 @@ export type Tier = "free" | "pro" | "elite";
 
 export const TRIAL_DAYS = 14;
 
+// Single source of truth for displayed pricing — landing page, upgrade page,
+// founding page, and transactional emails all read from this. Keep in sync
+// with the actual Stripe price objects (STRIPE_PRICE_* env vars); this file
+// doesn't validate against Stripe, it's just where copy should stop drifting
+// from what the app (and Stripe) actually charge.
+export const PRICING = {
+  pro: {
+    monthly:   40,
+    quarterly: 100,
+    lifetime:  299,
+  },
+  elite: {
+    monthly:   80,
+    quarterly: 200,
+    lifetime:  399,
+  },
+} as const;
+
 export const WATCHLIST_LIMIT: Record<Tier, number> = {
   free:  0,
   pro:   Infinity,
@@ -31,7 +49,7 @@ export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
   ],
 };
 
-export function canAccessFeature(tier: Tier, feature: "pleby" | "portfolio" | "alerts" | "real_time" | "on_demand_scoring" | "screener" | "performance"): boolean {
+export function canAccessFeature(tier: Tier, feature: "pleby" | "portfolio" | "alerts" | "real_time" | "on_demand_scoring" | "screener" | "performance" | "congress"): boolean {
   if (feature === "pleby")               return tier === "elite";
   if (feature === "on_demand_scoring")   return tier === "elite";
   if (feature === "portfolio")           return tier === "pro" || tier === "elite";
@@ -39,6 +57,7 @@ export function canAccessFeature(tier: Tier, feature: "pleby" | "portfolio" | "a
   if (feature === "real_time")           return tier === "pro" || tier === "elite";
   if (feature === "screener")            return tier === "pro" || tier === "elite";
   if (feature === "performance")         return tier === "pro" || tier === "elite";
+  if (feature === "congress")            return tier === "pro" || tier === "elite";
   return false;
 }
 

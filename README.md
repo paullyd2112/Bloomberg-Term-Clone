@@ -48,10 +48,15 @@ Apply migrations in order via Supabase CLI or dashboard.
 
 ## Tiers
 
+There is no free-standing plan — "free" in the schema means expired trial /
+cancelled subscription, not a usable tier (0 watchlist assets, no alerts, no
+portfolio, no performance page). Signup goes straight to Stripe checkout
+before any dashboard access.
+
 | Tier | Price | Key features |
 |---|---|---|
-| Free | $0 | 30-min delayed signals, 5 watchlist assets |
-| Pro | $50/mo | Real-time everything, unlimited watchlist, briefing email |
-| Elite | $99/mo | Pro + Pleby AI analyst |
+| Pro | $40/mo ($100/quarter, $299 lifetime) | Real-time signals, unlimited watchlist, options flow, congressional trades, briefing email |
+| Elite | $80/mo ($200/quarter, $399 lifetime) | Pro + prediction markets + Pleby AI analyst |
 
-7-day free trial (credit card required) for Pro and Elite.
+14-day free trial (credit card required, monthly plans only) for Pro and Elite.
+Quarterly, annual, and lifetime plans start billing immediately, no trial.

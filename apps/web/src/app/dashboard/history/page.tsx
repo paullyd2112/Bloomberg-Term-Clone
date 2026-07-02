@@ -103,7 +103,7 @@ function returnColor(ret: number | null): string {
 export default async function HistoryPage({
   searchParams,
 }: {
-  searchParams: { asset?: string; outcome?: string; horizon?: string };
+  searchParams: { asset?: string; outcome?: string; horizon?: string; source?: string };
 }) {
   const user = await getUser();
   const tier = await getUserTier();
@@ -113,6 +113,15 @@ export default async function HistoryPage({
   }
 
   const supabase = createClient();
+
+  // Default to live-only, same as the main signal feed and screener. Backtest
+  // signals are retrospective (their outcome is already known at insert time,
+  // computed against historical data) — blending them into headline win-rate
+  // and return numbers would misrepresent the live, predictive track record.
+  // "All" and "Backtest" remain available as explicit opt-in filters below.
+  const sourceFilter = searchParams.source === "all" || searchParams.source === "backtest"
+    ? searchParams.source
+    : "live";
 
   let query = supabase
     .from("signals")
@@ -124,6 +133,12 @@ export default async function HistoryPage({
     .gte("confidence", 70)
     .order("created_at", { ascending: false })
     .limit(1000);
+
+  if (sourceFilter === "live") {
+    query = query.eq("is_backtest", false);
+  } else if (sourceFilter === "backtest") {
+    query = query.eq("is_backtest", true);
+  }
 
   const assetFilter   = searchParams.asset;
   const outcomeFilter = searchParams.outcome;
@@ -213,7 +228,9 @@ export default async function HistoryPage({
             <h1 className="text-xl font-semibold tracking-tight text-white">Pleby Trade History</h1>
           </div>
           <p className="text-sm text-zinc-500">
-            Full signal track record — live trades and backtests since engine v2 launch.
+            {sourceFilter === "live" && "Live signal track record since engine v2 launch — backtest simulations excluded by default."}
+            {sourceFilter === "backtest" && "Backtest simulations only — retrospective results on historical data, not live predictive calls."}
+            {sourceFilter === "all" && "Live trades and backtest simulations combined — check the Source column per row."}
           </p>
         </div>
         <Link
@@ -361,7 +378,9 @@ export default async function HistoryPage({
             </span>
             <p className="text-zinc-300 text-sm font-medium">No resolved signals found</p>
             <p className="text-zinc-500 text-xs max-w-xs leading-relaxed">
-              Adjust filters or wait for signals to resolve.
+              {sourceFilter === "live"
+                ? "No live signals have resolved to a win or loss yet under these filters — this isn't a filter problem, the engine just hasn't had one age past its evaluation window. Check back soon, or view backtest results in the meantime."
+                : "Adjust filters or wait for signals to resolve."}
             </p>
           </div>
         ) : (

@@ -23,6 +23,7 @@ async function updateUserTier(
   tier: "free" | "pro" | "elite",
   subscriptionId: string | null,
   billingInterval: string | null,
+  trialEndsAt?: string | null,
 ) {
   const supabase = createAdminClient();
   const { data, error, status, statusText } = await (supabase as any)
@@ -31,6 +32,7 @@ async function updateUserTier(
       tier,
       stripe_subscription_id: subscriptionId,
       billing_interval:       billingInterval,
+      ...(trialEndsAt !== undefined ? { trial_ends_at: trialEndsAt } : {}),
     })
     .eq("id", supabaseUserId)
     .select();
@@ -166,6 +168,9 @@ export async function POST(req: Request) {
         const tier = getTierForPlan(plan);
         const interval = (sub.items.data[0]?.price.recurring?.interval ?? null) as string | null;
         const active   = ["active", "trialing"].includes(sub.status);
+        const trialEndsAt = sub.status === "trialing" && sub.trial_end
+          ? new Date(sub.trial_end * 1000).toISOString()
+          : null;
 
         // If user cancels during trial, revoke access immediately.
         // They haven't paid anything so there's nothing to honor.
@@ -173,7 +178,7 @@ export async function POST(req: Request) {
           sub.status === "trialing" && sub.cancel_at_period_end;
 
         if (canceledDuringTrial) {
-          await updateUserTier(userId, "free", null, null);
+          await updateUserTier(userId, "free", null, null, null);
           try {
             await stripe.subscriptions.cancel(sub.id);
           } catch (e) {
@@ -182,11 +187,24 @@ export async function POST(req: Request) {
           break;
         }
 
-        await updateUserTier(userId, active ? tier : "free", sub.id, interval);
+        await updateUserTier(userId, active ? tier : "free", sub.id, interval, trialEndsAt);
 
         // Reward referrer automatically when referred user goes active/trialing
         if (active) {
           await _processReferralReward(userId);
+        }
+
+        // This subscription supersedes a previous one (plan change/upgrade) —
+        // now that it's confirmed active, retire the old one. Doing this here
+        // (instead of up front at checkout time) means an abandoned checkout
+        // never costs the user their existing paid access.
+        const previousSubId = sub.metadata?.previous_subscription_id;
+        if (active && previousSubId && previousSubId !== sub.id) {
+          try {
+            await stripe.subscriptions.cancel(previousSubId, { prorate: true });
+          } catch (e) {
+            console.warn("Could not cancel superseded subscription:", previousSubId, e);
+          }
         }
         break;
       }

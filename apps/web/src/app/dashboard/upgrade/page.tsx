@@ -1,6 +1,6 @@
 import { Check } from "lucide-react";
 import { getUserTier, getUserProfile } from "@/lib/user";
-import { TIER_FEATURES } from "@/lib/tier";
+import { TIER_FEATURES, PRICING, TRIAL_DAYS } from "@/lib/tier";
 import UpgradeButtons from "./UpgradeButtons";
 import LifetimeButton from "./LifetimeButton";
 import BillingPortalButton from "./BillingPortalButton";
@@ -18,7 +18,7 @@ export default async function UpgradePage() {
         <h1 className="text-xl font-bold text-white tracking-tight">Plans & Billing</h1>
         <p className="text-sm text-zinc-400 mt-1.5">
           {tier === "free"
-            ? "Pick a plan to start your 14-day trial."
+            ? `Pick a plan to start your ${TRIAL_DAYS}-day trial.`
             : <>You&apos;re on the <span className="text-white capitalize font-medium">{tier}</span> plan.</>}
         </p>
       </div>
@@ -32,7 +32,7 @@ export default async function UpgradePage() {
         <div className="grid gap-5 md:grid-cols-2">
           <PlanCard
             name="Pro"
-            price={{ monthly: 40, quarterly: 100 }}
+            price={{ monthly: PRICING.pro.monthly, quarterly: PRICING.pro.quarterly }}
             description="Serious retail traders"
             features={TIER_FEATURES.pro}
             current={tier === "pro" && profile?.billing_interval !== "lifetime"}
@@ -41,7 +41,7 @@ export default async function UpgradePage() {
           />
           <PlanCard
             name="Elite"
-            price={{ monthly: 80, quarterly: 200 }}
+            price={{ monthly: PRICING.elite.monthly, quarterly: PRICING.elite.quarterly }}
             description="For the obsessed"
             features={TIER_FEATURES.elite}
             current={tier === "elite" && profile?.billing_interval !== "lifetime"}
@@ -72,7 +72,7 @@ export default async function UpgradePage() {
               <div className="text-xs text-zinc-500 mt-1">One-time payment, forever access</div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-white tabular-nums">$299</div>
+              <div className="text-3xl font-bold text-white tabular-nums">${PRICING.pro.lifetime}</div>
               <div className="text-xs text-zinc-500 mt-1">Pays for itself in ~8 months</div>
             </div>
             <ul className="space-y-2 flex-1">
@@ -102,7 +102,7 @@ export default async function UpgradePage() {
               <div className="text-xs text-zinc-500 mt-1">One-time payment, forever access</div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-white tabular-nums">$399</div>
+              <div className="text-3xl font-bold text-white tabular-nums">${PRICING.elite.lifetime}</div>
               <div className="text-xs text-zinc-500 mt-1">Pays for itself in ~5 months</div>
             </div>
             <ul className="space-y-2 flex-1">

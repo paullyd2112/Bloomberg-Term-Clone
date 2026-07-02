@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type TickerItem = {
   identifier: string;
@@ -9,13 +9,14 @@ type TickerItem = {
   asset_type: string;
 };
 
-const DISPLAY = [
-  { symbol: "NVDA", asset: "Equity", dir: "BUY" },
-  { symbol: "BTC", asset: "Crypto", dir: "BUY" },
-  { symbol: "TSLA", asset: "Equity", dir: "SELL" },
-  { symbol: "ETH", asset: "Crypto", dir: "BUY" },
-  { symbol: "SOL", asset: "Crypto", dir: "BUY" },
-] as const;
+type LiveSignal = {
+  id: string | number;
+  identifier: string;
+  direction: "BUY" | "SELL";
+  confidence: number;
+  time_horizon: string | null;
+  created_at: string;
+};
 
 function formatPrice(n: number) {
   if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -23,49 +24,33 @@ function formatPrice(n: number) {
   return n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 }
 
-const NYSE_HOLIDAYS: Set<string> = new Set([
-  // 2026
-  "2026-01-01","2026-01-19","2026-02-16","2026-04-03","2026-05-25",
-  "2026-06-19","2026-07-03","2026-09-07","2026-11-26","2026-12-25",
-  // 2027
-  "2027-01-01","2027-01-18","2027-02-15","2027-03-26","2027-05-31",
-  "2027-06-18","2027-07-05","2027-09-06","2027-11-25","2027-12-24",
-]);
-
-function isMarketOpen(): boolean {
-  const now = new Date();
-  const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  const day = et.getDay();
-  if (day === 0 || day === 6) return false;
-  const yyyy = et.getFullYear();
-  const mm = String(et.getMonth() + 1).padStart(2, "0");
-  const dd = String(et.getDate()).padStart(2, "0");
-  if (NYSE_HOLIDAYS.has(`${yyyy}-${mm}-${dd}`)) return false;
-  const mins = et.getHours() * 60 + et.getMinutes();
-  return mins >= 570 && mins < 960; // 9:30am – 4:00pm ET
-}
-
-function nudgePrice(base: number): number {
-  const magnitude = base * 0.0003;
-  const delta = (Math.random() - 0.5) * 2 * magnitude;
-  return Math.max(0.0001, base + delta);
-}
+const ASSET_LABEL: Record<string, string> = { stock: "Equity", crypto: "Crypto" };
 
 export default function LiveSignalFeed() {
-  const [prices, setPrices] = useState<Record<string, TickerItem>>({});
-  const basePrices = useRef<Record<string, TickerItem>>({});
-  const [clock, setClock] = useState("");
-  const [loaded, setLoaded] = useState(false);
+  const [prices, setPrices]   = useState<Record<string, TickerItem>>({});
+  const [signals, setSignals] = useState<LiveSignal[]>([]);
+  const [clock, setClock]     = useState("");
+  const [loaded, setLoaded]   = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/ticker", { cache: "no-store" });
-      if (!res.ok) return;
-      const data = (await res.json()) as { items: TickerItem[] };
-      const map: Record<string, TickerItem> = {};
-      for (const item of data.items) map[item.identifier] = item;
-      basePrices.current = map;
-      setPrices(map);
+      const [tickerRes, signalsRes] = await Promise.all([
+        fetch("/api/ticker", { cache: "no-store" }),
+        fetch("/api/landing-signals", { cache: "no-store" }),
+      ]);
+
+      if (tickerRes.ok) {
+        const data = (await tickerRes.json()) as { items: TickerItem[] };
+        const map: Record<string, TickerItem> = {};
+        for (const item of data.items) map[item.identifier] = item;
+        setPrices(map);
+      }
+
+      if (signalsRes.ok) {
+        const data = (await signalsRes.json()) as LiveSignal[];
+        setSignals(Array.isArray(data) ? data.slice(0, 5) : []);
+      }
+
       setLoaded(true);
     } catch {}
   }, []);
@@ -75,24 +60,6 @@ export default function LiveSignalFeed() {
     const id = setInterval(load, 30_000);
     return () => clearInterval(id);
   }, [load]);
-
-  useEffect(() => {
-    if (!loaded) return;
-    const id = setInterval(() => {
-      const open = isMarketOpen();
-      const nudged: Record<string, TickerItem> = {};
-      for (const [key, item] of Object.entries(basePrices.current)) {
-        nudged[key] = {
-          ...item,
-          price: (item.asset_type === "crypto" || open)
-            ? nudgePrice(item.price)
-            : item.price,
-        };
-      }
-      setPrices(nudged);
-    }, 2000);
-    return () => clearInterval(id);
-  }, [loaded]);
 
   useEffect(() => {
     function tick() {
@@ -134,52 +101,62 @@ export default function LiveSignalFeed() {
         </div>
 
         {/* rows */}
-        <div className="divide-y divide-white/[0.04]">
-          {DISPLAY.map((row) => {
-            const live = prices[row.symbol];
-            const change = live?.change_24h ?? 0;
-            const up = change >= 0;
-            return (
-              <div
-                key={row.symbol}
-                className="grid grid-cols-[52px_1fr_auto] gap-3 px-4 py-3.5 items-center hover:bg-white/[0.02] transition-colors"
-              >
-                <span
-                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded border font-mono text-center ${
-                    row.dir === "SELL"
-                      ? "text-rose-400 border-rose-700/50 bg-rose-500/10"
-                      : "text-emerald-400 border-emerald-700/50 bg-emerald-500/10"
-                  }`}
+        {loaded && signals.length === 0 ? (
+          <div className="px-4 py-8 text-center">
+            <p className="text-sm text-zinc-400">No signals above 70% confidence in the last cycle.</p>
+            <p className="text-[11px] text-zinc-600 mt-1">The feed only shows real calls — nothing simulated.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-white/[0.04]">
+            {signals.map((row) => {
+              const live = prices[row.identifier];
+              const change = live?.change_24h ?? 0;
+              const up = change >= 0;
+              const assetLabel = live ? ASSET_LABEL[live.asset_type] : undefined;
+              return (
+                <div
+                  key={row.id}
+                  className="grid grid-cols-[52px_1fr_auto] gap-3 px-4 py-3.5 items-center hover:bg-white/[0.02] transition-colors"
                 >
-                  {row.dir}
-                </span>
-
-                <div className="min-w-0">
-                  <div className="font-mono font-semibold text-white text-sm tabular-nums truncate">
-                    {row.symbol}
-                  </div>
-                  <div className="text-[11px] text-zinc-600">{row.asset}</div>
-                </div>
-
-                <div className="flex flex-col items-end">
-                  <span className="font-mono text-sm text-white tabular-nums">
-                    {live ? `$${formatPrice(live.price)}` : "··"}
-                  </span>
                   <span
-                    className={`font-mono text-[11px] tabular-nums ${
-                      up ? "text-emerald-400" : "text-rose-400"
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded border font-mono text-center ${
+                      row.direction === "SELL"
+                        ? "text-rose-400 border-rose-700/50 bg-rose-500/10"
+                        : "text-emerald-400 border-emerald-700/50 bg-emerald-500/10"
                     }`}
                   >
-                    {live ? `${up ? "+" : ""}${change.toFixed(2)}%` : "··"}
+                    {row.direction}
                   </span>
+
+                  <div className="min-w-0">
+                    <div className="font-mono font-semibold text-white text-sm tabular-nums truncate">
+                      {row.identifier}
+                    </div>
+                    <div className="text-[11px] text-zinc-600">
+                      {assetLabel ? `${assetLabel} · ` : ""}{row.confidence}% conf
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end">
+                    <span className="font-mono text-sm text-white tabular-nums">
+                      {live ? `$${formatPrice(live.price)}` : "··"}
+                    </span>
+                    <span
+                      className={`font-mono text-[11px] tabular-nums ${
+                        up ? "text-emerald-400" : "text-rose-400"
+                      }`}
+                    >
+                      {live ? `${up ? "+" : ""}${change.toFixed(2)}%` : "··"}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex items-center justify-between border-t border-white/[0.06] bg-white/[0.02] px-4 py-2.5 font-mono text-[10px] text-zinc-600">
-          <span>Live prices · signals are representative</span>
+          <span>Real signals, refreshed every 30s</span>
           <span className="tabular-nums">
             {clock || "Connecting…"}
           </span>

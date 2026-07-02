@@ -19,6 +19,7 @@ import Reveal from "@/components/landing/Reveal";
 import BrowserFrame from "@/components/landing/showcase/BrowserFrame";
 import DashboardShot from "@/components/landing/showcase/DashboardShot";
 import AssetShot from "@/components/landing/showcase/AssetShot";
+import { PRICING, TRIAL_DAYS } from "@/lib/tier";
 
 export const metadata: Metadata = {
   title: "Plebs · Hedge fund tools. Retail prices.",
@@ -52,7 +53,7 @@ function Nav() {
             Log in
           </Link>
           <Link
-            href="/signup"
+            href="/signup?plan=pro"
             className="group text-sm bg-emerald-500 hover:bg-emerald-400 text-black font-semibold pl-4 pr-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
           >
             Start free
@@ -116,7 +117,7 @@ function Hero() {
 
             <div className="mt-9 flex flex-col sm:flex-row sm:items-center gap-3">
               <Link
-                href="/signup"
+                href="/signup?plan=pro"
                 className="group inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-base px-6 py-3 rounded-xl transition-colors"
               >
                 Start 14-day trial
@@ -195,7 +196,7 @@ function Stats() {
     { value: "3",     label: "Markets covered" },
     { value: "7a",    label: "Daily briefing, ET" },
     { value: "60+",   label: "Assets tracked" },
-    { value: "14d",   label: "Trial period" },
+    { value: `${TRIAL_DAYS}d`, label: "Trial period" },
   ];
 
   return (
@@ -322,12 +323,12 @@ function Features() {
 const PLANS = [
   {
     name:      "Pro",
-    price:     "$40",
+    price:     `$${PRICING.pro.monthly}`,
     period:    "/mo",
     blurb:     "Everything you need to trade stocks & crypto with an edge.",
     highlight: false,
-    cta:       "Start 14-day trial",
-    href:      "/signup",
+    cta:       `Start ${TRIAL_DAYS}-day trial`,
+    href:      "/signup?plan=pro",
     features: [
       "Real-time AI signals for stocks & crypto",
       "Unlimited watchlist",
@@ -340,12 +341,12 @@ const PLANS = [
   },
   {
     name:      "Elite",
-    price:     "$80",
+    price:     `$${PRICING.elite.monthly}`,
     period:    "/mo",
     blurb:     "The real alpha: prediction markets and your own AI analyst.",
     highlight: true,
-    cta:       "Start 14-day trial",
-    href:      "/signup",
+    cta:       `Start ${TRIAL_DAYS}-day trial`,
+    href:      "/signup?plan=elite",
     features: [
       "Everything in Pro",
       "Prediction-market signals (Kalshi + Polymarket)",
@@ -421,9 +422,9 @@ function Pricing() {
         </div>
 
         <p className="text-center text-muted-foreground text-sm mt-8">
-          14-day free trial, credit card required, cancel anytime. Prefer to pay once?{" "}
-          <Link href="/signup" className="text-emerald-400 hover:text-emerald-300 underline underline-offset-4 transition-colors">
-            Lifetime access from $399
+          {TRIAL_DAYS}-day free trial, credit card required, cancel anytime. Prefer to pay once?{" "}
+          <Link href="/signup?plan=pro" className="text-emerald-400 hover:text-emerald-300 underline underline-offset-4 transition-colors">
+            Lifetime access from ${PRICING.pro.lifetime}
           </Link>
           .
         </p>
@@ -445,7 +446,7 @@ const FAQS = [
   },
   {
     q: "How does the trial work?",
-    a: "You get 14 days of full access to your chosen plan (Pro or Elite). Credit card is required upfront. Cancel anytime during the trial and you won't be charged.",
+    a: `You get ${TRIAL_DAYS} days of full access to your chosen plan (Pro or Elite). Credit card is required upfront — you'll go straight to checkout after you sign up. Cancel anytime during the trial and you won't be charged. Trials apply to monthly plans; quarterly, annual, and lifetime plans start billing immediately.`,
   },
   {
     q: "What markets do you cover?",
@@ -505,7 +506,7 @@ function CTAStrip() {
           <p className="text-secondary-foreground mt-4">14-day trial. Real-time signals from day one.</p>
 
           <Link
-            href="/signup"
+            href="/signup?plan=pro"
             className="group mt-8 inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-base px-9 py-3.5 rounded-xl transition-colors"
           >
             Start your trial
@@ -546,7 +547,7 @@ const FOOTER_COLS = [
     heading: "Company",
     links: [
       { label: "Log in", href: "/login" },
-      { label: "Start free", href: "/signup" },
+      { label: "Start free", href: "/signup?plan=pro" },
       { label: "Newsletter", href: "/#pricing" },
     ],
   },

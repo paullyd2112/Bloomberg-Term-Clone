@@ -15,6 +15,7 @@ const PRIMARY_BTN =
 export default function SignupForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/dashboard";
+  const plan = searchParams.get("plan") === "elite" ? "elite" : "pro";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,7 +37,7 @@ export default function SignupForm() {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}&plan=${plan}`,
       },
     });
     if (error) {
@@ -51,7 +52,7 @@ export default function SignupForm() {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}&plan=${plan}`,
       },
     });
   }
@@ -65,7 +66,8 @@ export default function SignupForm() {
         <h2 className="text-white font-semibold">Check your email</h2>
         <p className="text-secondary-foreground text-sm leading-relaxed">
           We sent a confirmation link to <span className="text-white">{email}</span>.
-          Click it to activate your account and start your 14-day trial.
+          Click it to activate your account — you&apos;ll go straight to checkout
+          to start your 14-day trial (card required, cancel anytime).
         </p>
         <Link href="/login" className="text-emerald-400 text-sm hover:text-emerald-300 transition-colors">
           Back to sign in

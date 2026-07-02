@@ -275,8 +275,7 @@ export default function OnboardingPage() {
             <div>
               <h1 className="text-2xl font-bold text-white">You&apos;re all set!</h1>
               <p className="text-zinc-400 text-sm mt-2">
-                One more step: choose a plan to get started. Credit card required
-                — cancel anytime during your 14-day trial and you won&apos;t be charged.
+                Your 14-day trial is active. Here&apos;s what&apos;s unlocked:
               </p>
             </div>
 
@@ -298,20 +297,12 @@ export default function OnboardingPage() {
               ))}
             </div>
 
-            <div className="space-y-3">
-              <Link
-                href="/dashboard/upgrade"
-                className="block w-full bg-green-500 hover:bg-green-400 text-black font-bold py-3 rounded-lg transition-colors text-center"
-              >
-                Choose a plan →
-              </Link>
-              <Link
-                href="/dashboard"
-                className="block text-sm text-zinc-500 hover:text-zinc-300 transition-colors text-center"
-              >
-                Browse the dashboard first
-              </Link>
-            </div>
+            <Link
+              href="/dashboard"
+              className="block w-full bg-green-500 hover:bg-green-400 text-black font-bold py-3 rounded-lg transition-colors text-center"
+            >
+              Go to dashboard →
+            </Link>
           </div>
         )}
       </div>
