@@ -721,6 +721,12 @@ def send_newsletter_now():
     from flask import request as flask_request
     body = flask_request.get_json(silent=True) or {}
     single_email = body.get("email") or flask_request.args.get("email")
+    # Defaults to "free" to preserve prior behavior. Pass tier=pro/elite to
+    # preview the paid rendering (signals + options flow cards) -- this was
+    # previously hardcoded to "free" with no way to test the paid path at all.
+    tier = (body.get("tier") or flask_request.args.get("tier") or "free").lower()
+    if tier not in ("free", "pro", "elite"):
+        return jsonify({"error": f"Invalid tier '{tier}' — must be free, pro, or elite"}), 400
 
     if single_email:
         from briefing.newsletter_emailer import _get_todays_newsletter, _render_html, _render_text
@@ -733,7 +739,7 @@ def send_newsletter_now():
 
         from datetime import date as _date
         subject = briefing.get("headline", f"Plebs — {_date.today().strftime('%b %-d')}")
-        html_body = _render_html(briefing, "free", None)
+        html_body = _render_html(briefing, tier, None)
         text_body = _render_text(briefing)
 
         try:
@@ -744,7 +750,7 @@ def send_newsletter_now():
                 "html": html_body,
                 "text": text_body,
             })
-            return jsonify({"status": "ok", "sent_to": single_email, "subject": subject})
+            return jsonify({"status": "ok", "sent_to": single_email, "subject": subject, "tier": tier})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
