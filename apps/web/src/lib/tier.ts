@@ -1,5 +1,11 @@
 export type Tier = "free" | "pro" | "elite";
 
+// Self-reported at onboarding (dashboard/settings lets users change it later).
+// Drives how much explanation vs. raw density the UI shows by default —
+// beginner gets inline plain-English captions, advanced gets fuller reasoning
+// text up front, intermediate gets the plain default either way.
+export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
+
 export const TRIAL_DAYS = 14;
 
 // Single source of truth for displayed pricing — landing page, upgrade page,

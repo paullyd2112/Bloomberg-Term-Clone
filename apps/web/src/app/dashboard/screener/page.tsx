@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Search, ArrowRight } from "lucide-react";
-import { getUserTier } from "@/lib/user";
-import { canAccessFeature } from "@/lib/tier";
+import { getUserTier, getUserProfile } from "@/lib/user";
+import { canAccessFeature, type ExperienceLevel } from "@/lib/tier";
 import ScreenerClient from "./ScreenerClient";
 
 export const revalidate = 0;
@@ -34,5 +34,6 @@ export default async function ScreenerPage() {
     );
   }
 
-  return <ScreenerClient />;
+  const profile = await getUserProfile();
+  return <ScreenerClient experienceLevel={profile?.trading_experience as ExperienceLevel | undefined} />;
 }

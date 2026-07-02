@@ -1,4 +1,5 @@
 import { Zap } from "lucide-react";
+import type { ExperienceLevel } from "@/lib/tier";
 
 type OptionsRow = {
   contract_type: string;
@@ -12,11 +13,14 @@ type OptionsRow = {
 
 export default function OptionsFlowTable({
   rows,
-  beginnerMode,
+  experienceLevel,
 }: {
   rows: OptionsRow[];
-  beginnerMode?: boolean;
+  experienceLevel?: ExperienceLevel;
 }) {
+  const beginnerMode = experienceLevel === "beginner";
+  const advancedMode = experienceLevel === "advanced";
+
   return (
     <div className="space-y-1.5">
       {beginnerMode && (
@@ -33,6 +37,7 @@ export default function OptionsFlowTable({
         <span className="w-8 flex-shrink-0">Type</span>
         <span title="Strike price">Strike</span>
         <span className="ml-2" title="Expiry date">Expiry</span>
+        {advancedMode && <span className="ml-2" title="Contract volume">Vol</span>}
         <span className="ml-auto" title="Premium paid">Premium</span>
       </div>
       {rows.map((row, i) => {
@@ -56,6 +61,9 @@ export default function OptionsFlowTable({
               <span className="text-zinc-600">
                 {new Date(row.expiry).toLocaleDateString([], { month: "short", day: "numeric" })}
               </span>
+            )}
+            {advancedMode && row.volume != null && (
+              <span className="font-mono text-zinc-500 tabular-nums">{row.volume.toLocaleString()}</span>
             )}
             <span className="ml-auto font-mono tabular-nums text-white">
               {row.premium_usd != null

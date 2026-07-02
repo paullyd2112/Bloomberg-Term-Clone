@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
+import type { ExperienceLevel } from "@/lib/tier";
 import SignalList from "@/components/signals/SignalList";
 import { type Signal } from "@/components/signals/SignalCard";
 
@@ -32,7 +33,7 @@ const DEFAULT_FILTERS: Filters = {
 
 const CONF_STEPS = [0, 50, 70, 80, 90] as const;
 
-export default function ScreenerClient() {
+export default function ScreenerClient({ experienceLevel }: { experienceLevel?: ExperienceLevel }) {
   const [signals, setSignals]   = useState<Signal[]>([]);
   const [insiderBuyTickers, setInsiderBuyTickers] = useState<Set<string>>(new Set());
   const [loading, setLoading]   = useState(true);
@@ -197,7 +198,7 @@ export default function ScreenerClient() {
       ) : (
         // Screener already requires pro/elite (canAccessFeature("screener")
         // matches "portfolio" exactly), so logging is always available here.
-        <SignalList signals={filtered} canLogPosition />
+        <SignalList signals={filtered} canLogPosition experienceLevel={experienceLevel} />
       )}
     </div>
   );

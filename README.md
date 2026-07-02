@@ -1,6 +1,6 @@
 # Plebs.io
 
-Trading intelligence platform for retail traders. Real-time signals across stocks, crypto, and prediction markets — powered by AI.
+Trading intelligence platform for retail traders. AI signals across stocks, crypto, and prediction markets, refreshed throughout the trading day — plus live prices.
 
 ## Stack
 
@@ -55,7 +55,7 @@ before any dashboard access.
 
 | Tier | Price | Key features |
 |---|---|---|
-| Pro | $40/mo ($100/quarter, $299 lifetime) | Real-time signals, unlimited watchlist, options flow, congressional trades, briefing email |
+| Pro | $40/mo ($100/quarter, $299 lifetime) | AI signals (refreshed throughout the day), unlimited watchlist, options flow, congressional trades, briefing email |
 | Elite | $80/mo ($200/quarter, $399 lifetime) | Pro + prediction markets + Pleby AI analyst |
 
 14-day free trial (credit card required, monthly plans only) for Pro and Elite.

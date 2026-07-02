@@ -114,7 +114,7 @@ def _email_features_1(name: str) -> tuple[str, str, str]:
     <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:20px;margin-bottom:24px;">
       <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">🌊 Options flow</div>
       <div style="color:#a1a1aa;font-size:14px;line-height:1.6;margin-bottom:12px;">
-        Unusual call and put sweeps flagged in real time. When institutions make big options bets, it shows up here before it shows up in the price.
+        Unusual call and put sweeps flagged multiple times a day. When institutions make big options bets, it shows up here before it shows up in the price.
       </div>
       <a href="{APP_URL}/dashboard/asset/stock/SPY" style="color:#22c55e;font-size:13px;font-weight:600;text-decoration:none;">Check options flow →</a>
     </div>
@@ -134,7 +134,7 @@ Every signal gets tracked against actual outcomes. See win rates per ticker.
 {APP_URL}/dashboard
 
 Options flow:
-Unusual call/put sweeps flagged in real time.
+Unusual call/put sweeps flagged multiple times a day.
 {APP_URL}/dashboard
 
 Not financial advice. Unsubscribe: {APP_URL}/unsubscribe"""

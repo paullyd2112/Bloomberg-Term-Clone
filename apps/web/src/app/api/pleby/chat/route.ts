@@ -1,9 +1,19 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getUser, getUserTier } from "@/lib/user";
+import { getUser, getUserTier, getUserProfile } from "@/lib/user";
 import { canAccessFeature } from "@/lib/tier";
 import { createClient } from "@/lib/supabase/server";
 import { PLEBY_TOOLS, executeTool } from "@/lib/pleby/tools";
 import { PLEBY_SYSTEM_PROMPT } from "@/lib/pleby/system-prompt";
+
+// Kept separate from the main (cached) system prompt so per-user personalization
+// doesn't bust the prompt cache on PLEBY_SYSTEM_PROMPT — this block is small and
+// deliberately left uncached, that one stays static and cacheable across users.
+const EXPERIENCE_INSTRUCTIONS: Record<string, string> = {
+  beginner:
+    "This user is new to trading. Define any jargon or acronym in plain English the first time you use it (RSI, IV, strike, premium, etc.) without being condescending about it.",
+  advanced:
+    "This user is an experienced trader. Skip basic explanations entirely — go straight into technical detail, specific indicators, and probabilities.",
+};
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -51,6 +61,11 @@ export async function POST(req: Request) {
     return new Response("Elite tier required", { status: 403 });
   }
 
+  const profile = await getUserProfile();
+  const experienceInstruction = profile?.trading_experience
+    ? EXPERIENCE_INSTRUCTIONS[profile.trading_experience]
+    : undefined;
+
   if (await isRateLimited(user.id)) {
     return new Response(
       JSON.stringify({ error: "Daily message limit reached. Resets in 24 hours." }),
@@ -93,6 +108,17 @@ export async function POST(req: Request) {
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
+  const systemBlocks: Anthropic.TextBlockParam[] = [
+    {
+      type: "text",
+      text: PLEBY_SYSTEM_PROMPT,
+      cache_control: { type: "ephemeral" },
+    },
+    ...(experienceInstruction
+      ? [{ type: "text" as const, text: experienceInstruction }]
+      : []),
+  ];
+
   const stream = new ReadableStream({
     async start(controller) {
       const enc = new TextEncoder();
@@ -106,13 +132,7 @@ export async function POST(req: Request) {
           const apiStream = client.messages.stream({
             model: "claude-sonnet-4-6",
             max_tokens: 4096,
-            system: [
-              {
-                type: "text",
-                text: PLEBY_SYSTEM_PROMPT,
-                cache_control: { type: "ephemeral" },
-              },
-            ],
+            system: systemBlocks,
             tools: PLEBY_TOOLS,
             messages,
           });

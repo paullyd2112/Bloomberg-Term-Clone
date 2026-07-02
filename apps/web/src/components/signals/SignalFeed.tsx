@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { clsx } from "clsx";
 import { ChevronDown } from "lucide-react";
+import type { ExperienceLevel } from "@/lib/tier";
 import SignalList from "./SignalList";
 import { type Signal } from "./SignalCard";
 
@@ -31,7 +32,15 @@ function formatDayLabel(dateStr: string): string {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-export default function SignalFeed({ signals, canLogPosition }: { signals: Signal[]; canLogPosition?: boolean }) {
+export default function SignalFeed({
+  signals,
+  canLogPosition,
+  experienceLevel,
+}: {
+  signals: Signal[];
+  canLogPosition?: boolean;
+  experienceLevel?: ExperienceLevel;
+}) {
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [selectedDay, setSelectedDay] = useState<string>("all");
 
@@ -100,7 +109,7 @@ export default function SignalFeed({ signals, canLogPosition }: { signals: Signa
           No signals for this day yet.
         </div>
       ) : (
-        <SignalList signals={filtered} canLogPosition={canLogPosition} />
+        <SignalList signals={filtered} canLogPosition={canLogPosition} experienceLevel={experienceLevel} />
       )}
     </div>
   );

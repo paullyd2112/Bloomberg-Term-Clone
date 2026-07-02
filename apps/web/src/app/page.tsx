@@ -24,7 +24,7 @@ import { PRICING, TRIAL_DAYS } from "@/lib/tier";
 export const metadata: Metadata = {
   title: "Plebs · Hedge fund tools. Retail prices.",
   description:
-    "Real-time AI signals for stocks, crypto, and prediction markets. Congressional trade tracker, options flow, morning briefing. Wall Street's toolkit, finally for everyone.",
+    "AI signals for stocks, crypto, and prediction markets, refreshed throughout the day. Congressional trade tracker, options flow, morning briefing. Wall Street's toolkit, finally for everyone.",
 };
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ function Hero() {
               <span className="font-mono uppercase tracking-[0.18em] text-[10px] text-emerald-400">
                 Live
               </span>
-              <span className="text-muted-foreground">Markets open · signals updating</span>
+              <span className="text-muted-foreground">Markets open · live prices</span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-semibold text-white leading-[1.03] tracking-tightest text-balance">
@@ -111,8 +111,9 @@ function Hero() {
             </h1>
 
             <p className="mt-6 text-lg text-secondary-foreground max-w-md leading-relaxed text-pretty">
-              Real-time AI signals across stocks, crypto, and prediction markets,
-              plus options flow, congressional trades, and a morning briefing. One terminal.
+              AI signals across stocks, crypto, and prediction markets, refreshed
+              throughout the trading day, plus options flow, congressional trades,
+              and a morning briefing. One terminal.
             </p>
 
             <div className="mt-9 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -220,7 +221,7 @@ function Stats() {
 const FEATURES = [
   {
     icon: Zap,
-    title: "Real-time AI signals",
+    title: "AI signals, refreshed all day",
     desc: "Model-driven analysis across stocks, crypto, and Polymarket / Kalshi contracts. BUY, SELL, YES, NO, each with a confidence score and the reasoning behind it.",
     span: "lg:col-span-3",
   },
@@ -233,7 +234,7 @@ const FEATURES = [
   {
     icon: Waves,
     title: "Options & dark pool flow",
-    desc: "Unusual sweeps and block trades flagged in real time. Follow the smart money early.",
+    desc: "Unusual sweeps and block trades flagged multiple times a day. Follow the smart money early.",
     span: "lg:col-span-3",
   },
   {
@@ -330,7 +331,7 @@ const PLANS = [
     cta:       `Start ${TRIAL_DAYS}-day trial`,
     href:      "/signup?plan=pro",
     features: [
-      "Real-time AI signals for stocks & crypto",
+      "AI signals for stocks & crypto, refreshed all day",
       "Unlimited watchlist",
       "Unusual options flow",
       "Congressional trade tracker",
@@ -438,7 +439,7 @@ function Pricing() {
 const FAQS = [
   {
     q: "What exactly is Plebs?",
-    a: "Plebs is an AI-powered trading terminal for retail investors. We run models across stocks, crypto, and options flow to generate real-time BUY/SELL signals with confidence scores and full reasoning. Think Bloomberg Terminal meets AI analyst, priced for normal people.",
+    a: "Plebs is an AI-powered trading terminal for retail investors. We run models across stocks, crypto, and options flow several times a day to generate BUY/SELL signals with confidence scores and full reasoning. Think Bloomberg Terminal meets AI analyst, priced for normal people.",
   },
   {
     q: "Is this financial advice?",
@@ -503,7 +504,7 @@ function CTAStrip() {
           <h2 className="text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
             Trade with an edge tomorrow morning.
           </h2>
-          <p className="text-secondary-foreground mt-4">14-day trial. Real-time signals from day one.</p>
+          <p className="text-secondary-foreground mt-4">14-day trial. Live prices and fresh signals from day one.</p>
 
           <Link
             href="/signup?plan=pro"

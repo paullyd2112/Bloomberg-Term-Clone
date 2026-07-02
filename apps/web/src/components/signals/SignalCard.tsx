@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { clsx } from "clsx";
 import { Wallet } from "lucide-react";
+import type { ExperienceLevel } from "@/lib/tier";
 import ShareButton from "./ShareButton";
 
 export type Signal = {
@@ -67,7 +68,15 @@ function confColors(c: number): { text: string; bar: string } {
   return { text: "text-zinc-500", bar: "bg-zinc-600" };
 }
 
-export default function SignalCard({ signal, canLogPosition }: { signal: Signal; canLogPosition?: boolean }) {
+export default function SignalCard({
+  signal,
+  canLogPosition,
+  experienceLevel,
+}: {
+  signal: Signal;
+  canLogPosition?: boolean;
+  experienceLevel?: ExperienceLevel;
+}) {
   const conf = confColors(signal.confidence);
   const horizon = HORIZON_SHORT[signal.time_horizon] ?? signal.time_horizon.slice(0, 5).toUpperCase();
   const typeLabel = TYPE_LABEL[signal.asset_type] ?? signal.asset_type;
@@ -144,8 +153,16 @@ export default function SignalCard({ signal, canLogPosition }: { signal: Signal;
         {priceStr}
       </span>
 
-      {/* Reasoning — recedes, click-through to detail via overlay */}
-      <p className="min-w-0 flex-1 truncate text-[13px] leading-tight text-zinc-400">
+      {/* Reasoning — recedes, click-through to detail via overlay.
+          Advanced accounts get 2 lines up front instead of 1 — less
+          clicking through for readers who actually want the technical
+          detail immediately. */}
+      <p
+        className={clsx(
+          "min-w-0 flex-1 text-[13px] leading-tight text-zinc-400",
+          experienceLevel === "advanced" ? "line-clamp-2 whitespace-normal" : "truncate",
+        )}
+      >
         {signal.reasoning}
       </p>
 

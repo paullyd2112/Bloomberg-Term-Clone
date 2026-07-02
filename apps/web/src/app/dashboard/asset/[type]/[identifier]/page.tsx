@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserTier, getUserProfile } from "@/lib/user";
-import { canAccessFeature } from "@/lib/tier";
+import { canAccessFeature, type ExperienceLevel } from "@/lib/tier";
 import SignalList from "@/components/signals/SignalList";
 import type { Signal } from "@/components/signals/SignalCard";
 import WatchlistToggle from "@/components/watchlist/WatchlistToggle";
@@ -169,7 +169,7 @@ export default async function AssetPage({ params }: PageProps) {
   const user = await getUser();
   const tier = await getUserTier();
   const profile = await getUserProfile();
-  const beginnerMode = profile?.trading_experience === "beginner";
+  const experienceLevel = profile?.trading_experience as ExperienceLevel | undefined;
   const canSeeOptions = canAccessFeature(tier, "real_time");
   const canScoreOnDemand = canAccessFeature(tier, "on_demand_scoring");
 
@@ -213,7 +213,7 @@ export default async function AssetPage({ params }: PageProps) {
         <KeyStatsGrid
           metadata={price.metadata as Record<string, unknown> | null}
           change24h={price.change_24h}
-          beginnerMode={beginnerMode}
+          experienceLevel={experienceLevel}
         />
       )}
 
@@ -235,7 +235,11 @@ export default async function AssetPage({ params }: PageProps) {
               <div className="text-sm text-zinc-500 py-8 text-center">No signals yet for {identifier}.</div>
             )
           ) : (
-            <SignalList signals={signals} canLogPosition={canAccessFeature(tier, "portfolio")} />
+            <SignalList
+              signals={signals}
+              canLogPosition={canAccessFeature(tier, "portfolio")}
+              experienceLevel={experienceLevel}
+            />
           )}
         </div>
 
@@ -294,7 +298,7 @@ export default async function AssetPage({ params }: PageProps) {
               <SectionHeader>Options flow</SectionHeader>
               {canSeeOptions ? (
                 options.length > 0 ? (
-                  <OptionsFlowTable rows={options} beginnerMode={beginnerMode} />
+                  <OptionsFlowTable rows={options} experienceLevel={experienceLevel} />
                 ) : (
                   <p className="text-xs text-zinc-600">No unusual flow recorded.</p>
                 )
@@ -365,12 +369,13 @@ function EarningsBadge({ reportDate, reportTime }: { reportDate: string; reportT
 function KeyStatsGrid({
   metadata,
   change24h,
-  beginnerMode,
+  experienceLevel,
 }: {
   metadata: Record<string, unknown> | null;
   change24h: number | null;
-  beginnerMode?: boolean;
+  experienceLevel?: ExperienceLevel;
 }) {
+  const beginnerMode = experienceLevel === "beginner";
   const rsi = metadata?.rsi_14 != null ? Number(metadata.rsi_14) : null;
   const volumeRatio = metadata?.volume_ratio != null ? Number(metadata.volume_ratio) : null;
 

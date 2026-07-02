@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Activity, Clock, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUserTier, getUserProfile } from "@/lib/user";
-import { canAccessFeature } from "@/lib/tier";
+import { canAccessFeature, type ExperienceLevel } from "@/lib/tier";
 import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
 import SubscribeGate from "@/components/ui/SubscribeGate";
@@ -323,7 +323,11 @@ export default async function DashboardPage() {
       {/* Signal feed — the product, surfaced above supporting analytics */}
       <section>
         <SectionHeader divider className="mb-4">Latest signals</SectionHeader>
-        <SignalFeed signals={signals} canLogPosition={canAccessFeature(tier, "portfolio")} />
+        <SignalFeed
+          signals={signals}
+          canLogPosition={canAccessFeature(tier, "portfolio")}
+          experienceLevel={profile?.trading_experience as ExperienceLevel | undefined}
+        />
       </section>
 
       {/* Sector heatmap (supporting context, below the feed) */}
