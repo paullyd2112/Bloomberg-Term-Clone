@@ -90,7 +90,7 @@ def _get_user_signals(user_id: str, top_signals: list[dict]) -> list[dict]:
 def _card(inner_html: str, padding: str = "20px 22px", extra_style: str = "") -> str:
     """Outlook-safe card: bgcolor attribute (not just CSS) + table layout."""
     return f"""
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#111113"
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#111113" class="og-bg1"
            style="background-color:#111113;border:1px solid #1e1e22;border-radius:10px;{extra_style}">
       <tr><td style="padding:{padding};">
         {inner_html}
@@ -231,7 +231,7 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
 
     free_cta = "" if is_paid else f"""
     <div style="margin:28px 0;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#111113"
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#111113" class="og-bg1"
              style="background-color:#111113;border:1px solid #1e1e22;border-radius:10px;">
         <tr><td style="padding:22px;text-align:center;">
           <div style="color:#f4f4f5;font-weight:700;font-size:15px;margin-bottom:6px;">Want the full signal feed?</div>
@@ -242,7 +242,7 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
     </div>"""
 
     closing_block = f"""
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#111113"
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#111113" class="og-bg1"
            style="background-color:#111113;border-radius:8px;margin:28px 0;">
       <tr>
         <td width="3" bgcolor="#22c55e" style="background-color:#22c55e;font-size:1px;line-height:1px;">&nbsp;</td>
@@ -271,9 +271,16 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
 <!--[if mso]>
 <style type="text/css">table {{border-collapse:collapse;}}</style>
 <![endif]-->
+<style type="text/css">
+/* Outlook.com / New Outlook's "dark mode" ignores the color-scheme meta tags
+   above and auto-recolors backgrounds it judges near-black, tagging <body>
+   with data-ogsc/data-ogsb when it does. Force our real colors back. */
+[data-ogsc] .og-bg0, [data-ogsb] .og-bg0 {{ background-color:#0a0a0c !important; }}
+[data-ogsc] .og-bg1, [data-ogsb] .og-bg1 {{ background-color:#111113 !important; }}
+</style>
 </head>
-<body style="margin:0;padding:0;background-color:#0a0a0c;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0c;">
+<body class="og-bg0" style="margin:0;padding:0;background-color:#0a0a0c;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="og-bg0" style="background-color:#0a0a0c;">
 <tr><td align="center">
 <!--[if mso]>
 <table role="presentation" align="center" width="620" cellpadding="0" cellspacing="0"><tr><td>
