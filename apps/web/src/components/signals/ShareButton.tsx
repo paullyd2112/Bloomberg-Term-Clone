@@ -35,6 +35,27 @@ function RedditIcon({ className }: { className?: string }) {
   );
 }
 
+let referralCodePromise: Promise<string | null> | null = null;
+
+// Shared across every ShareButton instance on the page — the signal feed can render
+// hundreds of rows at once, and each one used to independently call auth.getUser() +
+// look up the same profile, firing a stampede of duplicate requests on page load.
+function getReferralCode(): Promise<string | null> {
+  if (!referralCodePromise) {
+    const supabase = createClient();
+    referralCodePromise = supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return null;
+      return supabase
+        .from("profiles")
+        .select("referral_code")
+        .eq("id", user.id)
+        .single()
+        .then(({ data }) => (data?.referral_code as string | undefined) ?? null);
+    });
+  }
+  return referralCodePromise!;
+}
+
 export default function ShareButton({ signalId, ticker, direction, confidence }: ShareProps) {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
@@ -46,19 +67,8 @@ export default function ShareButton({ signalId, ticker, direction, confidence }:
     if (fetchedRef.current) return;
     fetchedRef.current = true;
 
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      supabase
-        .from("profiles")
-        .select("referral_code")
-        .eq("id", user.id)
-        .single()
-        .then(({ data }) => {
-          if (data?.referral_code) {
-            referralCodeRef.current = data.referral_code as string;
-          }
-        });
+    getReferralCode().then((code) => {
+      referralCodeRef.current = code;
     });
   }, []);
 
