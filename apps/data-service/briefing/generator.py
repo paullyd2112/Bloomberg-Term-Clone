@@ -183,7 +183,7 @@ Rules:
 - market_overview: 2-3 sentences on SPY/QQQ/BTC/ETH moves + Fear & Greed context
 - top_trades: the 3-5 highest-conviction signals from overnight. one_liner must be ≤120 chars and punchy
 - macro_context: 2-3 sentences on what's driving the macro backdrop today
-- prediction_market_edge: 1-2 sentences on any Kalshi/Polymarket signal with edge — skip if none
+- prediction_market_edge: 1-2 sentences on any Polymarket signal with edge — skip if none
 - watch_today: tickers/identifiers worth watching, not necessarily in top_trades
 - risk_note: 1-2 sentences on the key risk to today's thesis. Be honest."""
 

@@ -78,7 +78,7 @@ function SectionLabel({ index, children }: { index: string; children: React.Reac
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
-const COVERAGE = ["Stocks", "Crypto", "Kalshi", "Polymarket", "Congress"];
+const COVERAGE = ["Stocks", "Crypto", "Options Flow", "Polymarket", "Congress"];
 
 function Hero() {
   return (
@@ -220,7 +220,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: "Real-time AI signals",
-    desc: "Model-driven analysis across stocks, crypto, and Polymarket / Kalshi contracts. BUY, SELL, YES, NO, each with a confidence score and the reasoning behind it.",
+    desc: "Model-driven analysis across stocks, crypto, and Polymarket contracts. BUY, SELL, YES, NO, each with a confidence score and the reasoning behind it.",
     span: "lg:col-span-3",
   },
   {
@@ -348,7 +348,7 @@ const PLANS = [
     href:      "/signup",
     features: [
       "Everything in Pro",
-      "Prediction-market signals (Kalshi + Polymarket)",
+      "Prediction-market signals (Polymarket)",
       "AI finds mispriced contracts",
       "Pleby, your AI trading analyst, on call",
       "Personalised morning briefing",
