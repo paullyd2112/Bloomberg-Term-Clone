@@ -723,6 +723,33 @@ def score_asset(
                     + signal.reasoning
                 )
 
+    # Evidence gate — check the proposed direction against the empirically
+    # validated pattern table (analysis/factor_discovery.py: 10 months, 62
+    # stocks, ~9,800 observations, out-of-sample confirmed). If the current
+    # indicator state matches a validated pattern favoring the OPPOSITE
+    # direction, the historical data outvotes the model's read.
+    if asset_type == "stock" and signal.direction in ("BUY", "SELL"):
+        from scoring.validated_factors import check_signal_against_evidence
+        proposed = signal.direction
+        verdict, pattern_ids = check_signal_against_evidence(meta, proposed)
+        if verdict == "contradict":
+            logger.warning(
+                "{}/{}: evidence gate — {} contradicts validated pattern(s) {}, downgrading to HOLD",
+                asset_type, identifier, proposed, pattern_ids,
+            )
+            signal.direction  = "HOLD"
+            signal.confidence = min(signal.confidence, 45)
+            signal.reasoning  = (
+                f"[Evidence gate] A 10-month, ~9,800-observation study shows this exact "
+                f"indicator state historically resolved AGAINST a {proposed} "
+                f"(validated pattern: {', '.join(pattern_ids)}). "
+                + signal.reasoning
+            )
+        elif verdict == "confirm":
+            signal.reasoning = (
+                f"[Validated pattern: {', '.join(pattern_ids)}] " + signal.reasoning
+            )
+
     # Skip HOLD signals entirely — users want actionable BUY/SELL only
     if signal.direction == "HOLD":
         logger.debug("{}/{}: skipping HOLD signal ({}%)", asset_type, identifier, signal.confidence)
