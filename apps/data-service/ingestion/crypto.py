@@ -355,10 +355,18 @@ def _compute_crypto_indicators(df: pd.DataFrame) -> dict:
     volume_ratio = round(latest_vol / volume_avg, 2) if volume_avg else None
 
     latest = df.iloc[-1]
+    prev   = df.iloc[-2] if len(df) >= 2 else None
 
     def _col(prefix: str) -> float | None:
         match = [c for c in df.columns if c.lower().startswith(prefix.lower())]
         val = latest[match[0]] if match else None
+        return float(val) if val is not None and not np.isnan(val) else None
+
+    def _prev_col(prefix: str) -> float | None:
+        if prev is None:
+            return None
+        match = [c for c in df.columns if c.lower().startswith(prefix.lower())]
+        val = prev[match[0]] if match else None
         return float(val) if val is not None and not np.isnan(val) else None
 
     return {
@@ -366,6 +374,11 @@ def _compute_crypto_indicators(df: pd.DataFrame) -> dict:
         "macd_line":    _col("macd_"),
         "macd_signal":  _col("macds_"),
         "macd_hist":    _col("macdh_"),
+        # Needed by the BTC regime gate (bearish = negative AND deepening
+        # vs previous bar) and crypto prompt's crossover callouts — stocks
+        # have carried this since day one, crypto never did, which made the
+        # BTC regime gate unable to ever fire.
+        "prev_macd_hist": _prev_col("macdh_"),
         "volume_ratio": volume_ratio,      # >1.5 = above-average, >3 = anomaly
         "close":        float(latest["close"]),
         "volume_24h":   float(df["volume"].tail(24).sum()),  # last 24 1h bars

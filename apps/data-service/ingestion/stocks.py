@@ -112,9 +112,16 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
     latest = df.iloc[-1]
     prev   = df.iloc[-2] if len(df) >= 2 else latest
 
-    # Resolve Pandas-TA column names (they include params in name)
+    # Resolve Pandas-TA column names (they include params in name).
+    # MUST be case-insensitive: pandas_ta appends UPPERCASE columns
+    # (RSI_14, MACDh_12_26_9, BBU_20_2.0) after the lowercasing at the top
+    # of this function. The original case-sensitive startswith silently
+    # matched nothing, so every ta-derived indicator ingested as null while
+    # the manually-computed ones (sma_50, volume_ratio) worked — live stock
+    # scoring ran without RSI/MACD/BB from day one while backtests (which
+    # use case-insensitive matchers) had them.
     def _col(prefix: str) -> float | None:
-        match = [c for c in df.columns if c.startswith(prefix.lower())]
+        match = [c for c in df.columns if c.lower().startswith(prefix.lower())]
         if not match:
             return None
         val = latest[match[0]]
@@ -125,7 +132,7 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
     vol_ratio  = (float(latest["volume"]) / volume_sma) if volume_sma else None
 
     def _prev_col(prefix: str) -> float | None:
-        match = [c for c in df.columns if c.startswith(prefix.lower())]
+        match = [c for c in df.columns if c.lower().startswith(prefix.lower())]
         if not match:
             return None
         val = prev[match[0]]

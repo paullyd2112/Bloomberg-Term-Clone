@@ -18,7 +18,7 @@ Filters (must pass 2+ to qualify):
 from __future__ import annotations
 
 from loguru import logger
-from supabase_client import supabase
+# supabase access now goes through scoring.price_data (indicator-merging fetch)
 
 
 MIN_FILTERS_TO_QUALIFY = 2
@@ -119,21 +119,16 @@ def scan_stocks(tickers: list[str] | None = None, use_movers: bool = True,
 
     qualified: list[dict] = []
 
+    # Indicator-merging fetch: the naive newest-row query returns thin
+    # live-stream rows (no rsi/macd/volume_ratio) for streamed tickers,
+    # which made every indicator filter below silently miss.
+    from scoring.price_data import get_scoring_price_row
+
     for ticker in tickers:
         try:
-            result = (
-                supabase.table("raw_prices")
-                .select("*")
-                .eq("asset_type", "stock")
-                .eq("identifier", ticker)
-                .order("captured_at", desc=True)
-                .limit(1)
-                .execute()
-            )
-            if not result.data:
+            row = get_scoring_price_row("stock", ticker)
+            if not row:
                 continue
-
-            row = result.data[0]
             meta = row.get("metadata") or {}
             meta["price"] = row.get("price")
             meta["change_24h"] = row.get("change_24h")
