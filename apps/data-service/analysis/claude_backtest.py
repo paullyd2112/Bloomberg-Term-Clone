@@ -67,7 +67,12 @@ SAMPLE_DATES = ["2025-12-15", "2025-12-29", "2026-01-12", "2026-01-26",
                 "2026-06-01", "2026-06-12"]
 
 SAMPLE_STOCKS = ["AAPL", "NVDA", "TSLA", "PLTR", "AMD",
-                 "META", "GOOGL", "COIN", "SOFI", "HOOD"]
+                 "META", "GOOGL", "COIN", "SOFI", "HOOD",
+                 # Added for a bigger BUY-side sample -- more sector spread
+                 # (mega-cap, semis, EV, biotech, cloud/SaaS) to avoid just
+                 # doubling down on the same momentum-tech cluster above.
+                 "MSFT", "AMZN", "NFLX", "INTC", "AVGO",
+                 "SHOP", "MRNA", "RIVN", "DDOG", "NET"]
 
 CRYPTO_ASSETS = [
     ("BTC", "bitcoin"),
@@ -1102,6 +1107,14 @@ def run_claude_backtest(
 
     regime_filtered = 0
     conviction_filtered = 0
+    breadth_filtered = 0
+    # Per-date extended-BUY counts -- mirrors production's breadth_tracker,
+    # keyed by date since a "batch run" here is everything scored on one
+    # sample date, not the whole backtest. Order of the ticker/date loop
+    # below doesn't matter since this just accumulates per-date counts.
+    EXTENDED_VS_SMA50_PCT = 8.0
+    MAX_EXTENDED_BUYS_PER_RUN = 4
+    breadth_by_date: dict[str, int] = {}
 
     for ticker, df in stock_data.items():
         for date_str in sample_dates:
@@ -1145,6 +1158,16 @@ def run_claude_backtest(
                     logger.info("[claude_backtest] {} {} SELL suppressed: SPY >5% above SMA-50 (bullish regime)",
                                 ticker, actual_date)
                     signal.direction = "HOLD"
+
+                # ── Breadth/correlation cap: cap extended BUYs per sample date ──
+                if signal.direction == "BUY" and pd.notna(row.get("price_vs_sma50")) and float(row["price_vs_sma50"]) > EXTENDED_VS_SMA50_PCT:
+                    count = breadth_by_date.get(actual_date, 0) + 1
+                    breadth_by_date[actual_date] = count
+                    if count > MAX_EXTENDED_BUYS_PER_RUN:
+                        breadth_filtered += 1
+                        logger.info("[claude_backtest] {} {} BUY suppressed: {} extended BUYs already this date",
+                                    ticker, actual_date, count - 1)
+                        signal.direction = "HOLD"
 
                 sl_tp = {"intraday": (3.0, 6.0), "swing": (7.0, 16.0), "longterm": (10.0, 25.0)}
                 sl_pct, tp_pct = sl_tp.get(signal.time_horizon, (7.0, 16.0))
@@ -1296,6 +1319,7 @@ def run_claude_backtest(
         "signals_below_floor": conviction_filtered,
         "spy_regime_suppressed": regime_filtered,
         "btc_regime_suppressed": btc_gated,
+        "breadth_suppressed": breadth_filtered,
     }
     agg["crypto_real_candles"] = {
         "symbols_with_real_ohlc": sorted(crypto_hl.keys()),
