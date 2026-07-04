@@ -262,8 +262,19 @@ def _send(to_email: str, subject: str, html: str, text: str) -> bool:
 
 
 def send_welcome_sequence() -> str:
-    """Send the appropriate welcome email to users based on their trial day."""
+    """Send the appropriate welcome email to users based on their trial day.
+
+    NOTE: this is a daily batch scan — day-0 emails can arrive up to 24h
+    after signup, and a missed cron run skips that day's steps entirely.
+    The replacement is Dreamlit (event-driven off the profiles table, fires
+    on INSERT). Set WELCOME_VIA_DREAMLIT=true in Railway once the Dreamlit
+    workflows are live to retire this path without double-sending.
+    """
     from datetime import datetime, timezone as tz
+
+    if os.environ.get("WELCOME_VIA_DREAMLIT", "").lower() in ("1", "true", "yes"):
+        logger.info("welcome_sequence: skipped — handled by Dreamlit (WELCOME_VIA_DREAMLIT set)")
+        return "skipped — welcome emails handled by Dreamlit"
 
     today  = date.today()
     sent   = 0
