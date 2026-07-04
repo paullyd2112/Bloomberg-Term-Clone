@@ -19,6 +19,47 @@
 - [ ] Web UI: everything verified this session was backend/DB-level. No browser click-testing done on the new corporate actions dashboard card, push-notification subscribe/unsubscribe flow, or on-demand scoring flow.
 - [x] Newsletter Outlook rendering: fixed the `/send-newsletter-now` tier bug (was hardcoded to `"free"`, ignored `tier` param — #43) and added `data-ogsc`/`data-ogsb` CSS overrides for Outlook.com/New-Outlook-for-Windows' dark-mode auto-recolor of near-black backgrounds (#45). Verified via local Chromium render that signals/options cards render correctly. Confirmed via real inbox screenshot that Outlook mobile app (iOS/Android) still shows a washed-out gray background instead of near-black — that client uses a different, more aggressive dark-mode engine that doesn't expose the `data-ogsc` hook and is documented to largely ignore `color-scheme`/`supported-color-schemes` meta tags. No reliable CSS-only fix exists for this client; user explicitly decided to accept it as a known Outlook-mobile-only limitation rather than chase it further. Gmail, Apple Mail, and OWA/New-Outlook-desktop all confirmed rendering correctly.
 
+# ALGO / SIGNAL QUALITY (July 4 session — the "why was live underperforming" investigation)
+- [x] **ROOT CAUSE FOUND — live stock scoring was blind.** Three stacked data bugs meant production stock
+      signals never saw RSI/MACD/Bollinger data while every backtest did (explains live stock SELLs 0/20
+      vs 50-61% in backtests): (1) `ingestion/stocks.py` matched pandas_ta column names case-sensitively
+      (`rsi_` vs `RSI_14`) — every ta-derived indicator ingested as null since the matcher was introduced
+      (17d309a, near project start); crypto's matcher was always case-insensitive, which is why crypto
+      cited real RSI and stocks never did (#57). (2) The multi-source OHLCV merge added in #14 (June 29)
+      crashed on tz-aware Alpaca vs tz-naive fallback indexes (`pd.concat().sort_index()` TypeError,
+      outside every try) — ingestion failed for most of the watchlist for a week; funnel diagnostics
+      (#58) pinpointed it, fixed in #59, verified live: 80/80 ingested. (3) `streaming/alpaca_ws.py`
+      flushes thin `{source, updated_at}` rows every 60s that shadowed indicator rows for naive
+      newest-row queries — new `scoring/price_data.get_scoring_price_row()` merges freshest price with
+      newest indicator-bearing row; also crypto never wrote `prev_macd_hist` so the BTC regime gate had
+      no data (#57). Verified end-to-end: scanner qualifies stocks again (16 vs 0), signals cite real
+      indicator values, `[Validated pattern]` annotations firing live.
+- [x] **Deterministic gates (code-enforced, not just prompt text)** in `scoring/engine.py` (#53): SPY
+      regime gate (no BUYs when SPY < SMA-50, no SELLs when SPY >5% above — that asymmetry caused the
+      0/20 SELL streak), BTC regime gate for alt-coins, breadth cap (max 4 extended BUYs per run —
+      targets the 2026-04-17 correlated 5-stop cluster), data-quality skip (no technicals → no signal,
+      no Claude spend), evidence gate from factor study (below).
+- [x] **Factor discovery** (`analysis/factor_discovery.py`, #55; `POST /factor-discovery`): model-free
+      empirical study, 62 stocks, ~9,800 observations, ~10 months, train/test split at 2026-03-15.
+      Robust out-of-sample findings encoded + enforced in `scoring/validated_factors.py` (#56), only
+      buckets with test n≥~100: don't fade strength (>15% above SMA-50 or RSI>70 with expanding MACD =
+      BUY-favorable ~57-63%); positive-but-CONTRACTING MACD is an early SELL tell (~56-61% down)
+      EXCEPT in deep uptrends where it's a buyable pause; RSI 30-45 with positive MACD bleeds.
+      Signals contradicting validated patterns get downgraded to HOLD (`[Evidence gate]`); aligned ones
+      annotated (`[Validated pattern: ...]`) so /accuracy can compare later.
+- [ ] **Backtest status (pre-data-fix numbers, rerun after a week of clean live data):** best run 61.5%
+      win rate / profit factor 1.59 / +18.4% sim (202 calls); larger 342-call run regressed to 48.5% /
+      0.99 — BUT all these ran against backtest-computed indicators, on prompts whose live inputs were
+      broken, so treat them as measuring the prompt, not the product. Crypto was consistently strong
+      across both runs (94.1%, 88.9% — small n=17/18, don't oversell). BUY-side edge still unproven
+      (31-37% in backtests). ~$5.50 of the $6 backtest budget spent.
+- [ ] **Risk management not yet recalibrated:** every portfolio sim tripped its 15% drawdown circuit
+      breaker (15.1-16.1% max DD). Position sizing / stop discipline is a separate, unaddressed workstream
+      — signal quality fixes alone don't solve it. Prop-firm-style limits would have failed all sims.
+- [ ] Newsletter generation silent-failure gap: `generate_newsletter()` returns None on failure and the
+      job wrapper reports "ok" — a missed 7am generation means no briefing row and a silently skipped
+      send (observed July 3). Needs loud failure + alerting/retry.
+
 # POST-LAUNCH UPGRADE CHECKLIST (trigger: 10 paying users, not free signups)
 Everything below is currently on a free/cheapest tier to keep costs at zero pre-revenue. Once there are
 10 real paying subscribers, revisit each of these — the free-tier constraints (rate limits, delayed data,
