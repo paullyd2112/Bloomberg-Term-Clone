@@ -489,10 +489,16 @@ def score_asset(
     model_override: str | None = None,
     benchmarks: dict | None = None,
     macro_events: list[str] | None = None,
+    breadth_tracker: dict | None = None,
+    btc_regime: dict | None = None,
 ) -> dict | None:
     """
     Build context from Supabase, call Claude via Instructor,
     write validated signal. Returns signal dict or None if skipped.
+
+    `breadth_tracker` is a mutable dict shared across every ticker scored in
+    the same score_stocks() run, used to cap how many simultaneously-extended
+    BUY signals get issued in one batch -- see the breadth gate below.
 
     `benchmarks`/`macro_events` can be preloaded once by a calling loop
     (score_stocks, score_crypto) and passed in, since they're identical
@@ -567,6 +573,7 @@ def score_asset(
                 "fear_greed":          _get_fear_greed(),
                 "market_cap":          meta.get("market_cap"),
                 "news_headlines":      news,
+                "btc_regime":          btc_regime,
             }
             signal: CryptoSignal = client.chat.completions.create(
                 model=use_model,
@@ -641,6 +648,81 @@ def score_asset(
         except (TypeError, ValueError):
             pass
 
+    # Deterministic SPY regime gate — code-enforced, not just prompt text.
+    # The prompt's own "HARD GATE" is advisory to the model and can be
+    # ignored; this is the backstop that can't be. Mirrors the enforcement
+    # the backtest module has always had (_spy_regime_bearish/_bullish).
+    if asset_type == "stock":
+        spy_vs_sma50 = (benchmarks or {}).get("SPY", {}).get("price_vs_sma50_pct")
+        if spy_vs_sma50 is not None:
+            if spy_vs_sma50 < 0 and signal.direction == "BUY":
+                logger.warning(
+                    "{}/{}: regime gate — SPY {:.1f}% below SMA-50, downgrading BUY to HOLD",
+                    asset_type, identifier, spy_vs_sma50,
+                )
+                signal.direction  = "HOLD"
+                signal.confidence = min(signal.confidence, 45)
+                signal.reasoning  = (
+                    f"[Regime gate] SPY is {spy_vs_sma50:.1f}% below its SMA-50 — broad market "
+                    f"downtrend. Suppressing a BUY on single-stock strength alone. "
+                    + signal.reasoning
+                )
+            elif spy_vs_sma50 > 5 and signal.direction == "SELL":
+                logger.warning(
+                    "{}/{}: regime gate — SPY {:.1f}% above SMA-50, downgrading SELL to HOLD",
+                    asset_type, identifier, spy_vs_sma50,
+                )
+                signal.direction  = "HOLD"
+                signal.confidence = min(signal.confidence, 45)
+                signal.reasoning  = (
+                    f"[Regime gate] SPY is {spy_vs_sma50:.1f}% above its SMA-50 — strong broad-market "
+                    f"uptrend. Suppressing a SELL on single-stock weakness alone. "
+                    + signal.reasoning
+                )
+
+    # Deterministic BTC regime gate — same "prompt gate had no real data
+    # behind it" bug as SPY above. The crypto prompt's HARD GATE tells the
+    # model to check BTC's MACD, but nothing fetched BTC's indicators for
+    # alt-coin scoring until now. Code-enforce it, don't just describe it.
+    if asset_type == "crypto" and identifier != "BTC" and btc_regime and btc_regime.get("bearish") and signal.direction == "BUY":
+        logger.warning(
+            "{}/{}: BTC regime gate — BTC MACD bearish/deepening, downgrading BUY to HOLD",
+            asset_type, identifier,
+        )
+        signal.direction  = "HOLD"
+        signal.confidence = min(signal.confidence, 45)
+        signal.reasoning  = (
+            f"[BTC regime gate] BTC's MACD histogram is negative and deepening — alts follow BTC down. "
+            f"Suppressing a BUY on {identifier}-specific strength alone. "
+            + signal.reasoning
+        )
+
+    # Breadth/correlation cap — if several names in the same batch are all
+    # deeply extended and getting BUY calls, that's a synchronized-momentum
+    # signature, not N independent bets (see: 8 correlated BUYs on 2026-04-17
+    # in backtesting, 5 of which hit -10% stops the same day). Cap how many
+    # extended BUYs one run will issue.
+    EXTENDED_VS_SMA50_PCT = 8.0
+    MAX_EXTENDED_BUYS_PER_RUN = 4
+    if asset_type == "stock" and signal.direction == "BUY" and breadth_tracker is not None:
+        vs_sma50 = meta.get("price_vs_sma50_pct")
+        if vs_sma50 is not None and vs_sma50 > EXTENDED_VS_SMA50_PCT:
+            count = breadth_tracker.get("extended_buys", 0) + 1
+            breadth_tracker["extended_buys"] = count
+            if count > MAX_EXTENDED_BUYS_PER_RUN:
+                logger.warning(
+                    "{}/{}: breadth gate — {} extended BUYs already issued this run, downgrading to HOLD",
+                    asset_type, identifier, count - 1,
+                )
+                signal.direction  = "HOLD"
+                signal.confidence = min(signal.confidence, 45)
+                signal.reasoning  = (
+                    f"[Breadth gate] {count - 1} other names this run are already extended "
+                    f">{EXTENDED_VS_SMA50_PCT:.0f}% above their SMA-50 with a BUY call — this looks "
+                    f"like synchronized momentum-chasing, not an independent setup. "
+                    + signal.reasoning
+                )
+
     # Skip HOLD signals entirely — users want actionable BUY/SELL only
     if signal.direction == "HOLD":
         logger.debug("{}/{}: skipping HOLD signal ({}%)", asset_type, identifier, signal.confidence)
@@ -684,6 +766,7 @@ def score_stocks() -> str:
     # full price on it for every single ticker.
     benchmarks   = _get_market_benchmark()
     macro_events = _get_upcoming_macro(days=2)
+    breadth_tracker: dict = {"extended_buys": 0}
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
@@ -693,7 +776,8 @@ def score_stocks() -> str:
 
         if ticker in core_always_score:
             try:
-                result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events)
+                result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events,
+                                      breadth_tracker=breadth_tracker)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -719,7 +803,8 @@ def score_stocks() -> str:
             continue
 
         try:
-            result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events)
+            result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events,
+                                  breadth_tracker=breadth_tracker)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -733,7 +818,8 @@ def score_stocks() -> str:
     for core_ticker in core_always_score:
         if not any(s["ticker"] == core_ticker for s in scan_results):
             try:
-                result = score_asset("stock", core_ticker, benchmarks=benchmarks, macro_events=macro_events)
+                result = score_asset("stock", core_ticker, benchmarks=benchmarks, macro_events=macro_events,
+                                      breadth_tracker=breadth_tracker)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -758,6 +844,7 @@ def score_stocks_event_only() -> str:
 
     benchmarks   = _get_market_benchmark()
     macro_events = _get_upcoming_macro(days=2)
+    breadth_tracker: dict = {"extended_buys": 0}
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
@@ -779,7 +866,8 @@ def score_stocks_event_only() -> str:
             continue
 
         try:
-            result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events)
+            result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events,
+                                  breadth_tracker=breadth_tracker)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -830,6 +918,21 @@ def score_crypto() -> str:
     benchmarks   = _get_market_benchmark()
     macro_events = _get_upcoming_macro(days=2)
 
+    # BTC regime — computed once per run from the same rows already fetched
+    # above, so alt-coin scoring can actually see (and gate on) it instead
+    # of the prompt's HARD GATE checking data that was never provided.
+    btc_regime: dict | None = None
+    btc_row = next((r for r in rows if r["identifier"] == "BTC"), None)
+    if btc_row:
+        btc_meta = btc_row.get("metadata") or {}
+        hist      = btc_meta.get("macd_hist")
+        prev_hist = btc_meta.get("prev_macd_hist")
+        try:
+            bearish = hist is not None and prev_hist is not None and float(hist) < 0 and float(hist) < float(prev_hist)
+        except (TypeError, ValueError):
+            bearish = False
+        btc_regime = {"macd_hist": hist, "prev_macd_hist": prev_hist, "bearish": bearish}
+
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
     tier_skipped = 0
@@ -840,7 +943,8 @@ def score_crypto() -> str:
 
         if sym in CORE_CRYPTO:
             try:
-                result = score_asset("crypto", sym, benchmarks=benchmarks, macro_events=macro_events)
+                result = score_asset("crypto", sym, benchmarks=benchmarks, macro_events=macro_events,
+                                      btc_regime=btc_regime)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -868,7 +972,8 @@ def score_crypto() -> str:
             continue
 
         try:
-            result = score_asset("crypto", sym, benchmarks=benchmarks, macro_events=macro_events)
+            result = score_asset("crypto", sym, benchmarks=benchmarks, macro_events=macro_events,
+                                  btc_regime=btc_regime)
             sonnet_calls += 1
             if result is None:
                 skipped += 1

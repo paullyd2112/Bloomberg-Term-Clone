@@ -83,6 +83,15 @@ def build_user_prompt(context: dict) -> str:
     if context.get("market_cap"):
         lines.append(f"  Market cap: ${context['market_cap']:,.0f}")
 
+    btc_regime = context.get("btc_regime")
+    if btc_regime and symbol != "BTC":
+        lines += [
+            "",
+            f"BTC regime (governs the HARD GATE above): MACD hist {btc_regime.get('macd_hist', 'N/A')} "
+            f"(prev {btc_regime.get('prev_macd_hist', 'N/A')}) — "
+            f"{'BEARISH, deepening' if btc_regime.get('bearish') else 'not in a confirmed downtrend'}",
+        ]
+
     # Traditional-market benchmarks + upcoming macro events are identical
     # across every coin scored this run, so they're sent as a separate
     # cached system content block (see scoring/engine.py
