@@ -53,12 +53,18 @@ MASSIVE_BASE   = "https://api.massive.com"
 FINNHUB_CANDLE = "https://finnhub.io/api/v1/stock/candle"
 AV_URL         = "https://www.alphavantage.co/query"
 
-DATE_FROM = "2026-02-01"
-DATE_TO   = "2026-06-16"
+DATE_FROM = "2025-09-01"
+DATE_TO   = "2026-07-02"
 
-SAMPLE_DATES = ["2026-02-20", "2026-03-12", "2026-03-27",
-                "2026-04-10", "2026-04-24", "2026-05-08",
-                "2026-05-22", "2026-06-04"]
+# ~7 months of sampling (mid-Dec through mid-June), biweekly cadence.
+# DATE_FROM starts ~3.5 months before the first sample date so the 50-day
+# SMA/RSI/MACD warmup is satisfied; the last sample date sits ~3 weeks
+# before DATE_TO so even longterm-horizon signals (15-trading-day eval
+# window) have enough runway to resolve to WIN/LOSS/NEUTRAL.
+SAMPLE_DATES = ["2025-12-15", "2025-12-29", "2026-01-12", "2026-01-26",
+                "2026-02-09", "2026-02-23", "2026-03-09", "2026-03-23",
+                "2026-04-06", "2026-04-20", "2026-05-04", "2026-05-18",
+                "2026-06-01", "2026-06-12"]
 
 SAMPLE_STOCKS = ["AAPL", "NVDA", "TSLA", "PLTR", "AMD",
                  "META", "GOOGL", "COIN", "SOFI", "HOOD"]
@@ -711,6 +717,24 @@ def _spy_regime_bearish(benchmark_data: dict, date_str: str) -> bool:
     return float(row["close"]) < float(sma50)
 
 
+def _spy_regime_bullish(benchmark_data: dict, date_str: str) -> bool:
+    """Return True if SPY is more than 5% above its SMA-50 on this date —
+    strong uptrend, mirrors _spy_regime_bearish for the opposite gate."""
+    spy_df = benchmark_data.get("SPY")
+    if spy_df is None:
+        return False
+    target = pd.Timestamp(date_str)
+    idx = spy_df.index.get_indexer([target], method="ffill")[0]
+    if idx < 0:
+        return False
+    row = spy_df.iloc[idx]
+    sma50 = row.get("sma_50")
+    if pd.isna(sma50) or sma50 is None:
+        return False
+    close = float(row["close"])
+    return (close - float(sma50)) / float(sma50) * 100 > 5
+
+
 def _btc_regime_bearish(crypto_data: dict, date_str: str) -> bool:
     """Return True if BTC MACD histogram is negative and deepening — bearish regime.
     Used to gate alt-crypto longs."""
@@ -749,7 +773,17 @@ def _score_with_claude(
                 for sym, bm in benchmarks.items():
                     if bm.get("price") is not None:
                         chg = f"{bm['change_24h']:+.2f}%" if bm.get("change_24h") is not None else "N/A"
-                        bench_lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg})")
+                        vs50 = bm.get("vs_sma50_pct")
+                        if vs50 is not None:
+                            if vs50 > 5:
+                                regime = f"{vs50:+.1f}% vs SMA-50 — STRONG UPTREND"
+                            elif vs50 < 0:
+                                regime = f"{vs50:+.1f}% vs SMA-50 — DOWNTREND"
+                            else:
+                                regime = f"{vs50:+.1f}% vs SMA-50 — neutral"
+                            bench_lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg}) — {regime}")
+                        else:
+                            bench_lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg})")
                 user_prompt += "\n" + "\n".join(bench_lines)
             return claude_client.chat.completions.create(
                 model=MODEL,
@@ -1105,6 +1139,13 @@ def run_claude_backtest(
                                 ticker, actual_date)
                     signal.direction = "HOLD"
 
+                # ── SPY regime gate: suppress SELL in strong bullish regime ──
+                if signal.direction == "SELL" and _spy_regime_bullish(benchmark_data, actual_date):
+                    regime_filtered += 1
+                    logger.info("[claude_backtest] {} {} SELL suppressed: SPY >5% above SMA-50 (bullish regime)",
+                                ticker, actual_date)
+                    signal.direction = "HOLD"
+
                 sl_tp = {"intraday": (3.0, 6.0), "swing": (7.0, 16.0), "longterm": (10.0, 25.0)}
                 sl_pct, tp_pct = sl_tp.get(signal.time_horizon, (7.0, 16.0))
                 if signal.confidence >= 75:
@@ -1305,6 +1346,15 @@ def _aggregate_claude_results(
             "win_rate": round(len(h_wins) / len(h_decided) * 100, 1) if h_decided else None,
         }
 
+    by_direction = {}
+    for d in ["BUY", "SELL"]:
+        d_decided = [r for r in decided if r.direction == d and r.asset_class == "stock"]
+        d_wins = [r for r in d_decided if r.outcome == "WIN"]
+        by_direction[d] = {
+            "signals":  len(d_decided),
+            "win_rate": round(len(d_wins) / len(d_decided) * 100, 1) if d_decided else None,
+        }
+
     avg_win = float(np.mean([r.return_pct for r in wins])) if wins else 0
     avg_loss = float(np.mean([abs(r.return_pct) for r in losses])) if losses else 0
     profit_factor = round(sum(r.return_pct for r in wins) / abs(sum(r.return_pct for r in losses)), 2) if losses else 999.0
@@ -1367,6 +1417,7 @@ def _aggregate_claude_results(
             },
         },
         "by_time_horizon": by_horizon,
+        "by_direction":    by_direction,
         "signals": signal_details,
     }
 
