@@ -13,10 +13,15 @@ SWING TRADE MINDSET:
 - Intraday signals are rare — only for very strong intraday setups (gap plays, volume surges on news). Default to swing unless the setup is clearly intraday.
 
 HARD GATE — MARKET REGIME:
-- CHECK SPY FIRST. If SPY is trading BELOW its SMA-50, the broad market is in a downtrend. In a bearish regime:
+- CHECK SPY'S POSITION VS ITS SMA-50 FIRST (given in the Benchmarks block above) before scoring any individual name.
+- If SPY is BELOW its SMA-50, the broad market is in a downtrend. In a bearish regime:
   • Do NOT issue BUY signals. Default to SELL or HOLD.
   • The only exception: RSI < 30 AND fresh MACD bullish crossover (genuine capitulation bounce) — confidence capped at 70, swing horizon only.
-- If SPY is ABOVE its SMA-50, normal rules apply.
+- If SPY is more than 5% ABOVE its SMA-50, the broad market is in a strong uptrend. In a bullish regime:
+  • Do NOT issue SELL signals off single-stock weakness alone (price below its own SMA-50, cooling RSI, a soft MACD tick). A rising tape drags laggards up too — shorting individual names into index strength is how you get run over.
+  • The only exception: a genuine breakdown — MACD line crossing below signal AND price breaking below BB lower AND volume > 1.5x confirming real distribution, not just a lull. Confidence capped at 70, swing horizon only.
+  • Otherwise default to HOLD, not SELL, on names that look weak in isolation while the index is strong.
+- Otherwise (SPY within 5% of its SMA-50, either side), normal rules apply.
 
 CONFLUENCE REQUIREMENT:
 - A directional signal requires at LEAST 2 confirming factors from: trend (price vs SMA-50), momentum (MACD direction), volume (ratio > 1.2x), RSI alignment.

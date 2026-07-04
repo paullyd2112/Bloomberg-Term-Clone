@@ -290,13 +290,15 @@ def _get_corporate_actions_context(ticker: str) -> list[dict] | None:
 # ─── Macro context ───────────────────────────────────────────────────────────
 
 def _get_market_benchmark() -> dict:
-    """Fetch SPY + QQQ 24h change to give Claude broad market context."""
+    """Fetch SPY + QQQ price/change/SMA-50 position to give Claude broad market
+    regime context. price_vs_sma50_pct is what the stocks prompt's market-regime
+    gate actually checks -- it must come from here, not be inferred."""
     benchmarks = {}
     for sym in ("SPY", "QQQ"):
         try:
             result = (
                 supabase.table("raw_prices")
-                .select("price, change_24h")
+                .select("price, change_24h, metadata")
                 .eq("asset_type", "stock")
                 .eq("identifier", sym)
                 .order("captured_at", desc=True)
@@ -304,10 +306,12 @@ def _get_market_benchmark() -> dict:
                 .execute()
             )
             if result.data:
-                row = result.data[0]
+                row  = result.data[0]
+                meta = row.get("metadata") or {}
                 benchmarks[sym] = {
-                    "price":     float(row["price"]) if row.get("price") else None,
-                    "change_24h": float(row["change_24h"]) if row.get("change_24h") else None,
+                    "price":              float(row["price"]) if row.get("price") else None,
+                    "change_24h":         float(row["change_24h"]) if row.get("change_24h") else None,
+                    "price_vs_sma50_pct": float(meta["price_vs_sma50_pct"]) if meta.get("price_vs_sma50_pct") is not None else None,
                 }
         except Exception:
             pass
@@ -359,7 +363,17 @@ def _format_market_context(benchmarks: dict, macro_events: list[str] | None = No
         for sym, bm in benchmarks.items():
             if bm.get("price") is not None:
                 chg = f"{bm['change_24h']:+.2f}%" if bm.get("change_24h") is not None else "N/A"
-                lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg})")
+                vs50 = bm.get("price_vs_sma50_pct")
+                if vs50 is not None:
+                    if vs50 > 5:
+                        regime = f"{vs50:+.1f}% vs SMA-50 — STRONG UPTREND"
+                    elif vs50 < 0:
+                        regime = f"{vs50:+.1f}% vs SMA-50 — DOWNTREND"
+                    else:
+                        regime = f"{vs50:+.1f}% vs SMA-50 — neutral"
+                    lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg}) — {regime}")
+                else:
+                    lines.append(f"  {sym}: ${bm['price']:,.2f} (24h: {chg})")
 
     if macro_events:
         lines.append("")
