@@ -137,6 +137,23 @@ def job_generate_newsletter():
 def job_send_newsletter():
     return send_newsletter()
 
+def job_send_newsletter_retry():
+    """The 7:45am safety net. Previously just re-called send_newsletter(),
+    which only re-attempts SENDING -- if 7am generation failed (returns None
+    on Claude/DB errors, no exception), there was still nothing to send and
+    the retry was a no-op. Now actually retries generation first if today's
+    briefing is missing, so a transient 7am failure has a real second chance
+    instead of silently becoming a missed day."""
+    from datetime import date as _date
+    from briefing.newsletter_emailer import _get_todays_newsletter
+    if _get_todays_newsletter() is None:
+        logger.warning("send_newsletter_retry: no briefing for {} — regenerating before send", _date.today())
+        result = generate_newsletter()
+        if result is None:
+            logger.error("send_newsletter_retry: regeneration also failed — giving up for today")
+            return "regeneration failed, nothing to send"
+    return send_newsletter()
+
 def job_send_elite_briefings():
     return send_elite_briefings()
 
@@ -247,9 +264,18 @@ US_MARKET_HOLIDAYS = US_MARKET_HOLIDAYS_2026 | US_MARKET_HOLIDAYS_2027
 
 
 def _is_market_open() -> bool:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
     if today in US_MARKET_HOLIDAYS:
         logger.info("Market holiday — skipping stock jobs for {}", today)
+        return False
+    # Scheduled jobs are also weekday-gated via CronTrigger(day_of_week="mon-fri"),
+    # so this weekday check is redundant there. It's NOT redundant for manual
+    # /run-job/ triggers, which call the raw job functions directly and have no
+    # day-of-week gate at all -- confirmed live: a Saturday debugging session
+    # generated real stock signals off stale Friday-close data with zero guard.
+    if now.weekday() >= 5:  # 5=Saturday, 6=Sunday
+        logger.info("Weekend — skipping stock jobs for {}", today)
         return False
     return True
 
@@ -329,7 +355,7 @@ scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newslette
                   CronTrigger(hour=7, minute=0, day_of_week="mon-fri", timezone="America/New_York"), id="generate_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter", job_send_newsletter),
                   CronTrigger(hour=7, minute=15, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
-scheduler.add_job(lambda: _run_job("send_newsletter_retry", job_send_newsletter),
+scheduler.add_job(lambda: _run_job("send_newsletter_retry", job_send_newsletter_retry),
                   CronTrigger(hour=7, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter_retry")
 # Personalized Elite briefing — runs after main newsletter, one AI call per Elite user
 scheduler.add_job(lambda: _run_job("send_elite_briefings", job_send_elite_briefings),
@@ -570,11 +596,32 @@ def score_now_status():
     return jsonify(state)
 
 
+STOCK_MARKET_HOURS_JOBS = {
+    "ingest_stocks", "score_stocks", "score_options_flow",
+    "ingest_options_flow", "ingest_corporate_actions",
+}
+
+
 @app.route("/run-job/<job_name>", methods=["POST"])
 def run_job_manual(job_name: str):
-    """Manually trigger any registered job by name."""
+    """Manually trigger any registered job by name.
+
+    Stock-specific jobs skip outside market hours (weekend/holiday) unless
+    {"force": true} is passed -- otherwise they generate real signals off
+    stale data with no guard, same as the scheduled path would skip via
+    _is_market_open()/day_of_week, but manual calls bypass both entirely."""
     import threading
     import traceback
+    from flask import request as flask_request
+
+    if job_name in STOCK_MARKET_HOURS_JOBS and not _is_market_open():
+        body = flask_request.get_json(silent=True) or {}
+        if not body.get("force"):
+            return jsonify({
+                "status": "skipped",
+                "job": job_name,
+                "reason": "market closed (weekend/holiday) — pass {\"force\": true} to override for debugging",
+            })
 
     job_map = {
         "ingest_congressional": job_ingest_congressional,

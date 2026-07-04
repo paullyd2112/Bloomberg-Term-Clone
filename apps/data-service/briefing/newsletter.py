@@ -354,6 +354,29 @@ def _build_user_prompt(
     return "\n".join(parts)
 
 
+def _alert_generation_failure(reason: str) -> None:
+    """Email alert on generation failure. Sentry alone isn't sufficient here --
+    it's quota-capped (see CLAUDE.md), and a missed 7am generation means no
+    briefing row and a silently-skipped 7:15 send with no other signal that
+    anything went wrong (observed live July 3)."""
+    try:
+        import resend
+        resend.api_key = os.environ.get("RESEND_API_KEY", "") or os.environ.get("RESEND_API_KEY_", "")
+        if not resend.api_key:
+            return
+        alert_email = os.environ.get("ALERT_EMAIL", "paulsolomonaqua@gmail.com")
+        resend.Emails.send({
+            "from": "Plebs Alerts <alerts@plebs.finance>",
+            "to": [alert_email],
+            "subject": f"Newsletter generation FAILED — {date.today().isoformat()}",
+            "text": f"generate_newsletter() failed: {reason}\n\n"
+                    f"No briefing row was written for today. The 7:15am send will find "
+                    f"nothing to send, and the 7:45am retry will attempt regeneration.",
+        })
+    except Exception as e:
+        logger.warning("newsletter: failure-alert email itself failed — {}", e)
+
+
 def generate_newsletter() -> dict | None:
     signals        = _fetch_recent_signals()
     congress       = _fetch_congressional_trades()
@@ -377,6 +400,7 @@ def generate_newsletter() -> dict | None:
     except Exception as e:
         logger.error("newsletter: generation failed — {}", e)
         sentry_sdk.capture_exception(e)
+        _alert_generation_failure(f"Claude call failed: {type(e).__name__}: {e}")
         return None
 
     today = date.today().isoformat()
@@ -418,6 +442,7 @@ def generate_newsletter() -> dict | None:
     except Exception as e:
         logger.error("newsletter: db write failed — {}", e)
         sentry_sdk.capture_exception(e)
+        _alert_generation_failure(f"DB write failed: {type(e).__name__}: {e}")
         return None
 
 
