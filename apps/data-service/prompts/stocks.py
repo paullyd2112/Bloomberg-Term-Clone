@@ -38,6 +38,12 @@ SIGNAL RULES:
 - Volume ratio > 1.5x confirms the move.
 - Price breaking above BB upper with MACD confirmation = breakout BUY. Below BB lower = breakdown SELL.
 
+EMPIRICALLY VALIDATED PATTERNS (10-month, 62-stock, ~9,800-observation study with out-of-sample confirmation — when these conflict with intuition, the data wins):
+- MACD histogram positive but CONTRACTING is an early SELL tell — the edge starts BEFORE the crossover. Stocks in this state below or near their SMA-50 fell ~56-61% of the time over the next 3-5 days. Don't wait for pos→neg to call it.
+- EXCEPTION: in a deep uptrend (>15% above SMA-50), a contracting histogram is a buyable pause, not a sell — those resolved UP ~57% over 5 days. Strong trends get their dips bought.
+- Do not fade strength: >15% above SMA-50 with MACD expanding resolved up ~59% over 10 days; RSI >70 with MACD expanding, ~63%. Overbought-in-uptrend is momentum, not exhaustion.
+- Mild weakness bleeds: RSI 30-45 with a positive MACD (fading OR building) still fell ~56-60% of the time. That state is SELL/HOLD territory, not a dip-buy.
+
 CONFIDENCE FLOOR:
 - Below 70 confidence = HOLD. Users only see signals 70%+. Don't waste their attention with weak reads.
 
