@@ -73,20 +73,12 @@ class OptionsFlowSignal(BaseModel):
 # ─── Supabase helpers ─────────────────────────────────────────────────────────
 
 def _get_latest_price(asset_type: str, identifier: str) -> dict | None:
-    try:
-        result = (
-            supabase.table("raw_prices")
-            .select("*")
-            .eq("asset_type", asset_type)
-            .eq("identifier", identifier)
-            .order("captured_at", desc=True)
-            .limit(1)
-            .execute()
-        )
-        return result.data[0] if result.data else None
-    except Exception as e:
-        logger.error("raw_prices fetch failed for {}/{}: {}", asset_type, identifier, e)
-        return None
+    # Delegates to the shared helper: the naive newest-row query returns
+    # thin live-stream rows (no indicators, None change_24h) for streamed
+    # tickers, silently blinding the prompt technicals and every
+    # deterministic gate. See scoring/price_data.py.
+    from scoring.price_data import get_scoring_price_row
+    return get_scoring_price_row(asset_type, identifier)
 
 
 def _get_recent_news(asset_type: str, identifier: str, limit: int = 3) -> list[str]:
@@ -292,21 +284,15 @@ def _get_corporate_actions_context(ticker: str) -> list[dict] | None:
 def _get_market_benchmark() -> dict:
     """Fetch SPY + QQQ price/change/SMA-50 position to give Claude broad market
     regime context. price_vs_sma50_pct is what the stocks prompt's market-regime
-    gate actually checks -- it must come from here, not be inferred."""
+    gate actually checks -- it must come from here, not be inferred. Uses the
+    indicator-merging helper: the naive newest-row query returns thin
+    live-stream rows for SPY/QQQ, which silently disabled the regime gates."""
+    from scoring.price_data import get_scoring_price_row
     benchmarks = {}
     for sym in ("SPY", "QQQ"):
         try:
-            result = (
-                supabase.table("raw_prices")
-                .select("price, change_24h, metadata")
-                .eq("asset_type", "stock")
-                .eq("identifier", sym)
-                .order("captured_at", desc=True)
-                .limit(1)
-                .execute()
-            )
-            if result.data:
-                row  = result.data[0]
+            row = get_scoring_price_row("stock", sym)
+            if row:
                 meta = row.get("metadata") or {}
                 benchmarks[sym] = {
                     "price":              float(row["price"]) if row.get("price") else None,
@@ -528,6 +514,16 @@ def score_asset(
         logger.warning("{}/{}: price is None — skipping", asset_type, identifier)
         return None
     current_price = float(current_price)
+
+    # Without technicals there is nothing to score either — the entire
+    # signal ruleset (confluence, regime gates, evidence gate) is built on
+    # them. Live smoke-testing caught the model issuing 72%-confidence BUYs
+    # off options flow alone when the indicator merge found nothing; skip
+    # instead of scoring blind (and save the Claude call).
+    if asset_type in ("stock", "crypto") and meta.get("rsi_14") is None and meta.get("macd_hist") is None:
+        logger.warning("{}/{}: no technical indicators within {} days — skipping rather than scoring blind",
+                       asset_type, identifier, 5)
+        return None
 
     # ── Build asset-specific context & call Claude ──────────────────────────
 
@@ -922,11 +918,16 @@ def score_crypto() -> str:
     from scoring.haiku_prescreen import prescreen_crypto, should_escalate_to_sonnet
 
     try:
+        # Filter to indicator-bearing rows: the live stream flushes thin
+        # {source, updated_at} rows every 60s, so without this filter the
+        # newest row per streamed coin has no rsi/macd — blinding the
+        # prescreen and the BTC regime computation below.
         result = (
             supabase.table("raw_prices")
             .select("identifier, price, change_24h, metadata")
             .eq("asset_type", "crypto")
             .neq("identifier", "MARKET_SENTIMENT")
+            .filter("metadata->rsi_14", "not.is", "null")
             .order("captured_at", desc=True)
             .limit(200)
             .execute()
