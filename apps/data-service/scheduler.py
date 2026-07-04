@@ -614,6 +614,7 @@ def run_job_manual(job_name: str):
     import traceback
     from flask import request as flask_request
 
+    forced_outside_market_hours = False
     if job_name in STOCK_MARKET_HOURS_JOBS and not _is_market_open():
         body = flask_request.get_json(silent=True) or {}
         if not body.get("force"):
@@ -622,6 +623,7 @@ def run_job_manual(job_name: str):
                 "job": job_name,
                 "reason": "market closed (weekend/holiday) — pass {\"force\": true} to override for debugging",
             })
+        forced_outside_market_hours = True
 
     job_map = {
         "ingest_congressional": job_ingest_congressional,
@@ -651,6 +653,10 @@ def run_job_manual(job_name: str):
         return jsonify({"error": f"Unknown job: {job_name}", "available": list(job_map.keys())}), 404
 
     def _run():
+        import scoring.engine as _engine
+        if forced_outside_market_hours:
+            _engine.STALE_TEST_MODE = True
+            logger.warning("Manual {}: forced outside market hours — tagging any signals is_stale_test=true", job_name)
         try:
             _job_state[f"manual_{job_name}"] = {"status": "running", "started": datetime.now(timezone.utc).isoformat()}
             result = fn()
@@ -659,6 +665,9 @@ def run_job_manual(job_name: str):
         except Exception as e:
             _job_state[f"manual_{job_name}"] = {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
             logger.error("Manual {} failed: {}", job_name, e)
+        finally:
+            if forced_outside_market_hours:
+                _engine.STALE_TEST_MODE = False
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
