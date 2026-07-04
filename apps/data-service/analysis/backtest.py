@@ -1,9 +1,11 @@
 """
-Historical backtest — Feb 1 2026 → Jun 16 2026.
+Historical backtest — Sept 2025 → July 2026.
 
-Data sources (in priority order):
-  Stocks : FMP historical daily  → Alpha Vantage daily (fallback)
-  Crypto : Binance via CCXT      → Messari OHLCV (fallback)
+Data sources (in priority order) -- Alpaca first everywhere, matching the
+live ingestion pipeline; the rest are fallbacks only for tickers/ranges
+Alpaca doesn't have:
+  Stocks : Alpaca → FMP historical daily → Alpha Vantage daily
+  Crypto : Alpaca → CoinGecko            → Binance via CCXT
 
 Applies the same RSI / MACD / volume rules as the live scoring engine,
 then runs a paper-trading simulation starting from $1 000.
