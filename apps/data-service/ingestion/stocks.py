@@ -306,9 +306,12 @@ def _fetch_ohlcv_alpaca(ticker: str) -> pd.DataFrame | None:
     return fetch_stock_bars(ticker, days=90)
 
 
-def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
+def _fetch_ohlcv(ticker: str, stats: dict | None = None) -> pd.DataFrame | None:
     """Fetch from ALL sources, merge into one DataFrame for best coverage.
-    Alpaca is primary; others fill gaps."""
+    Alpaca is primary; others fill gaps. `stats` (optional) accumulates
+    per-source success counts and error samples across a whole ingest run,
+    surfaced in the job result -- with no server log access, the result
+    string is the only diagnostic channel."""
     sources = [
         ("Alpaca",        _fetch_ohlcv_alpaca),
         ("yfinance",      _fetch_ohlcv_yfinance),
@@ -325,10 +328,15 @@ def _fetch_ohlcv(ticker: str) -> pd.DataFrame | None:
                 df.columns = [c.lower() for c in df.columns]
                 logger.debug("{}: {} returned {} rows", ticker, name, len(df))
                 frames.append(df[["open", "high", "low", "close", "volume"]])
+                if stats is not None:
+                    stats.setdefault("source_hits", {}).setdefault(name, 0)
+                    stats["source_hits"][name] += 1
             else:
                 logger.debug("{}: {} — no data", ticker, name)
         except Exception as e:
             logger.debug("{}: {} — error: {}", ticker, name, e)
+            if stats is not None and len(stats.setdefault("source_errors", [])) < 5:
+                stats["source_errors"].append(f"{ticker}/{name}: {type(e).__name__}: {str(e)[:120]}")
 
     if not frames:
         logger.warning("{}: ALL 5 sources returned no data", ticker)
@@ -398,18 +406,29 @@ def _fetch_and_store_news(ticker: str) -> int:
 
 # ─── Per-ticker ingestion ─────────────────────────────────────────────────────
 
-def _ingest_ticker(ticker: str) -> bool:
-    """Fetch OHLCV, compute indicators, write raw_prices + news. Returns success."""
-    df = _fetch_ohlcv(ticker)
-    if df is None:
+def _ingest_ticker(ticker: str, stats: dict | None = None) -> bool:
+    """Fetch OHLCV, compute indicators, write raw_prices + news. Returns success.
+    `stats` (optional) records which stage failed — fetch / indicators /
+    insert — so the run summary can say WHY tickers failed, not just how many."""
+
+    def _fail(stage: str, detail: str = "") -> bool:
+        if stats is not None:
+            stats.setdefault("fail_stages", {}).setdefault(stage, 0)
+            stats["fail_stages"][stage] += 1
+            if detail and len(stats.setdefault("fail_samples", [])) < 5:
+                stats["fail_samples"].append(f"{ticker}/{stage}: {detail[:140]}")
         return False
+
+    df = _fetch_ohlcv(ticker, stats=stats)
+    if df is None:
+        return _fail("fetch")
 
     try:
         indicators = _compute_indicators(df)
     except Exception as e:
         logger.error("{}: indicator computation failed — {}", ticker, e)
         sentry_sdk.capture_exception(e)
-        return False
+        return _fail("indicators", f"{type(e).__name__}: {e}")
 
     record = {
         "asset_type": "stock",
@@ -425,7 +444,7 @@ def _ingest_ticker(ticker: str) -> bool:
     except Exception as e:
         logger.error("{}: raw_prices insert failed — {}", ticker, e)
         sentry_sdk.capture_exception(e)
-        return False
+        return _fail("insert", f"{type(e).__name__}: {e}")
 
     _fetch_and_store_news(ticker)
     return True
@@ -443,10 +462,11 @@ def ingest_stocks(tickers: list[str] | None = None) -> str:
 
     success = 0
     failed  = 0
+    stats: dict = {}
 
     for ticker in tickers:
         try:
-            ok = _ingest_ticker(ticker)
+            ok = _ingest_ticker(ticker, stats=stats)
             if ok:
                 success += 1
             else:
@@ -460,5 +480,13 @@ def ingest_stocks(tickers: list[str] | None = None) -> str:
         time.sleep(TICKER_DELAY_S)
 
     summary = f"{success} tickers ingested, {failed} failed"
+    if failed:
+        hits   = stats.get("source_hits", {})
+        stages = stats.get("fail_stages", {})
+        summary += (f" | source_hits={{{', '.join(f'{k}: {v}' for k, v in hits.items())}}}"
+                    f" fail_stages={{{', '.join(f'{k}: {v}' for k, v in stages.items())}}}")
+        samples = stats.get("fail_samples", []) + stats.get("source_errors", [])
+        if samples:
+            summary += f" | samples: {' ;; '.join(samples[:5])}"
     logger.info("Stocks ingestion complete — {}", summary)
     return summary
