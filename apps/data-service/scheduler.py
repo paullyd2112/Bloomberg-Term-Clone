@@ -961,6 +961,53 @@ def backtest_status():
     return jsonify(state)
 
 
+@app.route("/factor-discovery", methods=["GET", "POST"])
+def run_factor_discovery_endpoint():
+    """
+    Empirical, model-free study of which technical-indicator states actually
+    predicted forward returns over the past ~10 months, train/test split.
+    No LLM calls, no pre-baked scoring weights.
+    POST /factor-discovery
+    """
+    from flask import request as flask_request
+    from analysis.factor_discovery import run_factor_discovery
+    import threading
+
+    body       = flask_request.get_json(silent=True) or {}
+    output_dir = str(body.get("output_dir", "/tmp/factor_discovery"))
+
+    def _run():
+        try:
+            agg = run_factor_discovery(output_dir=output_dir)
+            _job_state["factor_discovery"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "ok" if "error" not in agg else "error",
+                "summary": agg,
+            }
+        except Exception as e:
+            _job_state["factor_discovery"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "error",
+                "error": str(e),
+            }
+            logger.error("Factor discovery failed: {}", e)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    return jsonify({
+        "status": "started",
+        "message": "Factor discovery running in background. Check /factor-discovery/status for results.",
+        "output_dir": output_dir,
+    })
+
+
+@app.route("/factor-discovery/status")
+def factor_discovery_status():
+    state = _job_state.get("factor_discovery", {"status": "never_run"})
+    return jsonify(state)
+
+
 # ─── Claude backtest endpoint ────────────────────────────────────────────────
 
 @app.route("/backtest/claude", methods=["GET", "POST"])
