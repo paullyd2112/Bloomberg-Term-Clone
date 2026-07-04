@@ -320,6 +320,22 @@ def _fetch_ohlcv(ticker: str, stats: dict | None = None) -> pd.DataFrame | None:
         ("Alpha Vantage", _fetch_ohlcv_av),
         ("Massive",       _fetch_ohlcv_massive),
     ]
+    def _normalize_index(df: pd.DataFrame) -> pd.DataFrame:
+        """Force a tz-naive, midnight-normalized DatetimeIndex. Sources
+        disagree: Alpaca returns tz-aware intraday-offset timestamps, FMP /
+        Massive / yfinance return naive dates -- .difference() between
+        tz-aware and tz-naive indexes raises TypeError, which crashed the
+        merge below (outside every try) for any ticker where 2+ sources
+        responded, killing ingestion for most of the watchlist since #14.
+        The backtest modules always did this normalization, which is why
+        they merged the same sources without issue."""
+        idx = pd.to_datetime(df.index)
+        if getattr(idx, "tz", None) is not None:
+            idx = idx.tz_localize(None)
+        df = df.copy()
+        df.index = idx.normalize()
+        return df[~df.index.duplicated(keep="first")]
+
     frames: list[pd.DataFrame] = []
     for name, fn in sources:
         try:
@@ -327,7 +343,7 @@ def _fetch_ohlcv(ticker: str, stats: dict | None = None) -> pd.DataFrame | None:
             if df is not None and not df.empty:
                 df.columns = [c.lower() for c in df.columns]
                 logger.debug("{}: {} returned {} rows", ticker, name, len(df))
-                frames.append(df[["open", "high", "low", "close", "volume"]])
+                frames.append(_normalize_index(df[["open", "high", "low", "close", "volume"]]))
                 if stats is not None:
                     stats.setdefault("source_hits", {}).setdefault(name, 0)
                     stats["source_hits"][name] += 1
@@ -344,10 +360,15 @@ def _fetch_ohlcv(ticker: str, stats: dict | None = None) -> pd.DataFrame | None:
 
     merged = frames[0]
     for extra in frames[1:]:
-        new_dates = extra.index.difference(merged.index)
-        if len(new_dates) > 0:
-            merged = pd.concat([merged, extra.loc[new_dates]]).sort_index()
-            logger.debug("{}: filled {} gap dates from additional source", ticker, len(new_dates))
+        try:
+            new_dates = extra.index.difference(merged.index)
+            if len(new_dates) > 0:
+                merged = pd.concat([merged, extra.loc[new_dates]]).sort_index()
+                logger.debug("{}: filled {} gap dates from additional source", ticker, len(new_dates))
+        except Exception as e:
+            # A single incompatible fallback frame must never sink the
+            # whole ticker -- skip it and keep what already merged.
+            logger.warning("{}: skipping incompatible fallback frame — {}", ticker, e)
 
     logger.info("{}: merged OHLCV — {} rows from {} sources", ticker, len(merged), len(frames))
     return merged
@@ -472,9 +493,15 @@ def ingest_stocks(tickers: list[str] | None = None) -> str:
             else:
                 failed += 1
         except Exception as e:
-            # Belt-and-suspenders: _ingest_ticker already catches, but never crash
+            # Belt-and-suspenders: _ingest_ticker already catches, but never crash.
+            # Record in the funnel too -- an empty fail_stages next to a big
+            # failed count is how the tz-index merge crash hid for a week.
             logger.error("{}: unhandled error — {}", ticker, e)
             sentry_sdk.capture_exception(e)
+            stats.setdefault("fail_stages", {}).setdefault("unhandled", 0)
+            stats["fail_stages"]["unhandled"] += 1
+            if len(stats.setdefault("fail_samples", [])) < 5:
+                stats["fail_samples"].append(f"{ticker}/unhandled: {type(e).__name__}: {str(e)[:140]}")
             failed += 1
 
         time.sleep(TICKER_DELAY_S)
