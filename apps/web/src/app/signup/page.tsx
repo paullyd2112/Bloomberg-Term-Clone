@@ -28,7 +28,7 @@ export default function SignupPage() {
           <SignupForm />
         </Suspense>
         <p className="mt-6 text-center font-mono text-[10px] uppercase tracking-wider text-zinc-600">
-          Real-time signals from day one
+          Live prices, fresh signals from day one
         </p>
       </div>
     </div>

@@ -13,7 +13,7 @@ export default function SubscribeGate({ message = "Subscribe to access this feat
       <div className="relative">
         <p className="text-white font-semibold text-lg text-balance">{message}</p>
         <p className="text-zinc-500 text-sm mt-1.5 leading-relaxed">
-          Subscribe to unlock real-time signals and the full suite.
+          Subscribe to unlock AI signals, live prices, and the full suite.
         </p>
       </div>
       <Link

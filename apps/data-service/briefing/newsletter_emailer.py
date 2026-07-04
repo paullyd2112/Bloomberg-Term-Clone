@@ -215,7 +215,7 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
     free_cta = "" if is_paid else f"""
     <div style="margin:28px 0;padding:22px;background:#111113;border:1px solid #1e1e22;border-radius:10px;text-align:center;">
       <div style="color:#f4f4f5;font-weight:700;font-size:15px;margin-bottom:6px;">Want the full signal feed?</div>
-      <div style="color:#a1a1aa;font-size:13px;margin-bottom:16px;">Real-time AI signals, options flow, congressional trades. Start your trial.</div>
+      <div style="color:#a1a1aa;font-size:13px;margin-bottom:16px;">AI signals, options flow, congressional trades. Start your trial.</div>
       <a href="{APP_URL}/signup" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:13px;padding:10px 24px;border-radius:8px;text-decoration:none;">Try Plebs free &rarr;</a>
     </div>"""
 

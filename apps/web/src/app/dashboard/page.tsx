@@ -175,7 +175,7 @@ export default async function DashboardPage() {
           <h1 className="text-xl font-semibold tracking-tight text-white">Signals</h1>
         </div>
         <p className="text-sm text-zinc-500">
-          Live AI signals across stocks and crypto — updating in real time.
+          AI signals across stocks and crypto, refreshed throughout the trading day.
         </p>
       </header>
 

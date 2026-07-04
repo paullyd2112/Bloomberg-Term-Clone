@@ -88,7 +88,7 @@ export default async function PortfolioPage() {
           </span>
           <h2 className="text-white font-semibold text-lg tracking-tight">Portfolio Tracker</h2>
           <p className="text-zinc-400 text-sm leading-relaxed max-w-md">
-            Log your positions, track unrealized P&amp;L in real-time, and see your win rate across closed trades. Pro and Elite only.
+            Log your positions, track unrealized P&amp;L, and see your win rate across closed trades. Pro and Elite only.
           </p>
           <Link
             href="/dashboard/upgrade"
