@@ -993,6 +993,8 @@ def run_claude_backtest_endpoint():
                     "portfolio_sim": agg.get("portfolio_sim", {}),
                     "by_asset_class": agg.get("by_asset_class", {}),
                     "by_time_horizon": agg.get("by_time_horizon", {}),
+                    "by_direction": agg.get("by_direction", {}),
+                    "filters": agg.get("filters", {}),
                     "error_samples": agg.get("error_samples", []),
                 },
                 "signals": agg.get("signals", []),
