@@ -436,6 +436,16 @@ def _apply_accuracy_penalty(confidence: int, accuracy: dict | None) -> int:
 
 # ─── Signal writer ────────────────────────────────────────────────────────────
 
+# Set by scheduler.py's manual /run-job/ endpoint around a {"force": true}
+# call for a stock-hours job outside market hours, so signals generated
+# from stale prior-close data during weekend/holiday debugging are tagged
+# rather than silently indistinguishable from real ones. Module-level
+# rather than threaded through every call site (mirrors breadth_tracker's
+# scope) -- acceptable since this only applies to a single deliberate
+# manual debug request, not concurrent normal traffic.
+STALE_TEST_MODE = False
+
+
 def _write_signal(asset_type: str, identifier: str, price: float | None, signal, news_with_urls: list[dict] | None = None) -> dict:
     accuracy = _get_asset_accuracy(identifier, asset_type)
     adjusted_confidence = _apply_accuracy_penalty(signal.confidence, accuracy)
@@ -461,6 +471,7 @@ def _write_signal(asset_type: str, identifier: str, price: float | None, signal,
         "news_context":    signal.news_context,
         "news_urls":       news_urls,
         "is_backtest":     False,
+        "is_stale_test":   STALE_TEST_MODE,
         "outcome":         "PENDING",
     }
     result = supabase.table("signals").insert(base).execute()
