@@ -1036,6 +1036,11 @@ def score_crypto() -> str:
             f"{haiku_calls} Haiku, {sonnet_calls} Sonnet, {tier_skipped} tier-skipped")
 
 
+PREDICTION_CANDIDATE_POOL  = 150  # raw pool pulled before diversification
+PREDICTION_CANDIDATE_LIMIT = 20   # diversified candidates actually prescreened
+PREDICTION_MAX_PER_EVENT   = 2    # cap per real-world event/topic
+
+
 def score_prediction_markets() -> str:
     from scoring.haiku_prescreen import prescreen_prediction, should_escalate_to_sonnet
 
@@ -1045,18 +1050,36 @@ def score_prediction_markets() -> str:
             .select("identifier, price, volume, metadata")
             .eq("asset_type", "prediction")
             .order("volume", desc=True)
-            .limit(20)
+            .limit(PREDICTION_CANDIDATE_POOL)
             .execute()
         )
-        seen, rows = set(), []
+        seen, pool = set(), []
         for r in result.data:
             ident = r["identifier"]
             if ident not in seen:
                 seen.add(ident)
-                rows.append(r)
+                pool.append(r)
     except Exception as e:
         logger.error("score_prediction_markets: failed to fetch identifiers — {}", e)
         return "failed to fetch identifiers"
+
+    # Diversify across events -- Polymarket volume concentrates hard around
+    # whatever the single biggest live event is (e.g. a marquee sports final
+    # can run $100M+ in volume while everything else is a fraction of that),
+    # so a naive volume-sorted top-N is effectively "the same event's markets,
+    # over and over" rather than a cross-section of what's actually happening
+    # on the platform. Cap how many candidates can come from the same event.
+    event_counts: dict[str, int] = {}
+    rows = []
+    for r in pool:
+        event_key = (r.get("metadata") or {}).get("event_slug") or r["identifier"]
+        count = event_counts.get(event_key, 0)
+        if count >= PREDICTION_MAX_PER_EVENT:
+            continue
+        event_counts[event_key] = count + 1
+        rows.append(r)
+        if len(rows) >= PREDICTION_CANDIDATE_LIMIT:
+            break
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
