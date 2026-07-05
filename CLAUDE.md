@@ -90,3 +90,10 @@ volume caps) stop being acceptable at that point.
       credentials confirmed present in Railway. Needs actual debugging (likely requires server-side log
       access this session didn't have) before re-enabling, not just a plan upgrade. Polymarket (Gamma API)
       is carrying prediction markets alone in the meantime.
+- [ ] **Dedicated Polymarket-style predictions tab**: the July 5 fix (#68 era) made prediction-market
+      signals render correctly, but it reuses the same dense stock/crypto components — it does not look
+      like Polymarket (big percentage as focal point, probability sparkline, colored Yes/No buy buttons,
+      volume/category chip). Also scope-different from the current signal-only view: this would be a
+      browse/discovery tab across ALL live Polymarket markets we ingest (dozens-hundreds), not just the
+      subset we've generated an AI signal for — same tier of effort as Congress Tracker was. Not a tier
+      upgrade, a real feature build; revisit once past initial launch.
