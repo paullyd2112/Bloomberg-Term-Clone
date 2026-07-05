@@ -231,6 +231,19 @@ async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
 
             identifier = str(_first(m, "conditionId", "condition_id", "id") or "")
 
+            # Gamma's own "category" field comes back empty in practice, so it's
+            # useless for grouping. events[0].slug (e.g. "world-cup-winner") is
+            # a real, populated grouping key -- markets on the same real-world
+            # topic share one event. events[0].eventMetadata.context_description
+            # is Polymarket's own live, current-state summary (actual results,
+            # standings, injuries) -- valuable grounding the scoring prompt
+            # otherwise never sees, since news lookups by conditionId hash
+            # never match anything.
+            events = _first(m, "events") or []
+            first_event = events[0] if events else {}
+            event_slug = first_event.get("slug") or ""
+            context_description = (first_event.get("eventMetadata") or {}).get("context_description") or ""
+
             records.append({
                 "asset_type": "prediction",
                 "identifier": identifier,
@@ -238,13 +251,15 @@ async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
                 "volume":     volume,
                 "change_24h": None,
                 "metadata": {
-                    "source":    "polymarket",
-                    "title":     _first(m, "question") or "",
-                    "yes_price": yes_price,
-                    "no_price":  no_price,
-                    "end_date":  _first(m, "endDate", "end_date_iso") or "",
-                    "category":  _first(m, "category") or "",
-                    "raw":       m,
+                    "source":              "polymarket",
+                    "title":               _first(m, "question") or "",
+                    "yes_price":           yes_price,
+                    "no_price":            no_price,
+                    "end_date":            _first(m, "endDate", "end_date_iso") or "",
+                    "category":            _first(m, "category") or "",
+                    "event_slug":          event_slug,
+                    "context_description": context_description,
+                    "raw":                 m,
                 },
             })
 

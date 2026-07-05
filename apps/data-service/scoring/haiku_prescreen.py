@@ -62,14 +62,15 @@ Rules:
 - Respond with direction, confidence 0-100, and a one-line reason."""
 
 
-PREDICTION_SYSTEM = """You are a prediction market screener. Given a contract's current price (probability), volume, and context, quickly assess: is there edge?
+PREDICTION_SYSTEM = """You are a prediction market screener trained to spot genuine mispricing, not just cheap longshots.
 
 Rules:
-- Price < 0.20 with strong supporting evidence = YES (70+ confidence)
-- Price > 0.80 with strong counter-evidence = NO (70+ confidence)
-- High volume + price moving sharply = momentum play (65+ confidence)
-- No clear edge or low volume = HOLD (below 60)
-- Respond with direction (YES/NO/HOLD), confidence 0-100, and a one-line reason."""
+- A low price alone is NOT edge. Favorite-longshot bias means longshots are usually OVERpriced relative to their true probability, not underpriced — so "it's cheap" is never sufficient justification by itself.
+- Only flag YES on a longshot (price < 0.20) if the context given includes a SPECIFIC, CURRENT reason the market hasn't priced in yet (an actual recent result, an eliminated rival, breaking news) — not general reputation or historical quality.
+- Only flag NO on a heavy favorite (price > 0.80) with an equally specific, current reason.
+- High volume + price moving sharply = worth a look regardless of absolute price level (something changed).
+- No specific current information given, even if the story sounds plausible = HOLD (below 60).
+- Respond with direction (YES/NO/HOLD), confidence 0-100, and a one-line reason citing the specific current fact driving your call."""
 
 
 def prescreen_stock(ticker: str, meta: dict, price: float | None = None,
@@ -143,14 +144,14 @@ def prescreen_prediction(identifier: str, price: float | None = None,
 
     meta = metadata or {}
     prompt_lines = [
-        f"Contract: {identifier}",
+        f"Market: {meta.get('title') or identifier}",
         f"Current price (probability): {price or 'N/A'}",
         f"Volume: {volume or 'N/A'}",
         f"Close date: {meta.get('close_time') or meta.get('end_date', 'N/A')}",
-        f"Category: {meta.get('category', 'N/A')}",
-        "",
-        "Is there edge here?",
     ]
+    if meta.get("context_description"):
+        prompt_lines += ["", f"Current context: {meta['context_description']}"]
+    prompt_lines += ["", "Is there edge here?"]
 
     try:
         return client.chat.completions.create(

@@ -13,6 +13,7 @@ Rules:
 - For macro markets (Fed, CPI, GDP): reference FRED data context if available.
 - For crypto markets: reference current BTC/ETH price action and trend.
 - For political markets: be extra calibrated — these are notoriously hard to price. Require stronger evidence.
+- For sports/tournament markets: current in-event state (results already played, standings, injuries, eliminations) matters far more than pre-event rosters or reputation. Favorite-longshot bias means longshots are typically OVERpriced relative to their true win probability, not underpriced — "they have talented players" or "they're historically strong" is NOT edge on its own. Only call a longshot mispriced if you can cite a SPECIFIC current development (an actual result, an injury, an opponent's elimination) the market hasn't reflected yet. If no such development exists, the price is probably closer to correct than your priors — return HOLD.
 - Confidence 80-100: clear edge with strong supporting evidence and data.
 - Confidence 70-79: real edge but with meaningful uncertainty.
 - Below 70: HOLD — no actionable edge. Users only see signals at 70%+, don't waste their feed.
@@ -46,6 +47,9 @@ def build_user_prompt(context: dict) -> str:
 
     if context.get("close_time"):
         lines.append(f"Resolves: {context['close_time']}")
+
+    if meta.get("context_description"):
+        lines += ["", f"Current state (from the platform's own live summary): {meta['context_description']}"]
 
     if context.get("news_headlines"):
         lines += ["", "Recent relevant news:"]
