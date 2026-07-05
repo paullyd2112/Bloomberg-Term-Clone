@@ -111,7 +111,35 @@ async function fetchSignals(): Promise<Signal[]> {
     console.error("fetchSignals error:", error.message);
     return [];
   }
-  return (data as Signal[]) ?? [];
+  const signals = (data as Signal[]) ?? [];
+
+  // Prediction-market identifiers are Polymarket conditionId hashes, not
+  // readable names — join in raw_prices.metadata.title so the feed/cards
+  // can show the actual market question instead of a hex string.
+  const predictionIds = Array.from(
+    new Set(signals.filter((s) => s.asset_type === "prediction").map((s) => s.identifier)),
+  );
+  if (predictionIds.length > 0) {
+    const { data: priceRows } = await supabase
+      .from("raw_prices")
+      .select("identifier, metadata")
+      .eq("asset_type", "prediction")
+      .in("identifier", predictionIds);
+    const titleByIdentifier = new Map<string, string>();
+    for (const row of priceRows ?? []) {
+      const title = (row.metadata as Record<string, unknown> | null)?.title;
+      if (typeof title === "string" && title && !titleByIdentifier.has(row.identifier)) {
+        titleByIdentifier.set(row.identifier, title);
+      }
+    }
+    for (const s of signals) {
+      if (s.asset_type === "prediction") {
+        s.market_title = titleByIdentifier.get(s.identifier) ?? null;
+      }
+    }
+  }
+
+  return signals;
 }
 
 async function fetchTopMovers() {
@@ -174,7 +202,7 @@ export default async function DashboardPage() {
           <h1 className="text-xl font-semibold tracking-tight text-white">Signals</h1>
         </div>
         <p className="text-sm text-zinc-500">
-          Live AI signals across stocks and crypto — updating in real time.
+          Live AI signals across stocks, crypto, and prediction markets — updating in real time.
         </p>
       </header>
 

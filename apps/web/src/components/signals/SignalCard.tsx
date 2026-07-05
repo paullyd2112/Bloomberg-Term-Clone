@@ -6,7 +6,7 @@ export type Signal = {
   id: number;
   asset_type: string;
   identifier: string;
-  direction: "BUY" | "SELL" | "HOLD";
+  direction: "BUY" | "SELL" | "HOLD" | "YES" | "NO";
   confidence: number;
   reasoning: string;
   time_horizon: string;
@@ -14,18 +14,26 @@ export type Signal = {
   news_context: string[] | null;
   created_at: string;
   outcome: "WIN" | "LOSS" | "NEUTRAL" | "PENDING";
+  // Prediction-market signals only: raw_prices.metadata.title, joined in at
+  // fetch time since `identifier` is a Polymarket conditionId (a long hex
+  // hash), not a human-readable name.
+  market_title?: string | null;
 };
 
 const DIRECTION_TEXT: Record<string, string> = {
   BUY:  "text-emerald-400",
   SELL: "text-red-400",
   HOLD: "text-zinc-500",
+  YES:  "text-emerald-400",
+  NO:   "text-red-400",
 };
 
 const DIRECTION_ACCENT: Record<string, string> = {
   BUY:  "border-l-emerald-500/50 group-hover:border-l-emerald-400",
   SELL: "border-l-red-500/50 group-hover:border-l-red-400",
   HOLD: "border-l-zinc-700 group-hover:border-l-zinc-600",
+  YES:  "border-l-emerald-500/50 group-hover:border-l-emerald-400",
+  NO:   "border-l-red-500/50 group-hover:border-l-red-400",
 };
 
 const OUTCOME_TEXT: Record<string, string> = {
@@ -70,10 +78,17 @@ export default function SignalCard({ signal }: { signal: Signal }) {
   const conf = confColors(signal.confidence);
   const horizon = HORIZON_SHORT[signal.time_horizon] ?? signal.time_horizon.slice(0, 5).toUpperCase();
   const typeLabel = TYPE_LABEL[signal.asset_type] ?? signal.asset_type;
-  const priceStr =
-    signal.price_at_signal != null
-      ? `$${Number(signal.price_at_signal).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-      : "—";
+  const isPrediction = signal.asset_type === "prediction";
+  // Polymarket identifiers are conditionId hex hashes, not readable names —
+  // show the market question instead wherever a "ticker" would normally go.
+  const displayName = isPrediction && signal.market_title ? signal.market_title : signal.identifier;
+  const priceStr = isPrediction
+    ? signal.price_at_signal != null
+      ? `${(Number(signal.price_at_signal) * 100).toFixed(0)}¢`
+      : "—"
+    : signal.price_at_signal != null
+    ? `$${Number(signal.price_at_signal).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+    : "—";
 
   return (
     <div
@@ -85,7 +100,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
       {/* Full-row click target → signal detail (siblings with z-10 stay clickable) */}
       <Link
         href={`/signal/${signal.id}`}
-        aria-label={`${signal.direction} ${signal.identifier} at ${signal.confidence}% confidence — view details`}
+        aria-label={`${signal.direction} ${displayName} at ${signal.confidence}% confidence — view details`}
         className="absolute inset-0 z-0"
       />
 
@@ -103,9 +118,13 @@ export default function SignalCard({ signal }: { signal: Signal }) {
       <div className="relative z-10 flex w-[4.5rem] min-w-0 flex-shrink-0 items-baseline gap-1.5 sm:w-32">
         <Link
           href={`/dashboard/asset/${signal.asset_type}/${encodeURIComponent(signal.identifier)}`}
-          className="truncate font-mono text-sm font-semibold text-white transition-colors hover:text-emerald-400"
+          title={isPrediction ? displayName : undefined}
+          className={clsx(
+            "truncate font-semibold text-white transition-colors hover:text-emerald-400",
+            isPrediction ? "text-xs" : "font-mono text-sm",
+          )}
         >
-          {signal.identifier}
+          {displayName}
         </Link>
         <span className="hidden flex-shrink-0 text-[10px] uppercase tracking-wider text-zinc-600 lg:inline">
           {typeLabel}
@@ -158,7 +177,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
       <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 bg-background/80 pl-2 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover:opacity-100">
         <ShareButton
           signalId={signal.id}
-          ticker={signal.identifier}
+          ticker={displayName}
           direction={signal.direction}
           confidence={signal.confidence}
         />
