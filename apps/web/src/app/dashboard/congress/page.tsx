@@ -256,7 +256,7 @@ export default function CongressPage() {
 
       {/* Footer note */}
       <p className="text-zinc-600 text-xs">
-        Source: Financial Modeling Prep (FMP) · STOCK Act disclosures · Last 90 days ·{" "}
+        Source: Senate EFD (efdsearch.senate.gov) · STOCK Act disclosures · Last 90 days ·{" "}
         <span className="text-amber-500/70">Delays &gt;30 days highlighted</span>
       </p>
     </div>

@@ -488,6 +488,7 @@ def score_asset(
     macro_events: list[str] | None = None,
     breadth_tracker: dict | None = None,
     btc_regime: dict | None = None,
+    skip_hold: bool = True,
 ) -> dict | None:
     """
     Build context from Supabase, call Claude via Instructor,
@@ -502,6 +503,13 @@ def score_asset(
     across every ticker scored in the same run — avoids refetching from
     Supabase per ticker and lets the shared context be cached as its own
     system content block instead of duplicated in every user prompt.
+
+    `skip_hold` discards HOLD signals instead of writing them (default,
+    used by the batch scanners so the feed only shows actionable calls).
+    On-demand scoring passes `skip_hold=False` — a user who explicitly
+    asked "what does the AI think about this ticker" deserves the real
+    answer even when that answer is neutral, instead of the generic
+    "no actionable data" message a silently-discarded HOLD produces.
     """
     # Skip if scored recently
     use_model = model_override or MODEL
@@ -758,7 +766,8 @@ def score_asset(
             )
 
     # Skip HOLD signals entirely — users want actionable BUY/SELL only
-    if signal.direction == "HOLD":
+    # (batch scanners only; on-demand scoring passes skip_hold=False)
+    if signal.direction == "HOLD" and skip_hold:
         logger.debug("{}/{}: skipping HOLD signal ({}%)", asset_type, identifier, signal.confidence)
         return None
 

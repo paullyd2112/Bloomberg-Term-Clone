@@ -297,13 +297,17 @@ def resolve_outcomes() -> str:
         polymarket_ids = [s["identifier"] for s in predictions
                           if s["identifier"] not in kalshi_ids]
 
-        kalshi_results, poly_results = asyncio.run(
-            asyncio.gather(
+        async def _settle_predictions():
+            # gather() must be constructed inside a running loop — passing it
+            # directly as an asyncio.run() argument evaluates it eagerly,
+            # before any loop exists on this (thread-pool) worker thread.
+            return await asyncio.gather(
                 _fetch_settled_kalshi(kalshi_ids),
                 _fetch_resolved_polymarket(polymarket_ids),
                 return_exceptions=True,
             )
-        )
+
+        kalshi_results, poly_results = asyncio.run(_settle_predictions())
 
         settlement_map: dict[str, str] = {}
         if isinstance(kalshi_results, dict):
