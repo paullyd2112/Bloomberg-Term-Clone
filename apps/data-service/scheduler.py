@@ -527,7 +527,7 @@ def score_asset_endpoint():
             logger.warning("Auto-ingest failed for {}/{}: {}", asset_type, identifier, e)
 
     try:
-        result = score_asset(asset_type, identifier)
+        result = score_asset(asset_type, identifier, skip_hold=False)
         if result is None:
             return jsonify({"status": "skipped", "reason": "recently scored or no data"})
         return jsonify({"status": "ok", "signal": result})
