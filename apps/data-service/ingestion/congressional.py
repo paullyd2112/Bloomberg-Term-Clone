@@ -579,7 +579,11 @@ def ingest_congressional() -> str:
     # 1. efdsearch.senate.gov direct scraper (free, official, always-current)
     all_rows, efd_diag = _fetch_senate_efd()
     if all_rows:
-        sources_tried.append(f"efd({len(all_rows)})")
+        # efd_diag carries the full funnel breakdown (filings found, paper-filed
+        # skipped, parsed/failed, tx rows seen/filtered) even on success -- surface
+        # it always, not just on the 0-rows failure path below, since "55 rows"
+        # alone can't distinguish a healthy-but-sparse period from real undercounting.
+        sources_tried.append(f"efd({len(all_rows)}: {efd_diag})")
 
     # 2. Senate Stock Watcher (free, but its static feed has been stale since
     #    ~Dec 2020 — kept only as a harmless zero-cost fallback)
