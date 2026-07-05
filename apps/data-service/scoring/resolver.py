@@ -20,6 +20,10 @@ from supabase_client import supabase
 from briefing.alert_emails import send_alert_notification
 
 REQUEST_TIMEOUT = 10.0
+# Settlement APIs paginate through their entire closed-market history with no
+# natural end in sight for us — cap pages so a scheduler worker thread can't
+# get tied up for minutes chasing history far older than any PENDING signal.
+MAX_SETTLEMENT_PAGES = 25
 
 # ─── Resolution config by (asset_type, time_horizon) ────────────────────────
 # Each tuple: (min_age_hours, win_threshold, loss_threshold)
@@ -124,7 +128,7 @@ async def _fetch_settled_kalshi(identifiers: list[str]) -> dict[str, str]:
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         cursor = None
-        while True:
+        for _ in range(MAX_SETTLEMENT_PAGES):
             params: dict = {"status": "settled", "limit": 200}
             if cursor:
                 params["cursor"] = cursor
@@ -161,7 +165,7 @@ async def _fetch_resolved_polymarket(identifiers: list[str]) -> dict[str, str]:
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         next_cursor = ""
-        while True:
+        for _ in range(MAX_SETTLEMENT_PAGES):
             params: dict = {"closed": "true"}
             if next_cursor:
                 params["next_cursor"] = next_cursor
