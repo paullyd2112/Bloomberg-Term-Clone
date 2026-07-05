@@ -56,9 +56,10 @@
 - [ ] **Risk management not yet recalibrated:** every portfolio sim tripped its 15% drawdown circuit
       breaker (15.1-16.1% max DD). Position sizing / stop discipline is a separate, unaddressed workstream
       — signal quality fixes alone don't solve it. Prop-firm-style limits would have failed all sims.
-- [ ] Newsletter generation silent-failure gap: `generate_newsletter()` returns None on failure and the
-      job wrapper reports "ok" — a missed 7am generation means no briefing row and a silently skipped
-      send (observed July 3). Needs loud failure + alerting/retry.
+- [x] Newsletter generation silent-failure gap: added `_alert_generation_failure()` email alert (mirrors
+      the uptime-check pattern) fired from both the Claude-call-failure and DB-write-failure branches of
+      `generate_newsletter()`, plus a real regeneration retry (`job_send_newsletter_retry()`) instead of
+      the old 7:45am job just re-sending nothing.
 
 # POST-LAUNCH UPGRADE CHECKLIST (trigger: 10 paying users, not free signups)
 Everything below is currently on a free/cheapest tier to keep costs at zero pre-revenue. Once there are
