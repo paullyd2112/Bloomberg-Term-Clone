@@ -60,6 +60,63 @@ Respond with valid JSON only — no markdown, no explanation outside the JSON:
   ]
 }`;
 
+type Allocation = { ticker: string; asset_type: string; allocation_pct: number; reasoning: string };
+
+// The system prompt describes allocation ranges in plain text (e.g. "conservative:
+// 60-80% stocks"), but nothing stops the model from ignoring them — the same
+// prompt-only-gate gap that used to let stock/crypto signals ignore their own
+// "HARD GATE" text until deterministic gates were added to scoring/engine.py.
+// This is the one live, user-facing feature that outputs money-allocation-shaped
+// numbers, so clamp and renormalize its output instead of trusting it as-is.
+const MAX_SINGLE_POSITION_PCT = 35;
+
+function renormalizeTo100(items: Allocation[]): void {
+  const total = items.reduce((sum, a) => sum + a.allocation_pct, 0);
+  if (total <= 0) return;
+  const scale = 100 / total;
+  for (const a of items) a.allocation_pct = Math.round(a.allocation_pct * scale * 10) / 10;
+}
+
+function sanitizeAllocations(raw: unknown[]): Allocation[] {
+  const items: Allocation[] = raw
+    .filter((a): a is Record<string, unknown> => typeof a === "object" && a !== null)
+    .map((a) => ({
+      ticker:         String(a.ticker ?? "").toUpperCase().trim(),
+      asset_type:     String(a.asset_type ?? "").trim(),
+      allocation_pct: Number(a.allocation_pct),
+      reasoning:      String(a.reasoning ?? ""),
+    }))
+    .filter((a) => a.ticker && a.asset_type && Number.isFinite(a.allocation_pct) && a.allocation_pct > 0);
+
+  if (items.length === 0) return items;
+
+  // Normalize to exactly 100% first — the redistribution below conserves the
+  // total, so doing this up front means it stays at ~100% throughout.
+  renormalizeTo100(items);
+
+  // Clamp anything over the cap and hand the excess to items still under the
+  // cap. Bounded loop because redistributing can itself push a previously-fine
+  // item over the cap (rare with a handful of positions, but handle it rather
+  // than assume one pass is enough).
+  for (let i = 0; i < 5; i++) {
+    const overCap = items.filter((a) => a.allocation_pct > MAX_SINGLE_POSITION_PCT);
+    if (overCap.length === 0) break;
+
+    let excess = 0;
+    for (const a of overCap) {
+      excess += a.allocation_pct - MAX_SINGLE_POSITION_PCT;
+      a.allocation_pct = MAX_SINGLE_POSITION_PCT;
+    }
+
+    const underCap = items.filter((a) => a.allocation_pct < MAX_SINGLE_POSITION_PCT);
+    if (underCap.length === 0) break; // everything's already at the cap — nowhere left to put the excess
+    const share = excess / underCap.length;
+    for (const a of underCap) a.allocation_pct += share;
+  }
+
+  return items;
+}
+
 async function fetchSignals(supabase: ReturnType<typeof createClient>) {
   const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const { data } = await supabase
@@ -148,12 +205,25 @@ Generate a portfolio allocation for this user.`.trim();
     return NextResponse.json({ error: "Invalid response from model" }, { status: 500 });
   }
 
+  if (!Array.isArray(parsed_result.allocations)) {
+    console.error("allocator: allocations was not an array", parsed_result);
+    return NextResponse.json({ error: "Invalid response from model" }, { status: 500 });
+  }
+
+  const allocations = sanitizeAllocations(parsed_result.allocations);
+  if (allocations.length === 0) {
+    console.error("allocator: no valid allocations survived sanitization", parsed_result.allocations);
+    return NextResponse.json({ error: "Invalid response from model" }, { status: 500 });
+  }
+
+  const result = { overall_reasoning: parsed_result.overall_reasoning, allocations };
+
   const { error } = await supabase.from("portfolio_allocations").insert({
     user_id:           user.id,
     goal,
     risk_tolerance,
     investment_amount,
-    allocations:       parsed_result.allocations,
+    allocations,
     overall_reasoning: parsed_result.overall_reasoning,
   });
 
@@ -162,7 +232,7 @@ Generate a portfolio allocation for this user.`.trim();
     return NextResponse.json({ error: "Failed to save allocation" }, { status: 500 });
   }
 
-  return NextResponse.json(parsed_result);
+  return NextResponse.json(result);
 }
 
 export async function GET() {

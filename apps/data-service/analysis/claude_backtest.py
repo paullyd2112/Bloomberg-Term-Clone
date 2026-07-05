@@ -850,6 +850,14 @@ EXTENDED_CRYPTO_LONGTERM = 21  # was 14
 # drawdown from peak exceeds this threshold.
 PORTFOLIO_CIRCUIT_BREAKER_PCT = 15.0
 
+# Every backtest run tripped the circuit breaker above (15.1-16.1% max DD) —
+# traced to oversized position sizing, not bad signals: base 15% x up to a
+# 2x confidence weight sized a single high-confidence trade at 30% of the
+# portfolio, with no cap on how many such trades could stack on the same
+# sample date. Tightened both the per-trade sizing and added a same-day
+# total-exposure cap below.
+MAX_DAILY_EXPOSURE_PCT = 0.35  # cap on combined position size across all trades on one sample date
+
 
 def _evaluate_claude_signal(
     signal: ClaudeSignalResult,
@@ -1177,9 +1185,9 @@ def run_claude_backtest(
 
                 weight = 1.0
                 if signal.confidence >= 75:
-                    weight = 2.0
-                elif signal.confidence >= 68:
                     weight = 1.5
+                elif signal.confidence >= 68:
+                    weight = 1.25
 
                 result = ClaudeSignalResult(
                     ticker=ticker,
@@ -1280,9 +1288,9 @@ def run_claude_backtest(
 
                 weight = 1.0
                 if signal.confidence >= 75:
-                    weight = 2.0
-                elif signal.confidence >= 68:
                     weight = 1.5
+                elif signal.confidence >= 68:
+                    weight = 1.25
 
                 result = ClaudeSignalResult(
                     ticker=symbol,
@@ -1449,11 +1457,12 @@ def _aggregate_claude_results(
 def _simulate_portfolio(
     actionable: list[ClaudeSignalResult],
     starting_balance: float = 1000.0,
-    base_position_pct: float = 0.15,
+    base_position_pct: float = 0.08,
 ) -> dict:
     """Simulate a $1k portfolio using confidence-weighted position sizing.
     Includes a circuit breaker: if drawdown from peak exceeds the threshold,
-    stop taking new positions (go to cash)."""
+    stop taking new positions (go to cash), and a same-day exposure cap so
+    several trades on one sample date can't combine into an outsized bet."""
     balance = starting_balance
     peak_balance = starting_balance
     max_drawdown = 0.0
@@ -1466,6 +1475,9 @@ def _simulate_portfolio(
 
     for date_str in sorted(by_date.keys()):
         trades = by_date[date_str]
+        balance_at_day_start = balance
+        deployed_today = 0.0
+
         for t in trades:
             if t.return_pct is None:
                 continue
@@ -1487,7 +1499,26 @@ def _simulate_portfolio(
                 })
                 continue
 
+            daily_cap = balance_at_day_start * MAX_DAILY_EXPOSURE_PCT
             position_size = balance * base_position_pct * t.position_weight
+            if deployed_today + position_size > daily_cap:
+                position_size = max(0.0, daily_cap - deployed_today)
+            if position_size <= 0:
+                trade_log.append({
+                    "date": date_str,
+                    "ticker": t.ticker,
+                    "direction": "SKIP",
+                    "confidence": t.confidence,
+                    "weight": 0,
+                    "position_size": 0,
+                    "return_pct": 0,
+                    "pnl": 0,
+                    "balance": round(balance, 2),
+                    "exit_reason": f"daily_exposure_cap_{int(MAX_DAILY_EXPOSURE_PCT * 100)}%",
+                })
+                continue
+
+            deployed_today += position_size
             pnl = position_size * (t.return_pct / 100.0)
             balance += pnl
             peak_balance = max(peak_balance, balance)
