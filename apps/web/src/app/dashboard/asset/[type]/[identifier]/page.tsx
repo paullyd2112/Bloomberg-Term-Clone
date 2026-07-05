@@ -15,7 +15,7 @@ import SectionHeader from "@/components/ui/SectionHeader";
 
 export const revalidate = 60;
 
-const VALID_TYPES = ["stock", "crypto"] as const;
+const VALID_TYPES = ["stock", "crypto", "prediction"] as const;
 type AssetType = (typeof VALID_TYPES)[number];
 
 type PageProps = {
@@ -164,7 +164,10 @@ export default async function AssetPage({ params }: PageProps) {
   const type = params.type as AssetType;
   if (!VALID_TYPES.includes(type)) notFound();
 
-  const identifier = decodeURIComponent(params.identifier).toUpperCase();
+  // Prediction-market identifiers are Polymarket conditionId hex hashes —
+  // case-sensitive, unlike ticker symbols. Only uppercase for stock/crypto.
+  const rawIdentifier = decodeURIComponent(params.identifier);
+  const identifier = type === "prediction" ? rawIdentifier : rawIdentifier.toUpperCase();
 
   const user = await getUser();
   const tier = await getUserTier();
@@ -176,20 +179,36 @@ export default async function AssetPage({ params }: PageProps) {
 
   if (!price && signals.length === 0) notFound();
 
+  // Prediction markets: identifier is a Polymarket conditionId hex hash, not
+  // human-readable — show the market question instead wherever a title goes.
+  const predictionMeta = type === "prediction" ? (price?.metadata as Record<string, unknown> | null) : null;
+  const predictionTitle = predictionMeta?.title as string | undefined;
+  const headerTitle = type === "prediction" && predictionTitle ? predictionTitle : identifier;
+
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="space-y-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold font-mono text-white tracking-tight">{identifier}</h1>
+            <h1
+              className={
+                type === "prediction"
+                  ? "text-xl font-bold text-white tracking-tight leading-snug max-w-2xl"
+                  : "text-2xl font-bold font-mono text-white tracking-tight"
+              }
+            >
+              {headerTitle}
+            </h1>
             <span className="text-xs text-zinc-400 capitalize bg-white/[0.05] border border-white/[0.08] px-2 py-0.5 rounded-md">
               {type}
             </span>
             {accuracy && <AccuracyBadge accuracy={accuracy} />}
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            {price && <PriceHeader price={price} assetType={type} />}
+            {type === "prediction"
+              ? price && <PredictionPriceHeader price={price} />
+              : price && <PriceHeader price={price} assetType={type} />}
             {type === "stock" && earnings && (
               <EarningsBadge reportDate={earnings.report_date} reportTime={earnings.report_time} />
             )}
@@ -229,7 +248,7 @@ export default async function AssetPage({ params }: PageProps) {
             canScoreOnDemand ? (
               <OnDemandScore assetType={type} identifier={identifier} />
             ) : (
-              <div className="text-sm text-zinc-500 py-8 text-center">No signals yet for {identifier}.</div>
+              <div className="text-sm text-zinc-500 py-8 text-center">No signals yet for {headerTitle}.</div>
             )
           ) : (
             <SignalList signals={signals} />
@@ -256,6 +275,11 @@ export default async function AssetPage({ params }: PageProps) {
           {/* Fundamentals (crypto only) */}
           {type === "crypto" && price?.metadata && (
             <FundamentalsCard metadata={price.metadata as Record<string, unknown>} />
+          )}
+
+          {/* Prediction market stats (predictions only) */}
+          {type === "prediction" && predictionMeta && (
+            <PredictionStatsCard metadata={predictionMeta} volume={price?.volume ?? null} />
           )}
 
           {/* News */}
@@ -536,6 +560,77 @@ function FearGreedBadge({ metadata }: { metadata: Record<string, unknown> }) {
     >
       Fear &amp; Greed: {value} {classification}
     </span>
+  );
+}
+
+/* ---------- Prediction price header (predictions only) ---------- */
+function PredictionPriceHeader({
+  price: data,
+}: {
+  price: { price: number | null; metadata: Record<string, unknown> | null; captured_at: string };
+}) {
+  const metadata = data.metadata as Record<string, unknown> | null;
+  const yesPrice = metadata?.yes_price != null ? Number(metadata.yes_price) : data.price;
+  const noPrice = metadata?.no_price != null ? Number(metadata.no_price) : yesPrice != null ? 1 - yesPrice : null;
+
+  return (
+    <div className="flex items-baseline gap-3 flex-wrap">
+      {yesPrice != null && (
+        <span className="text-2xl font-bold font-mono tabular-nums text-emerald-400">
+          {(yesPrice * 100).toFixed(0)}<span className="text-sm font-semibold opacity-70">¢ YES</span>
+        </span>
+      )}
+      {noPrice != null && (
+        <span className="text-2xl font-bold font-mono tabular-nums text-red-400">
+          {(noPrice * 100).toFixed(0)}<span className="text-sm font-semibold opacity-70">¢ NO</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Prediction stats card (predictions only) ---------- */
+function PredictionStatsCard({
+  metadata,
+  volume,
+}: {
+  metadata: Record<string, unknown>;
+  volume: number | null;
+}) {
+  const yesPrice = metadata?.yes_price != null ? Number(metadata.yes_price) : null;
+  const noPrice = metadata?.no_price != null ? Number(metadata.no_price) : null;
+  const endDate = metadata?.end_date as string | undefined;
+  const category = metadata?.category as string | undefined;
+
+  if (yesPrice == null && noPrice == null && !endDate && !category && volume == null) return null;
+
+  function fmtEndDate(iso: string): string {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  }
+
+  function fmtVolume(n: number): string {
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
+    return `$${n.toLocaleString()}`;
+  }
+
+  return (
+    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
+      <SectionHeader>Market stats</SectionHeader>
+      <div className="space-y-2">
+        {yesPrice != null && (
+          <StatRow label="Yes" value={`${(yesPrice * 100).toFixed(0)}%`} highlight />
+        )}
+        {noPrice != null && (
+          <StatRow label="No" value={`${(noPrice * 100).toFixed(0)}%`} />
+        )}
+        {volume != null && <StatRow label="Volume" value={fmtVolume(Number(volume))} />}
+        {category && <StatRow label="Category" value={category} />}
+        {endDate && <StatRow label="Resolves" value={fmtEndDate(endDate)} />}
+      </div>
+    </div>
   );
 }
 

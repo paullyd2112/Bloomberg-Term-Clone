@@ -7,9 +7,10 @@ import SignalList from "./SignalList";
 import { type Signal } from "./SignalCard";
 
 const TABS = [
-  { id: "all",    label: "All" },
-  { id: "stock",  label: "Stocks" },
-  { id: "crypto", label: "Crypto" },
+  { id: "all",        label: "All" },
+  { id: "stock",      label: "Stocks" },
+  { id: "crypto",     label: "Crypto" },
+  { id: "prediction", label: "Predictions" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["id"];
@@ -37,7 +38,7 @@ export default function SignalFeed({ signals }: { signals: Signal[] }) {
 
   const typeFiltered = useMemo(() => {
     return activeTab === "all"
-      ? signals.filter((s) => s.asset_type !== "prediction")
+      ? signals
       : signals.filter((s) => s.asset_type === activeTab);
   }, [signals, activeTab]);
 
@@ -67,7 +68,7 @@ export default function SignalFeed({ signals }: { signals: Signal[] }) {
               {tab.label}
               <span className="ml-1.5 text-xs text-zinc-600 tabular-nums">
                 {tab.id === "all"
-                  ? signals.filter((s) => s.asset_type !== "prediction").length
+                  ? signals.length
                   : signals.filter((s) => s.asset_type === tab.id).length}
               </span>
             </button>
