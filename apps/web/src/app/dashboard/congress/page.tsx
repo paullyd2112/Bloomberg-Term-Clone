@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import { Landmark, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -49,7 +49,6 @@ export default function CongressPage() {
   const [trades, setTrades]       = useState<CongressTrade[]>([]);
   const [loading, setLoading]     = useState(true);
   const [filter, setFilter]       = useState<Filter>({ transaction: "all", search: "" });
-  const [, startTransition]       = useTransition();
 
   useEffect(() => {
     const supabase = createClient();
@@ -114,9 +113,7 @@ export default function CongressPage() {
             type="text"
             placeholder="Search ticker or name…"
             value={filter.search}
-            onChange={(e) =>
-              startTransition(() => setFilter((f) => ({ ...f, search: e.target.value })))
-            }
+            onChange={(e) => setFilter((f) => ({ ...f, search: e.target.value }))}
             className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg pl-8 pr-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/40 focus:bg-white/[0.05] transition-colors"
           />
         </div>
