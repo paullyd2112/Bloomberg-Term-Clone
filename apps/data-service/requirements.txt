@@ -55,3 +55,4 @@ websocket-client==1.8.0
 python-dotenv==1.0.1
 pydantic>=2.8.0,<3.0.0
 cryptography==42.0.8
+pyyaml==6.0.1

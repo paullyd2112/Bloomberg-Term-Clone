@@ -21,6 +21,7 @@ from loguru import logger
 from dotenv import load_dotenv
 
 from supabase_client import supabase
+from ingestion.congress_members import get_party
 
 load_dotenv()
 
@@ -271,7 +272,7 @@ def _fetch_senate_efd() -> tuple[list[dict], str]:
 
                     rows.append({
                         "politician":   politician,
-                        "party":        "",
+                        "party":        get_party(politician),
                         "ticker":       ticker,
                         "transaction":  txn,
                         "amount_range": tx["tx_amount"].strip(),
@@ -363,7 +364,7 @@ def _fetch_senate_watcher() -> list[dict]:
 
         rows.append({
             "politician":   politician,
-            "party":        "",
+            "party":        get_party(politician),
             "ticker":       ticker,
             "transaction":  txn,
             "amount_range": (r.get("amount") or "").strip(),
@@ -510,9 +511,12 @@ def _parse_fmp(records: list[dict], chamber: str) -> list[dict]:
         except (ValueError, TypeError):
             report_date = None
 
+        politician = (r.get(name_key) or r.get("officialFullName") or "").strip()
+        # Finnhub covers House + Senate; get_party() only has current senators,
+        # so House names fall through to "" harmlessly.
         rows.append({
-            "politician":   (r.get(name_key) or r.get("officialFullName") or "").strip(),
-            "party":        "",
+            "politician":   politician,
+            "party":        get_party(politician),
             "ticker":       ticker,
             "transaction":  txn,
             "amount_range": (r.get("amount") or "").strip(),
