@@ -5,6 +5,7 @@ Produces two versions of the same email:
   - Paid (Pro/Elite): same editorial + personalized signal data layered on top
 """
 
+import json
 import os
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
@@ -13,7 +14,7 @@ import anthropic
 import instructor
 import sentry_sdk
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from supabase_client import supabase
 
@@ -43,6 +44,17 @@ class NewsletterContent(BaseModel):
     stories:       list[NewsletterStory] = Field(..., min_length=5, max_length=8)
     closing_line:  str = Field(..., min_length=30, max_length=300)
     market_vibe:   Literal["bullish", "bearish", "mixed", "quiet"]
+
+    @field_validator("stories", mode="before")
+    @classmethod
+    def _parse_stringified_stories(cls, v):
+        """Claude occasionally returns this field as a JSON-encoded string
+        instead of a native array (observed live 2026-07-06, killed that
+        day's newsletter with no automatic recovery). Parse it instead of
+        hard-failing validation."""
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
 
 
 NEWSLETTER_SYSTEM_PROMPT = """You are the voice of Plebs.finance. You write a daily finance newsletter for retail traders.
@@ -396,6 +408,7 @@ def generate_newsletter() -> dict | None:
             ],
             system=[{"type": "text", "text": NEWSLETTER_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
             response_model=NewsletterContent,
+            max_retries=2,
         )
     except Exception as e:
         logger.error("newsletter: generation failed — {}", e)
