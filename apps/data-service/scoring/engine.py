@@ -1044,21 +1044,34 @@ PREDICTION_MAX_PER_EVENT   = 2    # cap per real-world event/topic
 def score_prediction_markets() -> str:
     from scoring.haiku_prescreen import prescreen_prediction, should_escalate_to_sonnet
 
+    # raw_prices is a time-series table -- every market gets a new row each
+    # ~30min ingest cycle, so it holds many historical snapshots per identifier.
+    # Sorting the whole table by volume and taking the top N (as this used to
+    # do) returns raw snapshot rows, not distinct markets: a handful of
+    # extremely high-volume markets (e.g. one sports event's country-to-win
+    # sub-markets running $100M+ each) fill every slot with their own repeated
+    # history, crowding out literally every other market on the platform
+    # before the event-diversity cap below ever gets a chance to run. Fetch a
+    # recent window ordered by recency first and dedupe to one (latest) row
+    # per identifier -- that gives a true cross-section of currently-tracked
+    # markets -- then sort that by volume before diversifying by event.
     try:
         result = (
             supabase.table("raw_prices")
-            .select("identifier, price, volume, metadata")
+            .select("identifier, price, volume, metadata, captured_at")
             .eq("asset_type", "prediction")
-            .order("volume", desc=True)
-            .limit(PREDICTION_CANDIDATE_POOL)
+            .gte("captured_at", (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat())
+            .order("captured_at", desc=True)
+            .limit(5000)
             .execute()
         )
-        seen, pool = set(), []
+        seen, latest_per_market = set(), []
         for r in result.data:
             ident = r["identifier"]
             if ident not in seen:
                 seen.add(ident)
-                pool.append(r)
+                latest_per_market.append(r)
+        pool = sorted(latest_per_market, key=lambda r: r.get("volume") or 0, reverse=True)[:PREDICTION_CANDIDATE_POOL]
     except Exception as e:
         logger.error("score_prediction_markets: failed to fetch identifiers — {}", e)
         return "failed to fetch identifiers"
