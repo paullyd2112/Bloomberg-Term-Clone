@@ -960,7 +960,8 @@ def score_crypto() -> str:
                 rows.append(r)
     except Exception as e:
         logger.error("score_crypto: failed to fetch identifiers — {}", e)
-        return "failed to fetch identifiers"
+        sentry_sdk.capture_exception(e)
+        return f"failed to fetch identifiers — {type(e).__name__}: {e}"
 
     fg = _get_fear_greed()
     benchmarks   = _get_market_benchmark()
