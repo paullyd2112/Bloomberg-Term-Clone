@@ -18,12 +18,6 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen bg-background text-white overflow-hidden">
-      {/* Ambient background glow */}
-      <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute -top-40 left-1/4 w-[600px] h-[400px] bg-emerald-500/[0.04] blur-[150px] rounded-full" />
-        <div className="absolute top-1/2 right-0 w-[400px] h-[400px] bg-emerald-500/[0.03] blur-[120px] rounded-full" />
-      </div>
-
       {/* Sidebar — desktop only */}
       <Sidebar tier={tier} billingInterval={profile?.billing_interval} />
 
