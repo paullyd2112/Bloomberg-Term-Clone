@@ -6,6 +6,13 @@
       "env": {
         "RAILWAY_API_TOKEN": "${RAILWAY_API_TOKEN}"
       }
+    },
+    "dreamlit": {
+      "type": "http",
+      "url": "https://mcp.dreamlit.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer ${DREAMLIT_API_TOKEN}"
+      }
     }
   }
 }
