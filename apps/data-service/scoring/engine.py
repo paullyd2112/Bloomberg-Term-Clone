@@ -938,15 +938,22 @@ def score_crypto() -> str:
     from scoring.haiku_prescreen import prescreen_crypto, should_escalate_to_sonnet
 
     try:
-        # Filter to indicator-bearing rows: the live stream flushes thin
-        # {source, updated_at} rows every 60s, so without this filter the
-        # newest row per streamed coin has no rsi/macd — blinding the
-        # prescreen and the BTC regime computation below.
+        # raw_prices is a time-series table -- every coin gets a new row each
+        # ~60s stream flush, so unbounded it holds millions of rows. Filtering
+        # by a JSONB path (metadata->rsi_14 is not null) with no time bound
+        # forces a full-table scan that hits Postgres's statement timeout
+        # under service_role (57014, observed live 2026-07-04 through
+        # 2026-07-06 -- crypto signal generation silently produced zero
+        # output for two and a half days). ingest_crypto runs every 4h, so a
+        # 5h window comfortably covers the freshest indicator-bearing row per
+        # coin with buffer for a delayed run, while bounding the scan the
+        # same way the prediction-market fetch does.
         result = (
             supabase.table("raw_prices")
             .select("identifier, price, change_24h, metadata")
             .eq("asset_type", "crypto")
             .neq("identifier", "MARKET_SENTIMENT")
+            .gte("captured_at", (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat())
             .filter("metadata->rsi_14", "not.is", "null")
             .order("captured_at", desc=True)
             .limit(200)
