@@ -158,23 +158,53 @@ def _confidence_bar_color(confidence: int) -> str:
     return "#71717a"
 
 
-def _signals_html(signals: list[dict]) -> str:
+def _resolve_prediction_titles(signals: list[dict]) -> dict[str, str]:
+    """Prediction-market identifiers are Polymarket conditionId hex hashes,
+    not readable names (observed live 2026-07-06 in the newsletter's "Your
+    signals today" table) — look up raw_prices.metadata.title so the email
+    can show the actual market question instead."""
+    ids = list({s["identifier"] for s in signals if s.get("asset_type") == "prediction" and s.get("identifier")})
+    if not ids:
+        return {}
+    try:
+        rows = (
+            supabase.table("raw_prices")
+            .select("identifier, metadata")
+            .eq("asset_type", "prediction")
+            .in_("identifier", ids)
+            .execute()
+        )
+        titles: dict[str, str] = {}
+        for row in rows.data or []:
+            title = (row.get("metadata") or {}).get("title")
+            if title and row["identifier"] not in titles:
+                titles[row["identifier"]] = title
+        return titles
+    except Exception as e:
+        logger.warning("newsletter_emailer: prediction title lookup failed — {}", e)
+        return {}
+
+
+def _signals_html(signals: list[dict], prediction_titles: dict[str, str] | None = None) -> str:
     if not signals:
         return ""
+    prediction_titles = prediction_titles or {}
     rows = ""
     for s in signals:
         direction  = html.escape(s.get("direction", ""))
-        identifier = html.escape(s.get("identifier", ""))
+        identifier = s.get("identifier", "")
         asset_type = html.escape(s.get("asset_type", "stock"))
         confidence = s.get("confidence", 0)
         horizon    = html.escape(s.get("time_horizon", ""))
         dir_color  = "#22c55e" if direction in ("BUY", "YES") else "#ef4444"
         bar_color  = _confidence_bar_color(confidence)
         asset_url  = f"{APP_URL}/dashboard/asset/{asset_type}/{identifier}"
+        display_name = prediction_titles.get(identifier, identifier) if s.get("asset_type") == "prediction" else identifier
+        display_name = html.escape(display_name)
         rows += f"""
         <tr>
           <td style="padding:9px 12px;border-bottom:1px solid #1e1e22;">
-            <a href="{asset_url}" style="font-family:{MONO};font-weight:700;color:#fff;text-decoration:none;">{identifier}</a>
+            <a href="{asset_url}" style="font-family:{MONO};font-weight:700;color:#fff;text-decoration:none;">{display_name}</a>
             &nbsp;
             <span style="background:{dir_color}22;color:{dir_color};border:1px solid {dir_color}55;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;">{direction}</span>
           </td>
@@ -212,7 +242,7 @@ def _options_html(options: list[dict]) -> str:
     return f'<div style="margin:16px 0;">{_card(inner)}</div>'
 
 
-def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
+def _render_html(briefing: dict, tier: str, user_id: str | None, prediction_titles: dict[str, str] | None = None) -> str:
     content      = briefing.get("content_json") or {}
     subject_line = html.escape(briefing.get("headline", ""))
     opening      = _md_to_html(content.get("opening_line", ""))
@@ -227,7 +257,7 @@ def _render_html(briefing: dict, tier: str, user_id: str | None) -> str:
     if is_paid:
         top_signals = _get_user_signals(user_id or "", content.get("top_signals", []))
         options     = content.get("options_flow", [])
-        paid_block  = _signals_html(top_signals) + _options_html(options)
+        paid_block  = _signals_html(top_signals, prediction_titles) + _options_html(options)
 
     free_cta = "" if is_paid else f"""
     <div style="margin:28px 0;">
@@ -414,6 +444,7 @@ def send_newsletter() -> str:
     already_sent = _already_sent_today()
     subject   = briefing.get("headline", f"Plebs — {date.today().strftime('%b %-d')}")
     text_body = _render_text(briefing)
+    prediction_titles = _resolve_prediction_titles((briefing.get("content_json") or {}).get("top_signals", []))
     sent, skipped, failed = 0, 0, 0
     failed_emails: list[str] = []
     last_error: str = ""
@@ -431,7 +462,7 @@ def send_newsletter() -> str:
             continue
 
         try:
-            html_body = _render_html(briefing, tier, user_id)
+            html_body = _render_html(briefing, tier, user_id, prediction_titles)
             _send_with_retry({
                 "from":    FROM_ADDRESS,
                 "to":      [email],

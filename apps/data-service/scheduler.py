@@ -785,7 +785,7 @@ def send_newsletter_now():
         return jsonify({"error": f"Invalid tier '{tier}' — must be free, pro, or elite"}), 400
 
     if single_email:
-        from briefing.newsletter_emailer import _get_todays_newsletter, _render_html, _render_text
+        from briefing.newsletter_emailer import _get_todays_newsletter, _render_html, _render_text, _resolve_prediction_titles
         import resend as _resend
         _resend.api_key = os.environ.get("RESEND_API_KEY", "") or os.environ.get("RESEND_API_KEY_", "")
 
@@ -795,7 +795,8 @@ def send_newsletter_now():
 
         from datetime import date as _date
         subject = briefing.get("headline", f"Plebs — {_date.today().strftime('%b %-d')}")
-        html_body = _render_html(briefing, tier, None)
+        prediction_titles = _resolve_prediction_titles((briefing.get("content_json") or {}).get("top_signals", []))
+        html_body = _render_html(briefing, tier, None, prediction_titles)
         text_body = _render_text(briefing)
 
         try:

@@ -22,6 +22,9 @@ type ResolvedSignal = {
   outcome: "WIN" | "LOSS" | "NEUTRAL";
   created_at: string;
   is_backtest: boolean;
+  // Prediction-market signals only: raw_prices.metadata.title, joined in
+  // since `identifier` is a Polymarket conditionId hex hash, not readable.
+  market_title?: string | null;
 };
 
 function computeReturn(sig: ResolvedSignal): number | null {
@@ -143,6 +146,32 @@ export default async function HistoryPage({
   if (error) console.error("History query error:", error.message);
 
   const signals = (data ?? []) as ResolvedSignal[];
+
+  // Prediction-market identifiers are Polymarket conditionId hashes, not
+  // readable names — join in raw_prices.metadata.title so the table can
+  // show the actual market question instead of a hex string.
+  const predictionIds = Array.from(
+    new Set(signals.filter((s) => s.asset_type === "prediction").map((s) => s.identifier)),
+  );
+  if (predictionIds.length > 0) {
+    const { data: priceRows } = await supabase
+      .from("raw_prices")
+      .select("identifier, metadata")
+      .eq("asset_type", "prediction")
+      .in("identifier", predictionIds);
+    const titleByIdentifier = new Map<string, string>();
+    for (const row of priceRows ?? []) {
+      const title = (row.metadata as Record<string, unknown> | null)?.title;
+      if (typeof title === "string" && title && !titleByIdentifier.has(row.identifier)) {
+        titleByIdentifier.set(row.identifier, title);
+      }
+    }
+    for (const s of signals) {
+      if (s.asset_type === "prediction") {
+        s.market_title = titleByIdentifier.get(s.identifier) ?? null;
+      }
+    }
+  }
 
   // Only include signals with valid entry prices in aggregate metrics
   const pricedSignals = signals.filter((s) => s.price_at_signal != null && s.price_at_signal > 0);
@@ -393,9 +422,14 @@ export default async function HistoryPage({
                       <td className="py-2.5 px-3">
                         <Link
                           href={`/dashboard/asset/${sig.asset_type}/${encodeURIComponent(sig.identifier)}`}
-                          className="font-mono font-semibold text-white hover:text-emerald-400 transition-colors"
+                          title={sig.asset_type === "prediction" ? sig.market_title ?? undefined : undefined}
+                          className={
+                            sig.asset_type === "prediction"
+                              ? "font-semibold text-white hover:text-emerald-400 transition-colors line-clamp-2 max-w-xs"
+                              : "font-mono font-semibold text-white hover:text-emerald-400 transition-colors"
+                          }
                         >
-                          {sig.identifier}
+                          {sig.asset_type === "prediction" ? sig.market_title ?? sig.identifier : sig.identifier}
                         </Link>
                       </td>
                       <td className="py-2.5 px-3 text-zinc-500 text-xs capitalize">

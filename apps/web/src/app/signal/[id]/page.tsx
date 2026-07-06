@@ -18,6 +18,22 @@ type Signal = {
   outcome:         "WIN" | "LOSS" | "NEUTRAL" | "PENDING";
 };
 
+// Prediction-market identifiers are Polymarket conditionId hex hashes, not
+// readable names — look up raw_prices.metadata.title so shared links and
+// the page title show the actual market question instead of a hex string.
+async function fetchPredictionTitle(identifier: string): Promise<string | null> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("raw_prices")
+    .select("metadata")
+    .eq("asset_type", "prediction")
+    .eq("identifier", identifier)
+    .limit(1)
+    .maybeSingle();
+  const title = (data?.metadata as Record<string, unknown> | null)?.title;
+  return typeof title === "string" ? title : null;
+}
+
 const DIRECTION_STYLE: Record<string, string> = {
   BUY:  "bg-green-500/20 text-green-400 border-green-700",
   SELL: "bg-red-500/20 text-red-400 border-red-700",
@@ -46,13 +62,16 @@ export async function generateMetadata({
   const supabase = createClient();
   const { data } = await supabase
     .from("signals")
-    .select("direction, identifier, confidence, reasoning")
+    .select("direction, identifier, asset_type, confidence, reasoning")
     .eq("id", params.id)
     .single();
 
   if (!data) return { title: "Signal — Plebs.Finance" };
 
-  const title = `${data.direction} ${data.identifier} (${data.confidence}%) — Plebs.Finance`;
+  const displayName = data.asset_type === "prediction"
+    ? (await fetchPredictionTitle(data.identifier)) ?? data.identifier
+    : data.identifier;
+  const title = `${data.direction} ${displayName} (${data.confidence}%) — Plebs.Finance`;
   const desc  = (data.reasoning as string).slice(0, 160);
 
   return {
@@ -90,6 +109,9 @@ export default async function SharedSignalPage({
   const dirStyle  = DIRECTION_STYLE[s.direction] ?? DIRECTION_STYLE.HOLD;
   const outcome   = OUTCOME_STYLE[s.outcome];
   const timeAgo   = formatDistanceToNow(new Date(s.created_at), { addSuffix: true });
+  const displayName = s.asset_type === "prediction"
+    ? (await fetchPredictionTitle(s.identifier)) ?? s.identifier
+    : s.identifier;
 
   return (
     <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center px-4 py-16">
@@ -109,8 +131,15 @@ export default async function SharedSignalPage({
               {s.direction}
             </span>
             <div className="min-w-0">
-              <div className="font-mono font-bold text-white text-lg truncate">
-                {s.identifier}
+              <div
+                className={
+                  s.asset_type === "prediction"
+                    ? "font-bold text-white text-base leading-snug"
+                    : "font-mono font-bold text-white text-lg truncate"
+                }
+                title={s.asset_type === "prediction" ? displayName : undefined}
+              >
+                {displayName}
               </div>
               <div className="text-xs text-zinc-500 capitalize">
                 {s.asset_type} · {timeAgo}
