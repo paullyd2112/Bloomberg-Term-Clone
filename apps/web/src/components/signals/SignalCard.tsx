@@ -126,7 +126,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
         >
           {displayName}
         </Link>
-        <span className="hidden flex-shrink-0 text-[10px] uppercase tracking-wider text-zinc-600 lg:inline">
+        <span className="relative z-10 hidden flex-shrink-0 text-[10px] uppercase tracking-wider text-white lg:inline">
           {typeLabel}
         </span>
       </div>
@@ -143,17 +143,17 @@ export default function SignalCard({ signal }: { signal: Signal }) {
       </div>
 
       {/* Horizon */}
-      <span className="relative z-10 hidden w-14 flex-shrink-0 font-mono text-[10px] uppercase tracking-wider text-zinc-500 md:block">
+      <span className="relative z-10 hidden w-14 flex-shrink-0 font-mono text-[10px] uppercase tracking-wider text-white md:block">
         {horizon}
       </span>
 
       {/* Price */}
-      <span className="relative z-10 hidden w-20 flex-shrink-0 text-right font-mono text-xs tabular-nums text-zinc-400 sm:block">
+      <span className="relative z-10 hidden w-20 flex-shrink-0 text-right font-mono text-xs tabular-nums text-white sm:block">
         {priceStr}
       </span>
 
-      {/* Reasoning — recedes, click-through to detail via overlay */}
-      <p className="min-w-0 flex-1 truncate text-[13px] leading-tight text-zinc-400">
+      {/* Reasoning — click-through to detail via overlay */}
+      <p className="relative z-10 min-w-0 flex-1 truncate text-[13px] leading-tight text-white">
         {signal.reasoning}
       </p>
 
@@ -169,7 +169,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
       </span>
 
       {/* Timestamp */}
-      <span className="relative z-10 hidden w-10 flex-shrink-0 text-right font-mono text-[10px] tabular-nums text-zinc-600 lg:block">
+      <span className="relative z-10 hidden w-10 flex-shrink-0 text-right font-mono text-[10px] tabular-nums text-white lg:block">
         {timeAgo(signal.created_at)}
       </span>
 
