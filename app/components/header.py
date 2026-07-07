@@ -45,6 +45,8 @@ def top_header() -> rx.Component:
             rx.foreach(
                 [
                     "MARKETS",
+                    "CRYPTO",
+                    "PREDICTIONS",
                     "NEWS",
                     "EQUITIES",
                     "FX",

@@ -18,6 +18,7 @@ from app.components.trader_panels import (
     portfolio_risk_panel,
     lookup_dialog,
 )
+from app.components.spotlight import crypto_spotlight, predictions_spotlight
 
 
 def stats_strip() -> rx.Component:
@@ -135,31 +136,41 @@ def workspace() -> rx.Component:
         lookup_dialog(),
         rx.el.div(
             rx.el.div(
-                chart_panel(),
-                rx.el.div(
-                    rx.el.div(watchlist_panel(), class_name="lg:col-span-2"),
-                    order_ticket_panel(),
-                    class_name="grid grid-cols-1 lg:grid-cols-3 gap-2 mt-2",
-                ),
-                rx.el.div(
-                    prediction_markets_panel(),
-                    news_panel(),
-                    class_name="grid grid-cols-1 lg:grid-cols-2 gap-2 mt-2",
-                ),
-                class_name="lg:col-span-3 flex flex-col gap-2",
+                crypto_spotlight(),
+                predictions_spotlight(),
+                class_name="grid grid-cols-1 xl:grid-cols-2 gap-2 p-2",
             ),
             rx.el.div(
-                indices_panel(),
-                crypto_movers_panel(),
-                alerts_panel(),
-                portfolio_risk_panel(),
-                fx_panel(),
-                commodities_panel(),
-                command_reference(),
-                history_panel(),
-                class_name="lg:col-span-1 flex flex-col gap-2",
+                rx.el.div(
+                    chart_panel(),
+                    rx.el.div(
+                        rx.el.div(
+                            watchlist_panel(), class_name="lg:col-span-2"
+                        ),
+                        order_ticket_panel(),
+                        class_name="grid grid-cols-1 lg:grid-cols-3 gap-2 mt-2",
+                    ),
+                    rx.el.div(
+                        prediction_markets_panel(),
+                        news_panel(),
+                        class_name="grid grid-cols-1 lg:grid-cols-2 gap-2 mt-2",
+                    ),
+                    class_name="lg:col-span-3 flex flex-col gap-2",
+                ),
+                rx.el.div(
+                    indices_panel(),
+                    crypto_movers_panel(),
+                    alerts_panel(),
+                    portfolio_risk_panel(),
+                    fx_panel(),
+                    commodities_panel(),
+                    command_reference(),
+                    history_panel(),
+                    class_name="lg:col-span-1 flex flex-col gap-2",
+                ),
+                class_name="grid grid-cols-1 lg:grid-cols-4 gap-2 p-2",
             ),
-            class_name="grid grid-cols-1 lg:grid-cols-4 gap-2 p-2 flex-1 overflow-auto",
+            class_name="flex-1 overflow-auto",
         ),
         rx.moment(
             interval=2000,
