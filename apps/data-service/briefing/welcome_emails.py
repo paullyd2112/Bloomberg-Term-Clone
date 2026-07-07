@@ -207,14 +207,14 @@ def _email_day6(name: str, tier: str) -> tuple[str, str, str]:
           <div style="color:#fff;font-weight:600;font-size:15px;">Pro</div>
           <div style="color:#71717a;font-size:13px;">Signals, options flow, briefing, congressional trades</div>
         </div>
-        <div style="color:#22c55e;font-weight:800;font-size:18px;">$79<span style="font-size:12px;font-weight:400;color:#52525b;">/mo</span></div>
+        <div style="color:#22c55e;font-weight:800;font-size:18px;">$40<span style="font-size:12px;font-weight:400;color:#52525b;">/mo</span></div>
       </div>
       <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">
         <div style="flex:1;">
           <div style="color:#fff;font-weight:600;font-size:15px;">Lifetime Pro</div>
           <div style="color:#71717a;font-size:13px;">Pay once, access forever</div>
         </div>
-        <div style="color:#22c55e;font-weight:800;font-size:18px;">$399<span style="font-size:12px;font-weight:400;color:#52525b;"> once</span></div>
+        <div style="color:#22c55e;font-weight:800;font-size:18px;">$299<span style="font-size:12px;font-weight:400;color:#52525b;"> once</span></div>
       </div>
       <a href="{APP_URL}/dashboard/upgrade" style="display:block;text-align:center;background:#22c55e;color:#000;font-weight:700;font-size:14px;padding:12px;border-radius:8px;text-decoration:none;">
         Upgrade now →
@@ -234,8 +234,8 @@ def _email_day6(name: str, tier: str) -> tuple[str, str, str]:
 
 {"You're already subscribed — nothing changes." if is_pro else f"Upgrade to keep access: {APP_URL}/dashboard/upgrade"}
 
-Pro: $79/mo
-Lifetime Pro: $399 once
+Pro: $40/mo
+Lifetime Pro: $299 once
 
 Questions? support@plebs.finance
 
