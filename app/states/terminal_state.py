@@ -76,11 +76,21 @@ class RiskMetric(TypedDict):
 
 
 class TerminalState(rx.State):
+    view_mode: str = "retail"
     command_input: str = ""
     command_history: list[str] = ["HELP", "WEI", "TOP", "SPX <INDEX> GP"]
     active_symbol: str = "AAPL"
     active_panel: str = "MARKETS"
     current_time: str = "07:42:18 EST"
+
+    @rx.event
+    def set_view_mode(self, mode: str):
+        self.view_mode = mode
+
+    @rx.event
+    def toggle_view_mode(self):
+        self.view_mode = "terminal" if self.view_mode == "retail" else "retail"
+
     watchlist_filter: str = "ALL"
     trade_side: str = "BUY"
     trade_qty: str = "100"
@@ -91,6 +101,44 @@ class TerminalState(rx.State):
     feedback_message: str = ""
     feedback_tone: str = "info"
     loading: bool = False
+
+    # Guided trade flow
+    trade_dialog_open: bool = False
+    trade_step: int = 1  # 1 = setup, 2 = review, 3 = confirmed
+
+    # Guided alert flow
+    alert_dialog_open: bool = False
+    alert_symbol_ctx: str = "AAPL"
+    alert_condition: str = "above"
+    alert_target_str: str = ""
+
+    # Guided prediction bet flow
+    pred_dialog_open: bool = False
+    pred_market_idx: int = 0
+    pred_side: str = "YES"
+    pred_shares: str = "10"
+    pred_step: int = 1  # 1 = setup, 2 = confirmed
+
+    # Retail activity log for visible feedback trail
+    activity_log: list[dict[str, str]] = []
+
+    # Portfolio history for retail sparkline (seeded, deterministic)
+    portfolio_history: list[dict[str, float | str]] = [
+        {"t": "Mon", "value": 4198420.0},
+        {"t": "Tue", "value": 4215100.0},
+        {"t": "Wed", "value": 4187830.0},
+        {"t": "Thu", "value": 4232970.0},
+        {"t": "Fri", "value": 4251340.0},
+        {"t": "Sat", "value": 4269441.0},
+        {"t": "Sun", "value": 4287914.32},
+    ]
+
+    # Retail hero tab: overview | movers | learn
+    retail_tab: str = "overview"
+
+    @rx.event
+    def set_retail_tab(self, tab: str):
+        self.retail_tab = tab
 
     tickers: list[Ticker] = [
         {
@@ -775,6 +823,243 @@ class TerminalState(rx.State):
         self.alerts = [a for a in self.alerts if a["id"] != alert_id]
         self.feedback_message = "ALERT REMOVED"
         self.feedback_tone = "info"
+        self._log_activity("ALERT", f"Removed alert #{alert_id}", "info")
+
+    def _log_activity(self, kind: str, message: str, tone: str):
+        entry = {
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "kind": kind,
+            "message": message,
+            "tone": tone,
+        }
+        self.activity_log = [entry] + self.activity_log[:19]
+
+    # ----- Guided Trade Flow -----
+    @rx.event
+    def open_trade_dialog(self, symbol: str, side: str):
+        self.active_symbol = symbol
+        self.trade_side = side
+        self.trade_qty = "10"
+        self.trade_order_type = "MARKET"
+        self.trade_limit = ""
+        self.trade_step = 1
+        self.trade_dialog_open = True
+
+    @rx.event
+    def close_trade_dialog(self):
+        self.trade_dialog_open = False
+        self.trade_step = 1
+
+    @rx.event
+    def trade_next_step(self):
+        try:
+            qty = float(self.trade_qty or "0")
+        except ValueError:
+            qty = 0
+        if qty <= 0:
+            return rx.toast(
+                title="Enter a quantity",
+                description="Please enter a positive number of shares to continue.",
+                position="bottom-right",
+                duration=3500,
+            )
+        if self.trade_order_type != "MARKET":
+            try:
+                lim = float(self.trade_limit or "0")
+            except ValueError:
+                lim = 0
+            if lim <= 0:
+                return rx.toast(
+                    title="Enter a limit price",
+                    description="A limit or stop price is required for this order type.",
+                    position="bottom-right",
+                    duration=3500,
+                )
+        self.trade_step = 2
+
+    @rx.event
+    def trade_back_step(self):
+        self.trade_step = 1
+
+    @rx.event
+    def confirm_trade(self):
+        try:
+            qty = float(self.trade_qty or "0")
+        except ValueError:
+            qty = 0
+        if qty <= 0:
+            return rx.toast(title="Invalid quantity", position="bottom-right")
+        sym = self.active_symbol
+        px = self.selected_ticker["price"]
+        notional = qty * px
+        verb = "Bought" if self.trade_side == "BUY" else "Sold"
+        message = f"{verb} {qty:g} {sym} · ${notional:,.2f}"
+        self.trade_step = 3
+        self.feedback_message = f"✓ {message}"
+        self.feedback_tone = "ok"
+        self._log_activity(
+            "TRADE",
+            f"{self.trade_side} {qty:g} {sym} @ {self.trade_order_type} · ${notional:,.2f}",
+            "ok" if self.trade_side == "BUY" else "warn",
+        )
+        return rx.toast(
+            title=f"{verb} {sym}",
+            description=f"{qty:g} shares · ${notional:,.2f}. Position is now open.",
+            position="bottom-right",
+            duration=4500,
+            close_button=True,
+        )
+
+    # ----- Guided Alert Flow -----
+    @rx.event
+    def open_alert_dialog(self, symbol: str):
+        self.alert_symbol_ctx = symbol
+        self.alert_condition = "above"
+        # Prefill target with current price
+        for t in self.tickers:
+            if t["symbol"] == symbol:
+                self.alert_target_str = f"{t['price']:.2f}"
+                break
+        self.alert_dialog_open = True
+
+    @rx.event
+    def close_alert_dialog(self):
+        self.alert_dialog_open = False
+
+    @rx.event
+    def set_alert_condition(self, c: str):
+        self.alert_condition = c
+
+    @rx.event
+    def set_alert_target(self, v: str):
+        self.alert_target_str = v
+
+    @rx.event
+    def create_alert(self):
+        try:
+            target = float(self.alert_target_str or "0")
+        except ValueError:
+            target = 0
+        if target <= 0:
+            return rx.toast(
+                title="Enter a target price",
+                description="Please enter a positive price to watch.",
+                position="bottom-right",
+                duration=3500,
+            )
+        next_id = max([a["id"] for a in self.alerts], default=0) + 1
+        cond = "PRICE >" if self.alert_condition == "above" else "PRICE <"
+        new_alert: Alert = {
+            "id": next_id,
+            "symbol": self.alert_symbol_ctx,
+            "condition": cond,
+            "target": target,
+            "status": "ARMED",
+            "created": datetime.now().strftime("%H:%M"),
+        }
+        self.alerts = [new_alert] + self.alerts
+        self.alert_dialog_open = False
+        self.feedback_message = (
+            f"✓ Alert set: {self.alert_symbol_ctx} {cond} {target:.2f}"
+        )
+        self.feedback_tone = "ok"
+        word = "above" if self.alert_condition == "above" else "below"
+        self._log_activity(
+            "ALERT",
+            f"Watching {self.alert_symbol_ctx} {word} ${target:,.2f}",
+            "info",
+        )
+        return rx.toast(
+            title=f"Alert armed for {self.alert_symbol_ctx}",
+            description=f"We'll notify you when the price goes {word} ${target:,.2f}.",
+            position="bottom-right",
+            duration=4500,
+            close_button=True,
+        )
+
+    # ----- Guided Prediction Flow -----
+    @rx.event
+    def open_pred_dialog(self, idx: int, side: str):
+        self.pred_market_idx = idx
+        self.pred_side = side
+        self.pred_shares = "10"
+        self.pred_step = 1
+        self.pred_dialog_open = True
+
+    @rx.event
+    def close_pred_dialog(self):
+        self.pred_dialog_open = False
+        self.pred_step = 1
+
+    @rx.event
+    def set_pred_side(self, side: str):
+        self.pred_side = side
+
+    @rx.event
+    def set_pred_shares(self, v: str):
+        self.pred_shares = v
+
+    @rx.event
+    def confirm_pred(self):
+        try:
+            shares = float(self.pred_shares or "0")
+        except ValueError:
+            shares = 0
+        if shares <= 0:
+            return rx.toast(
+                title="Enter a share count",
+                description="Choose how many YES/NO shares to buy.",
+                position="bottom-right",
+                duration=3500,
+            )
+        market = self.prediction_markets[self.pred_market_idx]
+        price = (
+            market["yes_price"]
+            if self.pred_side == "YES"
+            else market["no_price"]
+        )
+        cost = shares * price
+        self.pred_step = 2
+        self.feedback_message = (
+            f"✓ Bought {shares:g} {self.pred_side} shares · ${cost:,.2f}"
+        )
+        self.feedback_tone = "ok"
+        self._log_activity(
+            "PREDICT",
+            f"{self.pred_side} × {shares:g} · {market['question'][:40]}",
+            "ok" if self.pred_side == "YES" else "warn",
+        )
+        return rx.toast(
+            title=f"{self.pred_side} position opened",
+            description=f"{shares:g} shares @ {price * 100:.0f}¢ · ${cost:,.2f}. Resolves {market['resolves']}.",
+            position="bottom-right",
+            duration=5000,
+            close_button=True,
+        )
+
+    @rx.var
+    def pred_selected(self) -> PredictionMarket:
+        if 0 <= self.pred_market_idx < len(self.prediction_markets):
+            return self.prediction_markets[self.pred_market_idx]
+        return self.prediction_markets[0]
+
+    @rx.var
+    def pred_cost(self) -> float:
+        try:
+            shares = float(self.pred_shares or "0")
+        except ValueError:
+            shares = 0
+        m = self.pred_selected
+        price = m["yes_price"] if self.pred_side == "YES" else m["no_price"]
+        return round(shares * price, 2)
+
+    @rx.var
+    def pred_payout(self) -> float:
+        try:
+            shares = float(self.pred_shares or "0")
+        except ValueError:
+            shares = 0
+        return round(shares * 1.0, 2)
 
     @rx.event
     def tick(self):
@@ -820,7 +1105,21 @@ class TerminalState(rx.State):
     def crypto_movers(self) -> list[Ticker]:
         cryptos = [t for t in self.tickers if t["asset_class"] == "CRYPTO"]
         cryptos.sort(key=lambda t: abs(t["change_pct"]), reverse=True)
-        return cryptos
+        return cryptos[:6]
+
+    @rx.var
+    def stock_highlights(self) -> list[Ticker]:
+        stocks = [
+            t for t in self.tickers if t["asset_class"] in ("STOCK", "ETF")
+        ]
+        return stocks[:8]
+
+    @rx.var
+    def top_movers(self) -> list[Ticker]:
+        movers = sorted(
+            self.tickers, key=lambda t: abs(t["change_pct"]), reverse=True
+        )
+        return movers[:6]
 
     @rx.var
     def lookup_results(self) -> list[Ticker]:
@@ -851,6 +1150,28 @@ class TerminalState(rx.State):
         except ValueError:
             qty = 0
         return round(qty * self.selected_ticker["price"], 2)
+
+    @rx.var
+    def selected_mini_chart(self) -> list[dict[str, float | str]]:
+        random.seed(hash(self.active_symbol) % 9973)
+        base = self.selected_ticker["price"]
+        pts: list[dict[str, float | str]] = []
+        val = base * 0.97
+        for i in range(24):
+            val = val + random.uniform(-base * 0.006, base * 0.008)
+            pts.append({"t": f"{i:02d}", "price": round(val, 2)})
+        pts.append({"t": "now", "price": round(base, 2)})
+        return pts
+
+    @rx.var
+    def retail_risk_summary(self) -> dict[str, str]:
+        # Compact retail-friendly risk snapshot
+        return {
+            "risk_level": "Balanced",
+            "risk_detail": "Your mix is diversified across stocks, crypto, and event markets.",
+            "diversification": "Good",
+            "cash_ratio": "27%",
+        }
 
     @rx.var
     def chart_data(self) -> list[dict[str, float | str]]:

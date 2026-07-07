@@ -1,19 +1,19 @@
-# Project Build Plan
+# Retail-Friendly Redesign Plan
 
-## Phase 1: Import and App Foundation ✅
-- [x] Review the uploaded project structure and identify the runnable Reflex experience
-- [x] Adapt the project into the current sandbox without touching protected configuration
-- [x] Establish a cohesive Bloomberg-inspired terminal UI direction: dark graphite surfaces, amber/green market accents, dense typography, bordered panels, and keyboard-terminal aesthetics
-- [x] Ensure the base route loads a complete interactive landing/workspace screen
+## Phase 1: Retail-First Home Experience ✅
+- [x] Reframe the UI direction as approachable retail trading: dark premium surfaces, softer card hierarchy, larger readable typography, cyan/amber accents, clear green/red market signals, and reduced terminal clutter
+- [x] Create a simplified first-screen overview that clearly separates Stocks, Crypto, and Prediction Markets
+- [x] Add beginner-friendly portfolio summary, watchlist highlights, market movers, and plain-language context
+- [x] Preserve optional terminal aesthetics without making commands the primary way to discover features
 
-## Phase 2: Terminal Workspace Features ✅
-- [x] Build the main terminal workspace with navigation, command area, market overview panels, and realistic financial content
-- [x] Add interactive controls for symbol lookup, command execution, watchlist updates, and panel switching
-- [x] Implement responsive behavior for desktop and narrower screens
-- [x] Include realistic empty, loading, and feedback states
+## Phase 2: Guided Trading and Discovery ✅
+- [x] Add clear guided flows for selecting assets, previewing trades, creating alerts, and exploring prediction market odds
+- [x] Make crypto and prediction markets first-class sections with larger cards, readable labels, and obvious calls to action
+- [x] Improve feedback states so users understand what changed after every important action
+- [x] Support responsive layouts that remain simple on smaller screens
 
-## Phase 3: Data Views and Experience Polish ✅
-- [x] Complete supporting market data views such as news, charts, portfolio, and analytics panels
-- [x] Connect shared state across views so user actions update the workspace consistently
-- [x] Add polished visual details, accessibility labels, and keyboard-friendly interactions
-- [x] Verify key interactions and finalize the user-ready experience
+## Phase 3: Polish and User-Ready Finish ✅
+- [x] Add retail-friendly explanations, risk cues, and confidence-building copy throughout the experience
+- [x] Ensure shared state keeps all sections synchronized when users select assets or switch market categories
+- [x] Reduce visual noise while keeping enough advanced data for active traders
+- [x] Finalize the app as a user-ready retail trader dashboard with an optional pro-terminal feel
