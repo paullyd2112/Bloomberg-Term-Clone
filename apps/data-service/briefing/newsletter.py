@@ -32,10 +32,16 @@ APP_URL = os.environ.get("NEXT_PUBLIC_APP_URL", "https://plebs.finance")
 class NewsletterStory(BaseModel):
     category:     str = Field(..., min_length=3, max_length=40)
     headline:     str = Field(..., min_length=10, max_length=120)
-    what_happened: str = Field(..., min_length=100, max_length=1000)
-    what_we_know:  str = Field(..., min_length=100, max_length=1000)
-    could_mean:    str = Field(..., min_length=100, max_length=1000)
-    watch:         str = Field(..., min_length=40, max_length=500)
+    # max_length is generous here because the prompt asks for 2-4 inline
+    # markdown links per field ([text](url)), and source URLs (Google News
+    # RSS redirects especially) routinely run 150-250+ characters each --
+    # that's counted against the cap even though readers only see the anchor
+    # text. A 1000-char cap failed live 3/3 retries on 2026-07-07 purely from
+    # citation URL bulk, not from the visible prose being too long.
+    what_happened: str = Field(..., min_length=100, max_length=2000)
+    what_we_know:  str = Field(..., min_length=100, max_length=2000)
+    could_mean:    str = Field(..., min_length=100, max_length=2000)
+    watch:         str = Field(..., min_length=40, max_length=1000)
 
 
 class NewsletterContent(BaseModel):
