@@ -241,7 +241,7 @@ export default function OnboardingPage() {
               <div>
                 <div className="font-semibold text-white text-sm">Daily morning briefing</div>
                 <div className="text-xs text-zinc-400 mt-0.5">
-                  Market recap, AI signals, and trade ideas — delivered before market open (7am ET weekdays)
+                  Market recap, AI signals, and trade ideas — delivered before market open on weekdays
                 </div>
               </div>
             </label>
@@ -288,7 +288,7 @@ export default function OnboardingPage() {
                 "AI signals: stocks & crypto",
                 "Unlimited watchlist",
                 "Unusual options flow",
-                "Morning briefing email (7am ET)",
+                "Morning briefing email",
                 "Per-asset AI accuracy tracking",
               ].map((f) => (
                 <div key={f} className="flex items-center gap-2 text-sm text-zinc-300">

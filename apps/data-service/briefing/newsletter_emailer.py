@@ -248,10 +248,16 @@ def _render_html(briefing: dict, tier: str, user_id: str | None, prediction_titl
     opening      = _md_to_html(content.get("opening_line", ""))
     closing      = _md_to_html(content.get("closing_line", ""))
     stories      = content.get("stories", [])
+    quick_hits   = content.get("quick_hits")
     today        = date.today().strftime("%A, %B %-d")
     is_paid      = tier in ("pro", "elite")
 
     stories_html = "".join(_story_html(s) for s in stories)
+
+    quick_hits_block = "" if not quick_hits else f"""
+    <div style="margin:20px 0;padding:14px 16px;border-left:2px solid #27272a;color:#71717a;font-size:13px;line-height:1.6;font-style:italic;">
+      {_md_to_html(quick_hits)}
+    </div>"""
 
     paid_block = ""
     if is_paid:
@@ -329,6 +335,7 @@ def _render_html(briefing: dict, tier: str, user_id: str | None, prediction_titl
     <div style="padding-top:8px;">
       {stories_html}
     </div>
+    {quick_hits_block}
     {paid_block}
     {free_cta}
     {closing_block}
@@ -375,6 +382,9 @@ def _render_text(briefing: dict) -> str:
             f"What to watch: {_md_to_text(s.get('watch', ''))}",
             "",
         ]
+    quick_hits = content.get("quick_hits")
+    if quick_hits:
+        lines += [_md_to_text(quick_hits), ""]
     lines += [
         _md_to_text(content.get("closing_line", "")),
         "",
