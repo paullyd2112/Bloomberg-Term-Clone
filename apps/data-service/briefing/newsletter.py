@@ -47,7 +47,12 @@ class NewsletterStory(BaseModel):
 class NewsletterContent(BaseModel):
     subject_line:  str = Field(..., min_length=10, max_length=80)
     opening_line:  str = Field(..., min_length=30, max_length=300)
-    stories:       list[NewsletterStory] = Field(..., min_length=5, max_length=8)
+    stories:       list[NewsletterStory] = Field(..., min_length=4, max_length=5)
+    # Optional, not a full story: a short, casual mention of non-market
+    # things people are talking about today (sports, entertainment, pop
+    # culture). No min_length -- some days genuinely have nothing worth
+    # including, and forcing one would mean padding or fabricating.
+    quick_hits:    str | None = Field(None, max_length=500)
     closing_line:  str = Field(..., min_length=30, max_length=300)
     market_vibe:   Literal["bullish", "bearish", "mixed", "quiet"]
 
@@ -94,10 +99,15 @@ STORY ORDER — THIS MATTERS:
 STRUCTURE FOR EVERY STORY:
 - category: short tag for the section (e.g. "EARNINGS SEASON", "FED WATCH", "CRYPTO CORNER", "THE TRADE DESK", "CONGRESS IS TRADING AGAIN", "GEOPOLITICS", "ENERGY", "SUPPLY CHAIN", "COMMODITIES", "AI WATCH")
 - headline: punchy, opinionated headline. This is the hook
-- what_happened: the fact + numbers, 3-5 sentences with real detail
-- what_we_know: what the data actually says and the broader context, 3-5 sentences
-- could_mean: your take with second-order effects, clearly framed as opinion, 3-5 sentences
-- watch: forward looking, specific catalysts and dates, 2-3 sentences
+- what_happened: the fact + numbers, 2-3 sentences with real detail. Tight, not exhaustive
+- what_we_know: what the data actually says and the broader context, 2-3 sentences
+- could_mean: your take with second-order effects, clearly framed as opinion, 2-3 sentences
+- watch: forward looking, specific catalysts and dates, 1-2 sentences
+
+QUICK HITS — OPTIONAL, NOT A STORY:
+- One short, casual aside (1-3 sentences, no markdown structure, no headline) mentioning something people are talking about today that has nothing to do with markets: sports results, a big cultural moment, celebrity news, whatever's actually in the air. Think "oh yeah, also this happened" energy, not a fifth story.
+- This is what makes the newsletter feel like it's written by a person paying attention to the same day everyone else lived, not a bot that only reads tickers.
+- CRITICAL: only use this if a non-market item actually appears in the news headlines provided below. Never invent or recall a sports score, event outcome, or celebrity item from your own memory. This newsletter's news feed is market/tech/geopolitics-focused, so most days there will be nothing here to include, and that's fine. Fabricating a plausible-sounding but unverified real-world claim is worse than leaving this out. Skip it entirely when the data below gives you nothing.
 
 INLINE LINKS — THIS IS CRITICAL:
 - Use markdown links inside the story text: [anchor text](url)
@@ -325,8 +335,9 @@ def _build_user_prompt(
             )
 
     parts.append(
-        "\nWrite 5-7 stories using the structure. DO NOT just recap the signals above. "
-        "Use the signals and news as a starting point, then broaden out.\n\n"
+        "\nWrite 4-5 stories using the structure. DO NOT just recap the signals above. "
+        "Use the signals and news as a starting point, then broaden out. Fewer, tighter stories "
+        "beats more, longer ones: a reader should finish this wanting more, not relieved it's over.\n\n"
         "STORY ORDER (follow this exactly):\n"
         "1. LEAD WITH THE MOST INTERESTING HOOK OF THE DAY. Story 1 must be a big-picture story: "
         "a macro theme, cultural/generational market narrative, geopolitical shift, major AI/tech "
@@ -335,14 +346,14 @@ def _build_user_prompt(
         "Pick whichever of these is genuinely the biggest story today, don't default to geopolitics "
         "just because it's available. This is the story that sets the tone and keeps people scrolling.\n"
         "2. Stories 2-3: your strongest signal-driven or sector narratives.\n"
-        "3. Stories 4-7: mix of remaining signals, congressional trades, options flow, "
+        "3. Stories 4-5: mix of remaining signals, congressional trades, options flow, "
         "and forward-looking themes.\n\n"
         "CRYPTO CAP: Maximum 2 crypto-focused stories per newsletter. Pick the 2 most interesting "
         "if the data has more. Never place them back-to-back. Mention other crypto moves inside "
         "broader market stories if needed, but don't give them their own section.\n\n"
         "MIX OF STORIES:\n"
-        "- 2-3 stories driven by the signal data and ticker-level moves above\n"
-        "- 1-2 stories on macro/geopolitical themes: oil supply, rate policy, sanctions, "
+        "- 2 stories driven by the signal data and ticker-level moves above\n"
+        "- 1 story on macro/geopolitical themes: oil supply, rate policy, sanctions, "
         "trade wars, currency moves, inflation data. Connect these to specific sectors and tickers. "
         "This is a ceiling, not a quota: skip it entirely on a day with no real geopolitical news "
         "rather than manufacturing one.\n"
@@ -350,16 +361,18 @@ def _build_user_prompt(
         "release, product launch, or usage/pricing change from a major AI lab. Cover it as its own "
         "story, not folded into an AI-capex sector narrative, and connect it to what it means for "
         "users and for AI-adjacent stocks.\n"
-        "- 1-2 stories on sector narratives: chip supply chains, energy infrastructure, "
+        "- 1 story on sector narratives: chip supply chains, energy infrastructure, "
         "AI capex, banking/credit, housing, commodities. What's the bigger picture?\n"
         "- If there's a congressional trade worth highlighting, work it into a story.\n\n"
         "Opening line sets the tone for the day. Make it count.\n\n"
         "IMPORTANT: Each section (what_happened, what_we_know, could_mean) should be "
-        "3-5 sentences with real depth and analysis. The reader should walk away "
-        "feeling like they understand what's happening in markets, not just which tickers moved. "
-        "Target 1500-2200 words total across all stories. "
-        "Think second-order effects: a chip shortage doesn't just hit semis, it hits autos, "
-        "cloud providers, and anyone waiting on server capacity.\n\n"
+        "2-3 sentences, tight and specific, not 3-5. Say the one or two things that actually matter "
+        "and stop. The reader should walk away feeling like they understand what's happening in "
+        "markets, not like they read a report. "
+        "Target 800-1200 words total across all stories, not 1500-2200 -- this newsletter has been "
+        "running long and readers feel it. Cut, don't pad. "
+        "Think second-order effects, but say them in one sentence: a chip shortage doesn't just hit "
+        "semis, it hits autos and cloud providers waiting on server capacity.\n\n"
         "CRITICAL: Do NOT use em dashes (the long dash character). Use periods, commas, "
         "colons, or semicolons instead. This is non-negotiable.\n\n"
         "INLINE LINKS: Hyperlink key claims, ticker symbols, and data points directly "
@@ -440,6 +453,7 @@ def generate_newsletter() -> dict | None:
             "content_json": {
                 "opening_line":  content.opening_line,
                 "stories":       [s.model_dump() for s in content.stories],
+                "quick_hits":    content.quick_hits,
                 "closing_line":  content.closing_line,
                 "market_vibe":   content.market_vibe,
                 "top_signals":   signals[:5],

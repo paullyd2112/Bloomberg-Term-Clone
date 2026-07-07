@@ -238,7 +238,7 @@ const FEATURES = [
   {
     icon: Sunrise,
     title: "Morning briefing",
-    desc: "An AI-written market brief in your inbox at 7a ET. Top signals, macro, and risk.",
+    desc: "An AI-written market brief in your inbox every weekday morning. Top signals, macro, and risk.",
     span: "lg:col-span-3",
   },
   {
@@ -333,7 +333,7 @@ const PLANS = [
       "Unlimited watchlist",
       "Unusual options flow",
       "Congressional trade tracker",
-      "Morning briefing email (7a ET)",
+      "Morning briefing email",
       "Portfolio tracker + P&L",
       "Price & signal alerts",
     ],
@@ -515,7 +515,7 @@ function CTAStrip() {
           <div className="mt-12 pt-10 border-t border-white/[0.06] max-w-md mx-auto">
             <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
               Not ready? Get the free daily newsletter. Markets in plain English,
-              every weekday at 7a ET.
+              every weekday morning.
             </p>
             <NewsletterSignup />
           </div>

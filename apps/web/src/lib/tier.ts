@@ -16,7 +16,7 @@ export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
     "Unlimited watchlist",
     "Unusual options flow",
     "Congressional trade tracker",
-    "Morning briefing email (7am ET)",
+    "Morning briefing email",
     "Portfolio tracker + P&L",
     "Performance analytics + equity curve",
     "Email alerts when signals fire",
