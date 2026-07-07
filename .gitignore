@@ -1,32 +1,8 @@
-# Environment
-.env
-.env.local
-.env*.local
-
-# Python
 __pycache__/
-*.py[cod]
+.web/
+.states/
+.pytest_cache/
+.git/
 .venv/
-venv/
-*.egg-info/
-dist/
-build/
-logs/
-
-# Node
 node_modules/
-.next/
-out/
-coverage/
-
-# Claude Code
-.claude/
-
-# Misc
-.DS_Store
-*.pem
-*.log
-*.tsbuildinfo
-next-env.d.ts
-.vercel
-.turbo/
+/app/__pycache__/
