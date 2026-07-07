@@ -11,12 +11,19 @@ import sentry_sdk
 from loguru import logger
 
 from supabase_client import supabase
+from scoring.engine import ENGINE_CUTOFF
 
 BATCH_SIZE = 100
 
 
 def _fetch_resolved_signals() -> list[dict]:
-    """Fetch all resolved signals in pages."""
+    """Fetch all resolved signals since ENGINE_CUTOFF, in pages.
+
+    This is the source for the public /accuracy endpoint -- unlike the
+    dashboard's win-rate stats, this had no cutoff at all until now, so it
+    was aggregating every signal ever generated including the pre-fix
+    (#59) stretch where stock/crypto scoring ran blind to real indicators.
+    """
     all_rows: list[dict] = []
     page_size = 1000
     offset    = 0
@@ -27,6 +34,7 @@ def _fetch_resolved_signals() -> list[dict]:
                 supabase.table("signals")
                 .select("identifier, asset_type, outcome, confidence, created_at")
                 .in_("outcome", ["WIN", "LOSS", "NEUTRAL"])
+                .gte("created_at", ENGINE_CUTOFF)
                 .range(offset, offset + page_size - 1)
                 .execute()
             )
@@ -97,12 +105,23 @@ def _aggregate(signals: list[dict]) -> list[dict]:
 
 def refresh_asset_accuracy() -> str:
     signals = _fetch_resolved_signals()
+    rows    = _aggregate(signals) if signals else []
 
-    if not signals:
-        logger.info("accuracy: no resolved signals found — nothing to refresh")
-        return "0 assets updated (no resolved signals)"
+    # Full delete-then-repopulate rather than upsert-only: this is upserted
+    # by (identifier, asset_type), so a ticker whose only resolved signals
+    # are now before ENGINE_CUTOFF would otherwise keep its stale, all-time
+    # row here forever -- upsert never removes rows that don't reappear in
+    # the current aggregation.
+    try:
+        supabase.table("asset_accuracy").delete().neq("identifier", "").execute()
+    except Exception as e:
+        logger.error("accuracy: failed to clear stale rows — {}", e)
+        sentry_sdk.capture_exception(e)
 
-    rows    = _aggregate(signals)
+    if not rows:
+        logger.info("accuracy: no resolved signals since ENGINE_CUTOFF — table cleared, nothing to repopulate")
+        return "0 assets updated (no resolved signals since cutoff)"
+
     updated = 0
 
     # Upsert in batches — asset_accuracy has composite PK (identifier, asset_type)

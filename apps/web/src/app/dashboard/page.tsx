@@ -12,7 +12,8 @@ import SkipTrialBanner from "@/components/SkipTrialBanner";
 
 export const revalidate = 60;
 
-const ENGINE_CUTOFF = "2026-06-22T00:00:00Z";
+// Keep in sync with apps/data-service/scoring/engine.py's ENGINE_CUTOFF.
+const ENGINE_CUTOFF = "2026-07-04T11:00:00Z";
 
 type MonthBucket = { month: string; wins: number; losses: number; winRate: number };
 

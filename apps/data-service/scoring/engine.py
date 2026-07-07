@@ -25,7 +25,13 @@ load_dotenv()
 MODEL              = "claude-sonnet-4-6"
 SIGNAL_COOLDOWN_H  = 4      # skip if signal generated within this many hours
 MAX_TOKENS         = 1024
-ENGINE_CUTOFF      = "2026-06-22T00:00:00Z"  # signals before this date are unreliable
+ENGINE_CUTOFF      = "2026-07-04T11:00:00Z"  # signals before this date are unreliable
+# Bumped from 2026-06-22 (the prior engine overhaul, #20) to just after
+# 2026-07-04T10:27:30Z (#59), the fix for the case-sensitive ta indicator
+# matcher + tz-aware ingest merge crash that left live stock/crypto scoring
+# blind to RSI/MACD/Bollinger for an unknown prior stretch. Signals before
+# this were generated from that broken pipeline and are not representative
+# of current model performance.
 
 _anthropic = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 client     = instructor.from_anthropic(_anthropic)
