@@ -292,30 +292,33 @@ def _run_stock_job(name: str, fn):
 # Prediction markets — every 2 hours (was every 30 min)
 scheduler.add_job(lambda: _run_job("ingest_prediction_markets", job_ingest_prediction_markets),
                   IntervalTrigger(minutes=30), id="ingest_prediction_markets")
-scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
-                  CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
+# PAUSED — not burning API tokens until product is ready to ship
+# scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
+#                   CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
 
 # Stocks — full scoring at open + close, event-only midday, weekdays only
 scheduler.add_job(lambda: _run_stock_job("ingest_stocks", job_ingest_stocks),
                   CronTrigger(minute=0, hour="9,11,13,15", day_of_week="mon-fri"), id="ingest_stocks")
-scheduler.add_job(lambda: _run_stock_job("score_stocks", job_score_stocks),
-                  CronTrigger(minute=20, hour="9,15", day_of_week="mon-fri"), id="score_stocks")
-scheduler.add_job(lambda: _run_stock_job("score_stocks_event", job_score_stocks_event_only),
-                  CronTrigger(minute=20, hour="11,13", day_of_week="mon-fri"), id="score_stocks_event")
+# PAUSED — not burning API tokens until product is ready to ship
+# scheduler.add_job(lambda: _run_stock_job("score_stocks", job_score_stocks),
+#                   CronTrigger(minute=20, hour="9,15", day_of_week="mon-fri"), id="score_stocks")
+# scheduler.add_job(lambda: _run_stock_job("score_stocks_event", job_score_stocks_event_only),
+#                   CronTrigger(minute=20, hour="11,13", day_of_week="mon-fri"), id="score_stocks_event")
 
 # Crypto — 6x/day (3 market-hours windows + 3 overnight) to balance signal volume with stocks
 scheduler.add_job(lambda: _run_job("ingest_crypto", job_ingest_crypto),
                   CronTrigger(minute=0, hour="0,4,8,12,16,20"), id="ingest_crypto")
-scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
-                  CronTrigger(minute=20, hour="0,4,8,12,16,20"), id="score_crypto")
+# PAUSED — not burning API tokens until product is ready to ship
+# scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
+#                   CronTrigger(minute=20, hour="0,4,8,12,16,20"), id="score_crypto")
 
 # Crypto momentum screener — every 2 hours, catches pumps/breakouts outside watchlist
 scheduler.add_job(lambda: _run_job("crypto_momentum", job_crypto_momentum),
                   CronTrigger(minute=45, hour="*/2"), id="crypto_momentum")
 
-# Options flow scoring — runs after flow ingestion, backtest-only until validated
-scheduler.add_job(lambda: _run_stock_job("score_options_flow", job_score_options_flow),
-                  CronTrigger(minute=30, hour="10,15", day_of_week="mon-fri"), id="score_options_flow")
+# PAUSED — not burning API tokens until product is ready to ship
+# scheduler.add_job(lambda: _run_stock_job("score_options_flow", job_score_options_flow),
+#                   CronTrigger(minute=30, hour="10,15", day_of_week="mon-fri"), id="score_options_flow")
 
 # Enrichment — weekdays, skip holidays
 scheduler.add_job(lambda: _run_stock_job("ingest_options_flow", job_ingest_options_flow),
