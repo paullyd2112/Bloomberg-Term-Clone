@@ -360,9 +360,9 @@ scheduler.add_job(lambda: _run_job("send_newsletter", job_send_newsletter),
                   CronTrigger(hour=7, minute=15, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter_retry", job_send_newsletter_retry),
                   CronTrigger(hour=7, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter_retry")
-# Personalized Elite briefing — runs after main newsletter, one AI call per Elite user
-scheduler.add_job(lambda: _run_job("send_elite_briefings", job_send_elite_briefings),
-                  CronTrigger(hour=7, minute=20, day_of_week="mon-fri", timezone="America/New_York"), id="send_elite_briefings")
+# PAUSED — not burning API tokens until product is ready to ship
+# scheduler.add_job(lambda: _run_job("send_elite_briefings", job_send_elite_briefings),
+#                   CronTrigger(hour=7, minute=20, day_of_week="mon-fri", timezone="America/New_York"), id="send_elite_briefings")
 scheduler.add_job(lambda: _run_job("send_welcome_sequence", job_send_welcome_sequence),
                   CronTrigger(hour=9, minute=0, timezone="America/New_York"), id="send_welcome_sequence")
 
