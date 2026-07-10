@@ -33,6 +33,14 @@ SIGNAL RULES:
 - MACD histogram crossing pos→neg = strongest SELL signal (74+).
 - MACD histogram negative and deepening = SELL or HOLD only. Never BUY against it.
 
+INVALIDATION PRICE (REQUIRED for BUY/SELL):
+- Every BUY/SELL must include an invalidation_price — the exact price level where the trade thesis breaks.
+- For a BUY: the level below entry where the setup fails (support break, trendline violation).
+- For a SELL: the level above entry where the setup fails (resistance reclaim, breakout above key level).
+- Use chart structure: BB lower/upper, recent swing low/high, SMA-50 level. NOT an arbitrary percentage.
+- The risk engine computes exact position size and take profit (minimum 2:1 R:R) from this level.
+- If you cannot identify a clear invalidation level, issue HOLD.
+
 CONFIDENCE FLOOR:
 - Below 70 confidence = HOLD. Users only see signals 70%+. Don't issue weak crypto reads.
 

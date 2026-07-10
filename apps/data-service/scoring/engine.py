@@ -45,6 +45,7 @@ class StockSignal(BaseModel):
     reasoning:    str    = Field(..., min_length=20)
     time_horizon: Literal["intraday", "swing", "longterm"]
     key_risk:     str
+    invalidation_price: float | None = Field(None, description="Price level where the trade thesis breaks (used for stop loss)")
     news_context: list[str] = Field(default_factory=list, max_length=3)
 
 
@@ -54,6 +55,7 @@ class CryptoSignal(BaseModel):
     reasoning:        str    = Field(..., min_length=20)
     time_horizon:     Literal["intraday", "swing", "longterm"]
     sentiment_driver: str
+    invalidation_price: float | None = Field(None, description="Price level where the trade thesis breaks (used for stop loss)")
     news_context:     list[str] = Field(default_factory=list, max_length=3)
 
 
@@ -452,7 +454,19 @@ def _apply_accuracy_penalty(confidence: int, accuracy: dict | None) -> int:
 STALE_TEST_MODE = False
 
 
-def _write_signal(asset_type: str, identifier: str, price: float | None, signal, news_with_urls: list[dict] | None = None) -> dict:
+def _write_signal(
+    asset_type: str,
+    identifier: str,
+    price: float | None,
+    signal,
+    news_with_urls: list[dict] | None = None,
+    risk_budget: "RiskBudget | None" = None,
+    atr: float | None = None,
+) -> dict:
+    from scoring.risk_engine import (
+        score_setup, format_trade_setup, AssetClass, DEFAULT_ACCOUNT,
+    )
+
     accuracy = _get_asset_accuracy(identifier, asset_type)
     adjusted_confidence = _apply_accuracy_penalty(signal.confidence, accuracy)
 
@@ -465,6 +479,36 @@ def _write_signal(asset_type: str, identifier: str, price: float | None, signal,
     for headline in (signal.news_context or []):
         matched_url = url_lookup.get(headline.lower().strip(), "")
         news_urls.append(matched_url)
+
+    # Run prop risk engine — compute position size, stop/target, and
+    # check against daily loss budget
+    trade_setup_data = None
+    if price is not None and signal.direction in ("BUY", "SELL"):
+        invalidation = getattr(signal, "invalidation_price", None)
+        asset_cls = AssetClass.CRYPTO if asset_type == "crypto" else AssetClass.STOCK
+        setup = score_setup(
+            direction=signal.direction,
+            asset_class=asset_cls,
+            entry_price=price,
+            confidence=adjusted_confidence,
+            account=DEFAULT_ACCOUNT,
+            budget=risk_budget,
+            atr=atr,
+            invalidation_level=invalidation,
+        )
+        trade_setup_data = format_trade_setup(setup)
+
+        if setup.suppressed:
+            logger.warning(
+                "{}/{}: SUPPRESSED by risk engine — {}",
+                asset_type, identifier, setup.suppression_reason,
+            )
+            signal.direction = "HOLD"
+            adjusted_confidence = 0
+            signal.reasoning = (
+                f"[SUPPRESSED — {setup.suppression_reason}] "
+                + signal.reasoning
+            )
 
     base = {
         "asset_type":      asset_type,
@@ -480,6 +524,8 @@ def _write_signal(asset_type: str, identifier: str, price: float | None, signal,
         "is_stale_test":   STALE_TEST_MODE,
         "outcome":         "PENDING",
     }
+    if trade_setup_data:
+        base["trade_setup"] = trade_setup_data
     result = supabase.table("signals").insert(base).execute()
     return result.data[0] if result.data else base
 
@@ -495,6 +541,7 @@ def score_asset(
     breadth_tracker: dict | None = None,
     btc_regime: dict | None = None,
     skip_hold: bool = True,
+    risk_budget: "RiskBudget | None" = None,
 ) -> dict | None:
     """
     Build context from Supabase, call Claude via Instructor,
@@ -777,9 +824,19 @@ def score_asset(
         logger.debug("{}/{}: skipping HOLD signal ({}%)", asset_type, identifier, signal.confidence)
         return None
 
-    # Write to Supabase
+    # Write to Supabase (risk engine runs inside _write_signal)
+    atr_value = None
+    if meta.get("atr_14") is not None:
+        try:
+            atr_value = float(meta["atr_14"])
+        except (TypeError, ValueError):
+            pass
+
     try:
-        record = _write_signal(asset_type, identifier, current_price, signal, news_with_urls)
+        record = _write_signal(
+            asset_type, identifier, current_price, signal, news_with_urls,
+            risk_budget=risk_budget, atr=atr_value,
+        )
         logger.info(
             "{}/{}: {} {}% confidence — {}",
             asset_type, identifier,
@@ -806,16 +863,15 @@ def score_asset(
 def score_stocks() -> str:
     from scoring.scanner import scan_stocks
     from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
+    from scoring.risk_engine import RiskBudget, DEFAULT_ACCOUNT
 
     scan_results = scan_stocks(use_movers=True)
     core_always_score = {"AAPL", "NVDA", "TSLA", "GOOGL", "META", "AMZN", "MSFT", "SPY", "QQQ"}
 
-    # Fetch once per run — identical for every ticker scored below, so this
-    # also lets the Claude call cache the shared block instead of paying
-    # full price on it for every single ticker.
     benchmarks   = _get_market_benchmark()
     macro_events = _get_upcoming_macro(days=2)
     breadth_tracker: dict = {"extended_buys": 0}
+    risk_budget = RiskBudget(account=DEFAULT_ACCOUNT)
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
@@ -826,7 +882,7 @@ def score_stocks() -> str:
         if ticker in core_always_score:
             try:
                 result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events,
-                                      breadth_tracker=breadth_tracker)
+                                      breadth_tracker=breadth_tracker, risk_budget=risk_budget)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -853,7 +909,7 @@ def score_stocks() -> str:
 
         try:
             result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events,
-                                  breadth_tracker=breadth_tracker)
+                                  breadth_tracker=breadth_tracker, risk_budget=risk_budget)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -868,7 +924,7 @@ def score_stocks() -> str:
         if not any(s["ticker"] == core_ticker for s in scan_results):
             try:
                 result = score_asset("stock", core_ticker, benchmarks=benchmarks, macro_events=macro_events,
-                                      breadth_tracker=breadth_tracker)
+                                      breadth_tracker=breadth_tracker, risk_budget=risk_budget)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -888,12 +944,14 @@ def score_stocks_event_only() -> str:
     Only scores stocks with intraday events (gap moves, volume surges)."""
     from scoring.scanner import scan_stocks
     from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
+    from scoring.risk_engine import RiskBudget, DEFAULT_ACCOUNT
 
     scan_results = scan_stocks(use_movers=True, event_only=True)
 
     benchmarks   = _get_market_benchmark()
     macro_events = _get_upcoming_macro(days=2)
     breadth_tracker: dict = {"extended_buys": 0}
+    risk_budget = RiskBudget(account=DEFAULT_ACCOUNT)
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
@@ -916,7 +974,7 @@ def score_stocks_event_only() -> str:
 
         try:
             result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events,
-                                  breadth_tracker=breadth_tracker)
+                                  breadth_tracker=breadth_tracker, risk_budget=risk_budget)
             sonnet_calls += 1
             if result is None:
                 skipped += 1

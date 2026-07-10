@@ -44,6 +44,14 @@ EMPIRICALLY VALIDATED PATTERNS (10-month, 62-stock, ~9,800-observation study wit
 - Do not fade strength: >15% above SMA-50 with MACD expanding resolved up ~59% over 10 days; RSI >70 with MACD expanding, ~63%. Overbought-in-uptrend is momentum, not exhaustion.
 - Mild weakness bleeds: RSI 30-45 with a positive MACD (fading OR building) still fell ~56-60% of the time. That state is SELL/HOLD territory, not a dip-buy.
 
+INVALIDATION PRICE (REQUIRED for BUY/SELL):
+- Every BUY/SELL must include an invalidation_price — the exact price level where the trade thesis breaks.
+- For a BUY: the level below entry where the setup is invalidated (support break, pattern failure).
+- For a SELL: the level above entry where the setup is invalidated (resistance break, breakout).
+- This MUST be a specific price derived from the chart structure (BB lower, recent swing low/high, SMA-50), NOT an arbitrary percentage.
+- The risk engine will use this to compute exact position size, stop loss, and take profit with a minimum 2:1 reward-to-risk ratio.
+- If you cannot identify a clear invalidation level, the setup is too vague — issue HOLD.
+
 CONFIDENCE FLOOR:
 - Below 70 confidence = HOLD. Users only see signals 70%+. Don't waste their attention with weak reads.
 
@@ -94,6 +102,22 @@ def build_user_prompt(context: dict) -> str:
         except (TypeError, ValueError):
             pass
 
+    # Compute Bollinger %B (0 = at lower band, 1 = at upper band, 0.5 = at middle)
+    bb_pct_b = "N/A"
+    bb_bandwidth = "N/A"
+    try:
+        bb_u = float(ind["bb_upper"]) if ind.get("bb_upper") is not None else None
+        bb_l = float(ind["bb_lower"]) if ind.get("bb_lower") is not None else None
+        bb_m = float(ind["bb_middle"]) if ind.get("bb_middle") is not None else None
+        p_num = float(price) if price != "N/A" else None
+        if bb_u is not None and bb_l is not None and bb_m is not None and p_num is not None:
+            band_width = bb_u - bb_l
+            if band_width > 0:
+                bb_pct_b = f"{((p_num - bb_l) / band_width):.2f}"
+                bb_bandwidth = f"{(band_width / bb_m * 100):.1f}%"
+    except (TypeError, ValueError):
+        pass
+
     lines = [
         f"Ticker: {ticker}",
         f"Price: ${price} | 24h change: {change}%",
@@ -103,10 +127,15 @@ def build_user_prompt(context: dict) -> str:
         f"  MACD line: {ind.get('macd_line', 'N/A')} | Signal: {ind.get('macd_signal', 'N/A')} | Hist: {ind.get('macd_hist', 'N/A')}{macd_cross}",
         f"  Previous MACD Hist: {ind.get('prev_macd_hist', 'N/A')}",
         f"  BB upper: {ind.get('bb_upper', 'N/A')} | Middle: {ind.get('bb_middle', 'N/A')} | Lower: {ind.get('bb_lower', 'N/A')}",
+        f"  BB %B: {bb_pct_b} (0=lower band, 0.5=middle, 1=upper) | Bandwidth: {bb_bandwidth}",
         f"  Price vs SMA-50: {ind.get('price_vs_sma50_pct', 'N/A')}%",
         f"  Volume ratio vs 20-day avg: {ind.get('volume_ratio', 'N/A')}x",
         f"  5-day return: {ind.get('week_return_pct', 'N/A')}%",
     ]
+
+    if ind.get("atr_14") is not None:
+        lines.append(f"  ATR-14: {ind['atr_14']}")
+
 
     if context.get("earnings_context"):
         e = context["earnings_context"]
