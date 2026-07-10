@@ -34,13 +34,13 @@ class AssetClass(str, Enum):
 class AccountProfile:
     """Prop firm funded account constraints.
 
-    Default values model a typical $50k FTMO-style funded account:
-      - 5% daily loss limit ($2,500)
+    Default values model a typical $50k funded account:
+      - 4% max EOD drawdown ($2,000)
       - 10% max trailing drawdown ($5,000)
       - Risk per trade: 0.25-0.5% of account ($125-$250)
     """
     account_size: float = 50_000.0
-    max_daily_loss_pct: float = 5.0
+    max_daily_loss_pct: float = 4.0
     max_drawdown_pct: float = 10.0
     risk_per_trade_pct: float = 0.5
     min_risk_per_trade_pct: float = 0.25
