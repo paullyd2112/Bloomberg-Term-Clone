@@ -92,23 +92,28 @@ export async function POST(req: Request) {
 
     case "cancel": {
       const sub = await stripe.subscriptions.retrieve(profile.stripe_subscription_id);
+      const admin = createAdminClient();
 
       if (sub.status === "trialing") {
-        // Trial: immediate cancellation, no access
         await stripe.subscriptions.cancel(profile.stripe_subscription_id);
-        const admin = createAdminClient();
         await (admin as any)
           .from("profiles")
-          .update({ tier: "free", stripe_subscription_id: null, billing_interval: null })
+          .update({ tier: "free", stripe_subscription_id: null, billing_interval: null, cancel_at: null })
           .eq("id", user.id);
-      } else {
-        // Paid: cancel at period end so they keep access for what they paid
-        await stripe.subscriptions.update(profile.stripe_subscription_id, {
-          cancel_at_period_end: true,
-        });
+        return NextResponse.json({ ok: true, immediate: true });
       }
 
-      return NextResponse.json({ ok: true });
+      await stripe.subscriptions.update(profile.stripe_subscription_id, {
+        cancel_at_period_end: true,
+      });
+
+      const periodEnd = new Date(sub.current_period_end * 1000).toISOString();
+      await (admin as any)
+        .from("profiles")
+        .update({ cancel_at: periodEnd })
+        .eq("id", user.id);
+
+      return NextResponse.json({ ok: true, immediate: false, cancel_at: periodEnd });
     }
   }
 }

@@ -23,6 +23,7 @@ async function updateUserTier(
   tier: "free" | "pro" | "elite",
   subscriptionId: string | null,
   billingInterval: string | null,
+  cancelAt: string | null = null,
 ) {
   const supabase = createAdminClient();
   const { data, error, status, statusText } = await (supabase as any)
@@ -31,6 +32,7 @@ async function updateUserTier(
       tier,
       stripe_subscription_id: subscriptionId,
       billing_interval:       billingInterval,
+      cancel_at:              cancelAt,
     })
     .eq("id", supabaseUserId)
     .select();
@@ -167,13 +169,11 @@ export async function POST(req: Request) {
         const interval = (sub.items.data[0]?.price.recurring?.interval ?? null) as string | null;
         const active   = ["active", "trialing"].includes(sub.status);
 
-        // If user cancels during trial, revoke access immediately.
-        // They haven't paid anything so there's nothing to honor.
         const canceledDuringTrial =
           sub.status === "trialing" && sub.cancel_at_period_end;
 
         if (canceledDuringTrial) {
-          await updateUserTier(userId, "free", null, null);
+          await updateUserTier(userId, "free", null, null, null);
           try {
             await stripe.subscriptions.cancel(sub.id);
           } catch (e) {
@@ -182,9 +182,12 @@ export async function POST(req: Request) {
           break;
         }
 
-        await updateUserTier(userId, active ? tier : "free", sub.id, interval);
+        const cancelAt = sub.cancel_at_period_end && sub.current_period_end
+          ? new Date(sub.current_period_end * 1000).toISOString()
+          : null;
 
-        // Reward referrer automatically when referred user goes active/trialing
+        await updateUserTier(userId, active ? tier : "free", sub.id, interval, cancelAt);
+
         if (active) {
           await _processReferralReward(userId);
         }
@@ -195,7 +198,7 @@ export async function POST(req: Request) {
         const sub    = event.data.object as Stripe.Subscription;
         const userId = sub.metadata?.supabase_user_id;
         if (!userId) break;
-        await updateUserTier(userId, "free", null, null);
+        await updateUserTier(userId, "free", null, null, null);
         break;
       }
 

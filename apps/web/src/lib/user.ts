@@ -36,7 +36,7 @@ export async function getUserProfile() {
 
   const { data } = await supabase
     .from("profiles")
-    .select("tier, billing_interval, full_name, phone_number, trading_experience, asset_preferences, trial_ends_at")
+    .select("tier, billing_interval, full_name, phone_number, trading_experience, asset_preferences, trial_ends_at, cancel_at")
     .eq("id", user.id)
     .single();
 

@@ -4,11 +4,12 @@ import { useState } from "react";
 
 type Step = "idle" | "loading" | "offer" | "confirming" | "done";
 
-export default function CancelButton() {
+export default function CancelButton({ cancelAt }: { cancelAt?: string | null }) {
   const [step, setStep] = useState<Step>("idle");
   const [discount, setDiscount] = useState<{ percent: number; months: number } | null>(null);
   const [tier, setTier] = useState("");
   const [error, setError] = useState("");
+  const [pendingCancelAt, setPendingCancelAt] = useState(cancelAt ?? null);
 
   async function handleCancel() {
     setStep("loading");
@@ -62,7 +63,13 @@ export default function CancelButton() {
         body: JSON.stringify({ action: "cancel" }),
       });
       if (res.ok) {
-        window.location.reload();
+        const data = await res.json();
+        if (data.immediate) {
+          window.location.reload();
+        } else {
+          setPendingCancelAt(data.cancel_at);
+          setStep("idle");
+        }
       } else {
         setError("Cancellation failed. Try again or contact support.");
         setStep("idle");
@@ -71,6 +78,25 @@ export default function CancelButton() {
       setError("Something went wrong.");
       setStep("idle");
     }
+  }
+
+  if (pendingCancelAt) {
+    const endDate = new Date(pendingCancelAt).toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+    return (
+      <div className="bg-amber-500/[0.06] border border-amber-500/20 rounded-xl p-4 text-center space-y-1">
+        <p className="text-sm font-semibold text-amber-400">
+          Your subscription is canceled
+        </p>
+        <p className="text-xs text-zinc-400">
+          You&apos;ll keep access until <span className="text-white font-medium">{endDate}</span>.
+          No further charges will be made.
+        </p>
+      </div>
+    );
   }
 
   if (step === "done") {
@@ -123,8 +149,8 @@ export default function CancelButton() {
         <div>
           <p className="text-sm font-semibold text-white">Are you sure?</p>
           <p className="text-xs text-zinc-400 mt-1">
-            You&apos;ll lose access to all premium features. If you&apos;re on a paid period,
-            you&apos;ll keep access until it ends.
+            Your subscription will be canceled at the end of your current billing period.
+            You&apos;ll keep access until then, and no further charges will be made.
           </p>
         </div>
         {error && (

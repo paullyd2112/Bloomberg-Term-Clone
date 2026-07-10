@@ -138,7 +138,7 @@ export default async function UpgradePage() {
           </div>
           {profile?.billing_interval !== "lifetime" && (
             <div className="flex justify-end px-1">
-              <CancelButton />
+              <CancelButton cancelAt={profile?.cancel_at as string | null} />
             </div>
           )}
         </div>
