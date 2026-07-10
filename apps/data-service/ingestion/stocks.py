@@ -102,6 +102,9 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
     # Bollinger Bands (20, 2)
     df.ta.bbands(length=20, std=2, append=True)
 
+    # ATR 14 — used by risk engine for volatility-adjusted stop placement
+    df.ta.atr(length=14, append=True)
+
     # Volume SMA 20
     df["volume_sma_20"] = df["volume"].rolling(20).mean()
 
@@ -161,6 +164,7 @@ def _compute_indicators(df: pd.DataFrame) -> dict:
         "price_vs_sma50_pct":  round(float(latest["price_vs_sma50_pct"]), 2)
                                if pd.notna(latest["price_vs_sma50_pct"]) else None,
         "week_return_pct":     week_return,
+        "atr_14":              _col("atr"),
         "close":               float(latest["close"]),
         "volume":              float(latest["volume"]),
         "change_1d_pct":       round(

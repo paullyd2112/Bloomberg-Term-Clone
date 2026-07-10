@@ -30,22 +30,27 @@ MAX_SETTLEMENT_PAGES = 25
 # min_age_hours  = how long to wait before evaluating
 # win_threshold  = % move in signal direction to count as WIN
 # loss_threshold = % move against signal direction to count as LOSS
+#
+# SYMMETRIC thresholds — win and loss use the same magnitude so that
+# reported win rates are honest. The old asymmetric thresholds (e.g.
+# 1.5% win / 4% loss) structurally inflated win rates because even
+# random signals would show >50% wins.
 
 RESOLUTION_CONFIG: dict[tuple[str, str], tuple[float, float, float]] = {
-    # Stocks — swing-trading focus, realistic move thresholds
-    ("stock", "intraday"):  (6,    0.004, 0.012),   # 6h,  0.4% win / 1.2% loss
-    ("stock", "swing"):     (120,  0.015, 0.04),     # 5 trading days, 1.5% win / 4% loss
-    ("stock", "longterm"):  (360,  0.04,  0.08),     # 15 trading days, 4% win / 8% loss
-    # Crypto — wider thresholds due to higher volatility
-    ("crypto", "intraday"): (6,    0.012, 0.025),    # 6h,  1.2% win / 2.5% loss
-    ("crypto", "swing"):    (120,  0.04,  0.08),     # 5 days, 4% win / 8% loss
-    ("crypto", "longterm"): (360,  0.08,  0.16),     # 15 days, 8% win / 16% loss
+    # Stocks — symmetric thresholds derived from risk engine stop midpoints
+    ("stock", "intraday"):  (6,    0.008,  0.008),   # 6h, 0.8% symmetric
+    ("stock", "swing"):     (120,  0.0175, 0.0175),   # 5 trading days, 1.75% symmetric
+    ("stock", "longterm"):  (360,  0.05,   0.05),     # 15 trading days, 5% symmetric
+    # Crypto — wider thresholds due to higher volatility, still symmetric
+    ("crypto", "intraday"): (6,    0.02,  0.02),      # 6h, 2% symmetric
+    ("crypto", "swing"):    (120,  0.03,  0.03),      # 5 days, 3% symmetric
+    ("crypto", "longterm"): (360,  0.08,  0.08),      # 15 days, 8% symmetric
 }
 
 # Fallback for signals with missing/unknown time_horizon
 DEFAULT_CONFIG: dict[str, tuple[float, float, float]] = {
-    "stock":  (24, 0.01, 0.03),     # legacy 24h, 1% win / 3% loss
-    "crypto": (24, 0.02, 0.05),     # legacy 24h, 2% win / 5% loss
+    "stock":  (24, 0.015, 0.015),   # legacy 24h, 1.5% symmetric
+    "crypto": (24, 0.03,  0.03),    # legacy 24h, 3% symmetric
 }
 
 
@@ -54,7 +59,24 @@ def _get_resolution_config(asset_type: str, time_horizon: str | None) -> tuple[f
         key = (asset_type, time_horizon)
         if key in RESOLUTION_CONFIG:
             return RESOLUTION_CONFIG[key]
-    return DEFAULT_CONFIG.get(asset_type, (24, 0.01, 0.01))
+    return DEFAULT_CONFIG.get(asset_type, (24, 0.015, 0.015))
+
+
+def _get_signal_setup_thresholds(signal: dict) -> tuple[float, float] | None:
+    """Extract stop/target from the trade_setup stored on the signal.
+
+    When the risk engine attached a trade_setup at signal time, use its
+    stop_pct as the definitive threshold (both win and loss) so that
+    resolution matches the exact levels the user was shown.
+    """
+    setup = signal.get("trade_setup")
+    if not setup or setup.get("suppressed"):
+        return None
+    stop_pct = setup.get("stop_pct")
+    if stop_pct is not None and stop_pct > 0:
+        threshold = stop_pct / 100
+        return threshold, threshold
+    return None
 
 
 # ─── Price helpers ────────────────────────────────────────────────────────────
@@ -84,11 +106,11 @@ def _score_outcome(
     loss_threshold: float,
     is_expired: bool = False,
 ) -> str:
-    """Score a signal outcome.
+    """Score a signal outcome with symmetric thresholds.
 
-    When is_expired=True (signal is past its full horizon), use binary resolution:
-    any move in the right direction = WIN, any move against = LOSS. No more NEUTRAL
-    for expired signals — a swing call that went sideways is a LOSS of opportunity.
+    When is_expired=True (signal is past 2x its horizon), resolve as
+    NEUTRAL — the trade thesis expired without hitting either target.
+    The old behavior (any move = WIN) inflated win rates.
     """
     if direction == "HOLD":
         return "NEUTRAL"
@@ -104,7 +126,7 @@ def _score_outcome(
         if pct_change <= -loss_threshold:
             return "LOSS"
         if is_expired:
-            return "WIN" if pct_change > 0 else "LOSS"
+            return "NEUTRAL"
         return "NEUTRAL"
 
     if direction in ("SELL", "NO"):
@@ -113,7 +135,7 @@ def _score_outcome(
         if pct_change >= loss_threshold:
             return "LOSS"
         if is_expired:
-            return "WIN" if pct_change < 0 else "LOSS"
+            return "NEUTRAL"
         return "NEUTRAL"
 
     return "NEUTRAL"
@@ -245,6 +267,11 @@ def resolve_outcomes() -> str:
             asset_type   = signal["asset_type"]
             time_horizon = signal.get("time_horizon")
             min_age_h, win_thresh, loss_thresh = _get_resolution_config(asset_type, time_horizon)
+
+            # Prefer the exact stop/target from the risk engine when available
+            setup_thresholds = _get_signal_setup_thresholds(signal)
+            if setup_thresholds:
+                win_thresh, loss_thresh = setup_thresholds
 
             created = datetime.fromisoformat(
                 signal["created_at"].replace("Z", "+00:00")
