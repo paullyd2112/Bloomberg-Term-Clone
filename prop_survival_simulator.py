@@ -83,12 +83,12 @@ class SimulationResult:
     max_consecutive_losses: int
     daily_kill_switch_hits: int
     survived: bool
+    breach_reason: str = ""
 
 
 def simulate_single_run(profile_name: str, profile: dict) -> SimulationResult:
     account_size = profile["account_size"]
     balance = float(account_size)
-    high_water_mark = balance
     risk_per_trade = profile["risk_per_trade_dollar"]
     max_overall_dd = profile["max_overall_drawdown"]
     daily_kill_threshold = profile["daily_kill_switch_threshold"]
@@ -98,9 +98,11 @@ def simulate_single_run(profile_name: str, profile: dict) -> SimulationResult:
     current_loss_streak = 0
     daily_kill_hits = 0
     survived = True
+    breach_reason = ""
 
     daily_pnl = 0.0
     trades_today = 0
+    max_daily_loss = profile["max_daily_loss"]
 
     for i in range(NUM_SIGNALS):
         # Reset daily tracking
@@ -108,11 +110,20 @@ def simulate_single_run(profile_name: str, profile: dict) -> SimulationResult:
             trades_today = 0
             daily_pnl = 0.0
 
-        # Check daily kill switch before trade
-        if abs(daily_pnl) >= daily_kill_threshold and daily_pnl < 0:
+        # Daily kill switch — hard breach, account is dead
+        if daily_pnl <= -daily_kill_threshold:
             daily_kill_hits += 1
-            trades_today = TRADES_PER_DAY  # force day reset
-            continue
+            survived = False
+            breach_reason = "daily_kill_switch"
+            max_dd_dollar = max(max_dd_dollar, account_size - balance)
+            break
+
+        # Max daily loss — hard breach
+        if daily_pnl <= -max_daily_loss:
+            survived = False
+            breach_reason = "max_daily_loss"
+            max_dd_dollar = max(max_dd_dollar, account_size - balance)
+            break
 
         # Pick asset class weighted randomly
         r = random.random()
@@ -141,17 +152,16 @@ def simulate_single_run(profile_name: str, profile: dict) -> SimulationResult:
         daily_pnl += pnl
         trades_today += 1
 
-        # Track high water mark and drawdown
-        if balance > high_water_mark:
-            high_water_mark = balance
-
-        current_dd = high_water_mark - balance
-        if current_dd > max_dd_dollar:
+        # Track drawdown from STARTING balance (prop firm static DD)
+        current_dd = account_size - balance
+        if current_dd > 0 and current_dd > max_dd_dollar:
             max_dd_dollar = current_dd
 
-        # Check hard breach
-        if (account_size - balance) >= max_overall_dd:
+        # Hard breach — overall drawdown limit hit, account is instantly dead
+        if current_dd >= max_overall_dd:
             survived = False
+            breach_reason = "max_overall_drawdown"
+            max_dd_dollar = current_dd
             break
 
     max_dd_pct = (max_dd_dollar / account_size) * 100.0
@@ -164,6 +174,7 @@ def simulate_single_run(profile_name: str, profile: dict) -> SimulationResult:
         max_consecutive_losses=max_consecutive_losses,
         daily_kill_switch_hits=daily_kill_hits,
         survived=survived,
+        breach_reason=breach_reason,
     )
 
 
@@ -249,11 +260,13 @@ def run_monte_carlo():
         print(f"  │   Avg Daily Kill Hits:  {statistics.mean(r.daily_kill_switch_hits for r in results):>8.1f}")
 
         if breached_results:
-            avg_breach_signal = statistics.mean(
-                NUM_SIGNALS - (r.final_balance - (profile['account_size'] - profile['max_overall_drawdown']))
-                for r in breached_results
-            ) if breached_results else 0
             print(f"  │   Breached Accounts:    {len(breached_results):>8} / {NUM_MONTE_CARLO_RUNS}")
+            dd_breaches = sum(1 for r in breached_results if r.breach_reason == "max_overall_drawdown")
+            daily_breaches = sum(1 for r in breached_results if r.breach_reason == "max_daily_loss")
+            kill_breaches = sum(1 for r in breached_results if r.breach_reason == "daily_kill_switch")
+            print(f"  │     → Overall DD breach:  {dd_breaches:>6}")
+            print(f"  │     → Daily loss breach:  {daily_breaches:>6}")
+            print(f"  │     → Kill switch breach: {kill_breaches:>6}")
 
         # Expected value calculation
         ev_per_trade = 0.0
