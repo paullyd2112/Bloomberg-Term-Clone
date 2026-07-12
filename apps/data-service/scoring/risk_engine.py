@@ -1,22 +1,18 @@
 """
-Prop Risk Engine — enforces strict position sizing and symmetric R:R
-boundaries for prop firm funded accounts.
+Universal Prop Risk Engine — multi-profile position sizing with
+per-profile kill switches and dual-layer signal output.
 
-Every signal must pass through this engine before being surfaced to users.
-It calculates exact position size, stop loss, and take profit targets based
-on the account profile, and suppresses trades whose invalidation point
-would violate the daily loss limit.
+Every signal passes through this engine. It produces:
+  Layer 1 (Core Alpha): entry, stop, target — identical for all users
+  Layer 2 (Risk Allocation): per-profile position sizing, suppression state
 
-Core rules:
-  - Risk per trade: 0.25% to 0.5% of account (configurable)
-  - Minimum reward-to-risk: 2:1 (stocks/crypto), premium-based for options
-  - If a trade's required stop would exceed the daily loss budget, score = 0 (SUPPRESSED)
-  - All thresholds are symmetric: the resolver uses the same stop/target
-    that this engine computed at signal time
+Profiles are hardcoded non-linear dollar constraints modeled on real
+prop firms (Tradeify/Lucid) to prevent micro-tick noise on small accounts.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal
@@ -28,126 +24,205 @@ class AssetClass(str, Enum):
     STOCK = "stock"
     CRYPTO = "crypto"
     OPTIONS = "options"
+    FUTURES = "futures"
 
 
-@dataclass(frozen=True)
-class AccountProfile:
-    """Prop firm funded account constraints.
+# ─── Non-linear account profiles ──────────────────────────────────────────────
 
-    Default values model a typical $50k funded account:
-      - 4% max EOD drawdown ($2,000)
-      - 10% max trailing drawdown ($5,000)
-      - Risk per trade: 0.25-0.5% of account ($125-$250)
-    """
-    account_size: float = 50_000.0
-    max_daily_loss_pct: float = 4.0
-    max_drawdown_pct: float = 10.0
-    risk_per_trade_pct: float = 0.5
-    min_risk_per_trade_pct: float = 0.25
-    max_open_risk_pct: float = 3.0
+PROP_RISK_MATRIX: dict[str, dict] = {
+    "retail_standard": {
+        "account_size": 10_000,
+        "max_overall_drawdown": 1_000,
+        "max_daily_loss": 500,
+        "risk_per_trade_dollar": 100,
+        "daily_kill_switch_threshold": 400,
+    },
+    "25k_prop_conservative": {
+        "account_size": 25_000,
+        "max_overall_drawdown": 1_000,
+        "max_daily_loss": 500,
+        "risk_per_trade_dollar": 75,
+        "daily_kill_switch_threshold": 375,
+    },
+    "50k_prop_moderate": {
+        "account_size": 50_000,
+        "max_overall_drawdown": 2_000,
+        "max_daily_loss": 1_000,
+        "risk_per_trade_dollar": 125,
+        "daily_kill_switch_threshold": 750,
+    },
+    "150k_prop_boss": {
+        "account_size": 150_000,
+        "max_overall_drawdown": 4_500,
+        "max_daily_loss": 2_700,
+        "risk_per_trade_dollar": 225,
+        "daily_kill_switch_threshold": 2_025,
+    },
+}
 
-    @property
-    def max_daily_loss(self) -> float:
-        return self.account_size * (self.max_daily_loss_pct / 100)
+DEFAULT_PROFILE = "50k_prop_moderate"
 
-    @property
-    def max_drawdown(self) -> float:
-        return self.account_size * (self.max_drawdown_pct / 100)
-
-    @property
-    def max_risk_per_trade(self) -> float:
-        return self.account_size * (self.risk_per_trade_pct / 100)
-
-    @property
-    def min_risk_per_trade(self) -> float:
-        return self.account_size * (self.min_risk_per_trade_pct / 100)
-
-    @property
-    def max_open_risk(self) -> float:
-        return self.account_size * (self.max_open_risk_pct / 100)
+FUTURES_POINT_VALUES: dict[str, float] = {
+    "ES": 50, "NQ": 20, "MES": 5, "MNQ": 2,
+}
 
 
 # ─── R:R Configuration ──────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class RiskRewardConfig:
-    """Symmetric risk-to-reward boundaries per asset class."""
     min_rr: float
     max_rr: float
-    # Stop loss bounds as percentage of entry price
     min_stop_pct: float
     max_stop_pct: float
-    # Options use premium-based stops instead of price-based
     is_premium_based: bool = False
 
 
 RR_CONFIGS: dict[AssetClass, RiskRewardConfig] = {
     AssetClass.STOCK: RiskRewardConfig(
-        min_rr=2.0,
-        max_rr=3.0,
-        min_stop_pct=0.5,
-        max_stop_pct=3.0,
+        min_rr=2.0, max_rr=3.0,
+        min_stop_pct=0.5, max_stop_pct=3.0,
     ),
     AssetClass.CRYPTO: RiskRewardConfig(
-        min_rr=2.0,
-        max_rr=3.0,
-        min_stop_pct=1.0,
-        max_stop_pct=5.0,
+        min_rr=2.0, max_rr=3.0,
+        min_stop_pct=1.0, max_stop_pct=5.0,
     ),
     AssetClass.OPTIONS: RiskRewardConfig(
-        min_rr=2.5,
-        max_rr=3.0,
-        min_stop_pct=20.0,
-        max_stop_pct=30.0,
+        min_rr=2.5, max_rr=3.0,
+        min_stop_pct=20.0, max_stop_pct=30.0,
         is_premium_based=True,
+    ),
+    AssetClass.FUTURES: RiskRewardConfig(
+        min_rr=2.0, max_rr=3.0,
+        min_stop_pct=0.3, max_stop_pct=2.0,
     ),
 }
 
 
-# ─── Trade Setup ─────────────────────────────────────────────────────────────
+# ─── Layer 1: Core Alpha (same for all users) ───────────────────────────────
 
 @dataclass
-class TradeSetup:
-    """A scored trade setup with risk parameters.
-
-    Computed by `score_setup()` — contains everything a user needs to
-    execute the trade within prop firm rules.
-    """
+class CoreAlpha:
     direction: Literal["BUY", "SELL"]
     asset_class: AssetClass
     entry_price: float
     stop_loss: float
     take_profit: float
-    position_size: float
-    position_value: float
-    risk_dollars: float
-    reward_dollars: float
     risk_reward_ratio: float
     stop_pct: float
     target_pct: float
-    max_contracts: int | None = None
     suppressed: bool = False
     suppression_reason: str = ""
 
-    @property
-    def is_valid(self) -> bool:
-        return not self.suppressed and self.position_size > 0
+
+# ─── Layer 2: Per-Profile Risk Allocation ────────────────────────────────────
+
+@dataclass
+class ProfileAllocation:
+    profile_name: str
+    units: float
+    position_value: float
+    risk_dollars: float
+    reward_dollars: float
+    contracts: int | None = None
+    suppressed: bool = False
+    suppression_reason: str = ""
 
 
 @dataclass
+class DualLayerSetup:
+    alpha: CoreAlpha
+    allocations: dict[str, ProfileAllocation] = field(default_factory=dict)
+
+    @property
+    def is_valid(self) -> bool:
+        return not self.alpha.suppressed and any(
+            not a.suppressed for a in self.allocations.values()
+        )
+
+
+# ─── Per-Profile Session Kill Switch ────────────────────────────────────────
+
+@dataclass
+class SessionTracker:
+    realized_loss: dict[str, float] = field(default_factory=dict)
+    unrealized_loss: dict[str, float] = field(default_factory=dict)
+
+    def record_loss(self, profile: str, amount: float):
+        self.realized_loss[profile] = self.realized_loss.get(profile, 0.0) + abs(amount)
+
+    def update_unrealized(self, profile: str, amount: float):
+        self.unrealized_loss[profile] = abs(amount)
+
+    def total_loss(self, profile: str) -> float:
+        return self.realized_loss.get(profile, 0.0) + self.unrealized_loss.get(profile, 0.0)
+
+    def is_killed(self, profile: str) -> bool:
+        threshold = PROP_RISK_MATRIX[profile]["daily_kill_switch_threshold"]
+        return self.total_loss(profile) >= threshold
+
+    def reset_day(self):
+        self.realized_loss.clear()
+        self.unrealized_loss.clear()
+
+
+# ─── Backward-compat adapter ────────────────────────────────────────────────
+
+class AccountProfile:
+    """Thin adapter so existing callers (engine.py, resolver.py) keep working."""
+    def __init__(self, profile_name: str = DEFAULT_PROFILE):
+        p = PROP_RISK_MATRIX[profile_name]
+        self.account_size = p["account_size"]
+        self.max_daily_loss_pct = (p["max_daily_loss"] / p["account_size"]) * 100
+        self.max_drawdown_pct = (p["max_overall_drawdown"] / p["account_size"]) * 100
+        self.risk_per_trade_pct = (p["risk_per_trade_dollar"] / p["account_size"]) * 100
+        self.min_risk_per_trade_pct = self.risk_per_trade_pct
+        self.max_open_risk_pct = 3.0
+        self._profile = p
+
+    @property
+    def max_daily_loss(self) -> float:
+        return self._profile["max_daily_loss"]
+
+    @property
+    def max_drawdown(self) -> float:
+        return self._profile["max_overall_drawdown"]
+
+    @property
+    def max_risk_per_trade(self) -> float:
+        return self._profile["risk_per_trade_dollar"]
+
+    @property
+    def min_risk_per_trade(self) -> float:
+        return self._profile["risk_per_trade_dollar"] * 0.5
+
+    @property
+    def max_open_risk(self) -> float:
+        return self.account_size * (self.max_open_risk_pct / 100)
+
+
+DEFAULT_ACCOUNT = AccountProfile()
+
+
+# ─── RiskBudget (per-profile daily tracker) ─────────────────────────────────
+
+@dataclass
 class RiskBudget:
-    """Tracks intra-day risk consumption across all open trades."""
-    account: AccountProfile
+    profile_name: str = DEFAULT_PROFILE
     realized_loss_today: float = 0.0
     open_risk: float = 0.0
 
     @property
+    def _profile(self) -> dict:
+        return PROP_RISK_MATRIX[self.profile_name]
+
+    @property
     def daily_budget_remaining(self) -> float:
-        return self.account.max_daily_loss - self.realized_loss_today - self.open_risk
+        return self._profile["max_daily_loss"] - self.realized_loss_today - self.open_risk
 
     @property
     def can_take_trade(self) -> bool:
-        return self.daily_budget_remaining > self.account.min_risk_per_trade
+        return self.daily_budget_remaining > (self._profile["risk_per_trade_dollar"] * 0.5)
 
     def reserve(self, risk_dollars: float) -> bool:
         if risk_dollars > self.daily_budget_remaining:
@@ -162,7 +237,7 @@ class RiskBudget:
         self.realized_loss_today += abs(loss_dollars)
 
 
-# ─── Core scoring algorithm ─────────────────────────────────────────────────
+# ─── Stop/Target computation (Layer 1) ─────────────────────────────────────
 
 def compute_stop_and_target(
     entry_price: float,
@@ -172,9 +247,6 @@ def compute_stop_and_target(
     invalidation_level: float | None = None,
 ) -> tuple[float, float, float, float]:
     """Compute stop loss and take profit for a trade setup.
-
-    Uses ATR-based stops when available, otherwise falls back to
-    percentage-based stops within the config bounds.
 
     Returns: (stop_loss, take_profit, stop_pct, target_pct)
     """
@@ -207,34 +279,175 @@ def compute_stop_and_target(
     return stop_loss, take_profit, stop_pct, target_pct
 
 
-def compute_position_size(
-    account: AccountProfile,
+# ─── Polymorphic position sizing (Layer 2) ─────────────────────────────────
+
+def compute_units(
+    asset_class: AssetClass,
+    risk_dollars: float,
     entry_price: float,
     stop_loss: float,
-    confidence: int,
-) -> tuple[float, float, float]:
-    """Calculate position size in shares/units and dollar risk.
+    futures_symbol: str | None = None,
+) -> tuple[float, int | None]:
+    """Returns (units, contracts_or_none).
 
-    Scales risk between min_risk_per_trade_pct and risk_per_trade_pct
-    based on confidence: 70 confidence = min risk, 95+ = max risk.
-
-    Returns: (shares, position_value, risk_dollars)
+    Stocks/Crypto: fractional units (8 decimals for crypto).
+    Options: contracts = floor(risk / ((premium_entry - premium_stop) * 100)).
+    Futures: contracts = floor(risk / (stop_points * point_value)).
     """
-    risk_per_share = abs(entry_price - stop_loss)
-    if risk_per_share <= 0:
-        return 0.0, 0.0, 0.0
+    risk_per_unit = abs(entry_price - stop_loss)
+    if risk_per_unit <= 0:
+        return 0.0, None
 
-    conf_scale = max(0.0, min(1.0, (confidence - 70) / 25))
-    risk_pct = (
-        account.min_risk_per_trade_pct
-        + conf_scale * (account.risk_per_trade_pct - account.min_risk_per_trade_pct)
+    if asset_class == AssetClass.OPTIONS:
+        contracts = math.floor(risk_dollars / (risk_per_unit * 100))
+        return float(contracts), max(contracts, 0)
+
+    if asset_class == AssetClass.FUTURES:
+        pv = FUTURES_POINT_VALUES.get((futures_symbol or "").upper(), 50)
+        contracts = math.floor(risk_dollars / (risk_per_unit * pv))
+        return float(contracts), max(contracts, 0)
+
+    units = risk_dollars / risk_per_unit
+    if asset_class == AssetClass.CRYPTO:
+        return round(units, 8), None
+    return round(units, 4), None
+
+
+# ─── Multi-profile scoring (the main entry point) ──────────────────────────
+
+def score_all_profiles(
+    direction: str,
+    asset_class: AssetClass | str,
+    entry_price: float,
+    confidence: int,
+    session: SessionTracker | None = None,
+    atr: float | None = None,
+    invalidation_level: float | None = None,
+    futures_symbol: str | None = None,
+) -> DualLayerSetup:
+    if isinstance(asset_class, str):
+        asset_class = AssetClass(asset_class)
+
+    if direction not in ("BUY", "SELL"):
+        return DualLayerSetup(
+            alpha=CoreAlpha(
+                direction=direction, asset_class=asset_class,
+                entry_price=entry_price, stop_loss=0, take_profit=0,
+                risk_reward_ratio=0, stop_pct=0, target_pct=0,
+                suppressed=True,
+                suppression_reason="HOLD signals have no trade setup",
+            )
+        )
+
+    stop_loss, take_profit, stop_pct, target_pct = compute_stop_and_target(
+        entry_price, direction, asset_class,
+        atr=atr, invalidation_level=invalidation_level,
     )
-    risk_dollars = account.account_size * (risk_pct / 100)
+    rr_ratio = target_pct / stop_pct if stop_pct > 0 else 0
+    config = RR_CONFIGS[asset_class]
 
-    shares = risk_dollars / risk_per_share
-    position_value = shares * entry_price
+    if rr_ratio < config.min_rr:
+        return DualLayerSetup(
+            alpha=CoreAlpha(
+                direction=direction, asset_class=asset_class,
+                entry_price=entry_price, stop_loss=stop_loss,
+                take_profit=take_profit, risk_reward_ratio=rr_ratio,
+                stop_pct=round(stop_pct * 100, 2),
+                target_pct=round(target_pct * 100, 2),
+                suppressed=True,
+                suppression_reason=f"R:R {rr_ratio:.1f}:1 below minimum {config.min_rr}:1",
+            )
+        )
 
-    return round(shares, 4), round(position_value, 2), round(risk_dollars, 2)
+    alpha = CoreAlpha(
+        direction=direction,
+        asset_class=asset_class,
+        entry_price=entry_price,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        risk_reward_ratio=round(rr_ratio, 2),
+        stop_pct=round(stop_pct * 100, 2),
+        target_pct=round(target_pct * 100, 2),
+    )
+
+    allocations: dict[str, ProfileAllocation] = {}
+    for name, profile in PROP_RISK_MATRIX.items():
+        risk_dollars = profile["risk_per_trade_dollar"]
+
+        if session is not None and session.is_killed(name):
+            allocations[name] = ProfileAllocation(
+                profile_name=name, units=0, position_value=0,
+                risk_dollars=risk_dollars, reward_dollars=0,
+                suppressed=True,
+                suppression_reason=(
+                    f"Kill switch: ${session.total_loss(name):.0f} losses "
+                    f">= ${profile['daily_kill_switch_threshold']} threshold"
+                ),
+            )
+            continue
+
+        if risk_dollars > profile["max_daily_loss"]:
+            allocations[name] = ProfileAllocation(
+                profile_name=name, units=0, position_value=0,
+                risk_dollars=risk_dollars, reward_dollars=0,
+                suppressed=True,
+                suppression_reason=(
+                    f"Risk ${risk_dollars} exceeds daily loss limit ${profile['max_daily_loss']}"
+                ),
+            )
+            continue
+
+        units, contracts = compute_units(
+            asset_class, risk_dollars, entry_price, stop_loss,
+            futures_symbol=futures_symbol,
+        )
+        position_value = round(units * entry_price, 2)
+        reward_dollars = round(units * abs(entry_price - take_profit), 2)
+
+        allocations[name] = ProfileAllocation(
+            profile_name=name,
+            units=units,
+            position_value=position_value,
+            risk_dollars=round(risk_dollars, 2),
+            reward_dollars=reward_dollars,
+            contracts=contracts,
+        )
+
+    logger.debug(
+        "risk_engine: {} {} @ ${:.2f} → SL ${:.2f} ({:.1f}%) / "
+        "TP ${:.2f} ({:.1f}%) / R:R {:.1f}:1 / {} profiles scored",
+        direction, asset_class.value, entry_price,
+        stop_loss, stop_pct * 100, take_profit, target_pct * 100,
+        rr_ratio, len(allocations),
+    )
+
+    return DualLayerSetup(alpha=alpha, allocations=allocations)
+
+
+# ─── Single-profile scoring (backward compat for engine.py) ────────────────
+
+@dataclass
+class TradeSetup:
+    direction: Literal["BUY", "SELL"]
+    asset_class: AssetClass
+    entry_price: float
+    stop_loss: float
+    take_profit: float
+    position_size: float
+    position_value: float
+    risk_dollars: float
+    reward_dollars: float
+    risk_reward_ratio: float
+    stop_pct: float
+    target_pct: float
+    max_contracts: int | None = None
+    suppressed: bool = False
+    suppression_reason: str = ""
+    allocations: dict[str, dict] | None = None
+
+    @property
+    def is_valid(self) -> bool:
+        return not self.suppressed and self.position_size > 0
 
 
 def score_setup(
@@ -242,178 +455,149 @@ def score_setup(
     asset_class: AssetClass | str,
     entry_price: float,
     confidence: int,
-    account: AccountProfile | None = None,
+    account: "AccountProfile | None" = None,
     budget: RiskBudget | None = None,
     atr: float | None = None,
     invalidation_level: float | None = None,
 ) -> TradeSetup:
-    """Score a potential trade setup against prop firm risk rules.
+    """Backward-compatible single-profile entry point.
 
-    This is the main entry point. It:
-    1. Computes stop/target with symmetric R:R
-    2. Sizes the position to risk 0.25-0.5% of the account
-    3. Checks if the trade fits within the daily loss budget
-    4. Returns SUPPRESSED if any rule is violated
+    Calls score_all_profiles() internally, returns a TradeSetup using
+    the default profile for position sizing, with all profile allocations
+    attached.
     """
-    if account is None:
-        account = DEFAULT_ACCOUNT
     if isinstance(asset_class, str):
         asset_class = AssetClass(asset_class)
 
-    if direction not in ("BUY", "SELL"):
-        return TradeSetup(
-            direction=direction,
-            asset_class=asset_class,
-            entry_price=entry_price,
-            stop_loss=0, take_profit=0,
-            position_size=0, position_value=0,
-            risk_dollars=0, reward_dollars=0,
-            risk_reward_ratio=0, stop_pct=0, target_pct=0,
-            suppressed=True,
-            suppression_reason="HOLD signals have no trade setup",
-        )
-
-    stop_loss, take_profit, stop_pct, target_pct = compute_stop_and_target(
-        entry_price, direction, asset_class, atr=atr,
+    dual = score_all_profiles(
+        direction=direction,
+        asset_class=asset_class,
+        entry_price=entry_price,
+        confidence=confidence,
+        atr=atr,
         invalidation_level=invalidation_level,
     )
 
-    rr_ratio = target_pct / stop_pct if stop_pct > 0 else 0
-    config = RR_CONFIGS[asset_class]
-
-    if rr_ratio < config.min_rr:
+    if dual.alpha.suppressed:
         return TradeSetup(
             direction=direction, asset_class=asset_class,
-            entry_price=entry_price, stop_loss=stop_loss,
-            take_profit=take_profit, position_size=0,
-            position_value=0, risk_dollars=0, reward_dollars=0,
-            risk_reward_ratio=rr_ratio, stop_pct=stop_pct,
-            target_pct=target_pct, suppressed=True,
-            suppression_reason=(
-                f"R:R {rr_ratio:.1f}:1 below minimum {config.min_rr}:1"
-            ),
+            entry_price=entry_price,
+            stop_loss=dual.alpha.stop_loss,
+            take_profit=dual.alpha.take_profit,
+            position_size=0, position_value=0,
+            risk_dollars=0, reward_dollars=0,
+            risk_reward_ratio=dual.alpha.risk_reward_ratio,
+            stop_pct=dual.alpha.stop_pct,
+            target_pct=dual.alpha.target_pct,
+            suppressed=True,
+            suppression_reason=dual.alpha.suppression_reason,
         )
 
-    shares, position_value, risk_dollars = compute_position_size(
-        account, entry_price, stop_loss, confidence,
-    )
-
-    reward_dollars = shares * abs(entry_price - take_profit) if shares > 0 else 0
-
-    # Check daily loss budget
-    if risk_dollars > account.max_daily_loss:
+    default_alloc = dual.allocations.get(DEFAULT_PROFILE)
+    if default_alloc is None or default_alloc.suppressed:
+        reason = default_alloc.suppression_reason if default_alloc else "no default profile"
         return TradeSetup(
             direction=direction, asset_class=asset_class,
-            entry_price=entry_price, stop_loss=stop_loss,
-            take_profit=take_profit, position_size=0,
-            position_value=0, risk_dollars=risk_dollars,
-            reward_dollars=0, risk_reward_ratio=rr_ratio,
-            stop_pct=stop_pct, target_pct=target_pct,
+            entry_price=entry_price,
+            stop_loss=dual.alpha.stop_loss,
+            take_profit=dual.alpha.take_profit,
+            position_size=0, position_value=0,
+            risk_dollars=0, reward_dollars=0,
+            risk_reward_ratio=dual.alpha.risk_reward_ratio,
+            stop_pct=dual.alpha.stop_pct,
+            target_pct=dual.alpha.target_pct,
             suppressed=True,
-            suppression_reason=(
-                f"Risk ${risk_dollars:.0f} exceeds daily loss limit "
-                f"${account.max_daily_loss:.0f}"
-            ),
+            suppression_reason=reason,
         )
 
     if budget is not None and not budget.can_take_trade:
         return TradeSetup(
             direction=direction, asset_class=asset_class,
-            entry_price=entry_price, stop_loss=stop_loss,
-            take_profit=take_profit, position_size=0,
-            position_value=0, risk_dollars=risk_dollars,
-            reward_dollars=reward_dollars,
-            risk_reward_ratio=rr_ratio, stop_pct=stop_pct,
-            target_pct=target_pct, suppressed=True,
+            entry_price=entry_price,
+            stop_loss=dual.alpha.stop_loss,
+            take_profit=dual.alpha.take_profit,
+            position_size=0, position_value=0,
+            risk_dollars=default_alloc.risk_dollars,
+            reward_dollars=default_alloc.reward_dollars,
+            risk_reward_ratio=dual.alpha.risk_reward_ratio,
+            stop_pct=dual.alpha.stop_pct,
+            target_pct=dual.alpha.target_pct,
+            suppressed=True,
             suppression_reason=(
                 f"Daily risk budget exhausted — "
-                f"${budget.daily_budget_remaining:.0f} remaining, "
-                f"need ${risk_dollars:.0f}"
+                f"${budget.daily_budget_remaining:.0f} remaining"
             ),
         )
 
     if budget is not None:
-        if not budget.reserve(risk_dollars):
+        if not budget.reserve(default_alloc.risk_dollars):
             return TradeSetup(
                 direction=direction, asset_class=asset_class,
-                entry_price=entry_price, stop_loss=stop_loss,
-                take_profit=take_profit, position_size=0,
-                position_value=0, risk_dollars=risk_dollars,
-                reward_dollars=reward_dollars,
-                risk_reward_ratio=rr_ratio, stop_pct=stop_pct,
-                target_pct=target_pct, suppressed=True,
+                entry_price=entry_price,
+                stop_loss=dual.alpha.stop_loss,
+                take_profit=dual.alpha.take_profit,
+                position_size=0, position_value=0,
+                risk_dollars=default_alloc.risk_dollars,
+                reward_dollars=default_alloc.reward_dollars,
+                risk_reward_ratio=dual.alpha.risk_reward_ratio,
+                stop_pct=dual.alpha.stop_pct,
+                target_pct=dual.alpha.target_pct,
+                suppressed=True,
                 suppression_reason=(
                     f"Would exceed open risk cap — "
                     f"${budget.daily_budget_remaining:.0f} budget remaining"
                 ),
             )
 
-    max_contracts = None
-    if asset_class == AssetClass.OPTIONS:
-        contract_risk = entry_price * 100 * (stop_pct)
-        max_contracts = max(1, int(risk_dollars / contract_risk)) if contract_risk > 0 else 0
+    all_allocs = {
+        name: {
+            "units": a.units,
+            "position_value": a.position_value,
+            "risk_dollars": a.risk_dollars,
+            "reward_dollars": a.reward_dollars,
+            "contracts": a.contracts,
+            "suppressed": a.suppressed,
+            "suppression_reason": a.suppression_reason,
+        }
+        for name, a in dual.allocations.items()
+    }
 
-    setup = TradeSetup(
+    return TradeSetup(
         direction=direction,
         asset_class=asset_class,
         entry_price=entry_price,
-        stop_loss=stop_loss,
-        take_profit=take_profit,
-        position_size=round(shares, 4),
-        position_value=round(position_value, 2),
-        risk_dollars=round(risk_dollars, 2),
-        reward_dollars=round(reward_dollars, 2),
-        risk_reward_ratio=round(rr_ratio, 2),
-        stop_pct=round(stop_pct * 100, 2),
-        target_pct=round(target_pct * 100, 2),
-        max_contracts=max_contracts,
+        stop_loss=dual.alpha.stop_loss,
+        take_profit=dual.alpha.take_profit,
+        position_size=default_alloc.units,
+        position_value=default_alloc.position_value,
+        risk_dollars=default_alloc.risk_dollars,
+        reward_dollars=default_alloc.reward_dollars,
+        risk_reward_ratio=dual.alpha.risk_reward_ratio,
+        stop_pct=dual.alpha.stop_pct,
+        target_pct=dual.alpha.target_pct,
+        max_contracts=default_alloc.contracts,
+        allocations=all_allocs,
     )
 
-    logger.debug(
-        "risk_engine: {} {} @ ${:.2f} → SL ${:.2f} ({:.1f}%) / "
-        "TP ${:.2f} ({:.1f}%) / {:.1f} shares / risk ${:.0f} / "
-        "R:R {:.1f}:1",
-        direction, asset_class.value, entry_price,
-        stop_loss, stop_pct * 100, take_profit, target_pct * 100,
-        shares, risk_dollars, rr_ratio,
-    )
 
-    return setup
-
-
-# ─── Resolution thresholds derived from trade setups ─────────────────────────
+# ─── Resolution thresholds ─────────────────────────────────────────────────
 
 def get_symmetric_resolution_thresholds(
     asset_class: AssetClass | str,
 ) -> tuple[float, float]:
-    """Return (win_threshold, loss_threshold) as decimals for the resolver.
-
-    These are SYMMETRIC — same magnitude in both directions — derived from
-    the R:R config's stop range midpoint. This replaces the old asymmetric
-    thresholds that inflated win rates.
-    """
     if isinstance(asset_class, str):
         asset_class = AssetClass(asset_class)
-
     config = RR_CONFIGS[asset_class]
-
     if config.is_premium_based:
         mid_stop = config.min_stop_pct / 100
     else:
         mid_stop = (config.min_stop_pct + config.max_stop_pct) / 2 / 100
-
     return mid_stop, mid_stop
 
 
-# ─── Default account (used when no user profile is configured) ───────────────
-
-DEFAULT_ACCOUNT = AccountProfile()
-
-
-# ─── Formatting helpers (for signal output / newsletter) ─────────────────────
+# ─── Formatting helpers ───────────────────────────────────────────────────
 
 def format_trade_setup(setup: TradeSetup) -> dict:
-    """Serialize a TradeSetup into the dict stored alongside a signal."""
     if setup.suppressed:
         return {
             "suppressed": True,
@@ -433,4 +617,6 @@ def format_trade_setup(setup: TradeSetup) -> dict:
     }
     if setup.max_contracts is not None:
         base["max_contracts"] = setup.max_contracts
+    if setup.allocations:
+        base["profile_allocations"] = setup.allocations
     return base
