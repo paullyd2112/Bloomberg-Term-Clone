@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import Literal
 
@@ -69,6 +70,35 @@ DEFAULT_PROFILE = "50k_prop_moderate"
 FUTURES_POINT_VALUES: dict[str, float] = {
     "ES": 50, "NQ": 20, "MES": 5, "MNQ": 2,
 }
+
+# ─── Slippage friction buffer (10% haircut on nominal risk) ──────────────────
+# Production guardrail: assume 10% slippage/fees on every entry so position
+# sizing never relies on perfect fills. Each profile's effective risk per trade
+# is 90% of the nominal value.
+SLIPPAGE_FRICTION_PCT = 0.10
+EFFECTIVE_RISK: dict[str, float] = {
+    name: round(p["risk_per_trade_dollar"] * (1 - SLIPPAGE_FRICTION_PCT), 2)
+    for name, p in PROP_RISK_MATRIX.items()
+}
+
+
+# ─── Subscription tier gating ────────────────────────────────────────────────
+
+class SubscriptionTier(str, Enum):
+    PRO = "pro"
+    LIFETIME_PRO = "lifetime_pro"
+    ELITE = "elite"
+    LIFETIME_ELITE = "lifetime_elite"
+
+
+PRO_TIERS = frozenset({SubscriptionTier.PRO, SubscriptionTier.LIFETIME_PRO})
+ELITE_TIERS = frozenset({SubscriptionTier.ELITE, SubscriptionTier.LIFETIME_ELITE})
+
+PRO_ALLOWED_ASSETS = frozenset({AssetClass.STOCK, AssetClass.CRYPTO})
+ELITE_ALLOWED_ASSETS = frozenset({
+    AssetClass.STOCK, AssetClass.CRYPTO, AssetClass.OPTIONS,
+    AssetClass.FUTURES, AssetClass.PREDICTION_MARKET,
+})
 
 
 # ─── R:R Configuration ──────────────────────────────────────────────────────
@@ -334,6 +364,183 @@ def compute_prediction_contracts(
     return math.floor(risk_dollars / premium_risk)
 
 
+# ─── Production guardrails ─────────────────────────────────────────────────
+
+def is_after_market_cutoff() -> bool:
+    """Block signals after 3:30 PM EST (19:30 UTC during EDT, 20:30 during EST).
+    Returns True if current time is past cutoff."""
+    from zoneinfo import ZoneInfo
+    now_et = datetime.now(ZoneInfo("America/New_York"))
+    cutoff = now_et.replace(hour=15, minute=30, second=0, microsecond=0)
+    return now_et >= cutoff
+
+
+def check_zero_unit_rejection(units: float, contracts: int | None, asset_class: AssetClass) -> str | None:
+    """Returns rejection reason if position resolves to zero, else None."""
+    if asset_class in (AssetClass.OPTIONS, AssetClass.FUTURES, AssetClass.PREDICTION_MARKET):
+        if contracts is not None and contracts <= 0:
+            return f"Zero contracts after sizing — risk too small for {asset_class.value}"
+    else:
+        if units <= 0:
+            return f"Zero units after sizing — risk too small for {asset_class.value}"
+    return None
+
+
+CONFIDENCE_MINIMUM = 75
+
+
+def check_confidence_gate(confidence_score: int) -> str | None:
+    """Returns rejection reason if confidence below threshold, else None."""
+    if confidence_score < CONFIDENCE_MINIMUM:
+        return f"Confidence {confidence_score} below minimum {CONFIDENCE_MINIMUM}"
+    return None
+
+
+def get_effective_risk(profile_name: str) -> float:
+    """Return the slippage-buffered risk dollar amount for a profile."""
+    return EFFECTIVE_RISK[profile_name]
+
+
+def filter_by_subscription(
+    asset_class: AssetClass,
+    subscription: SubscriptionTier | str,
+) -> str | None:
+    """Returns rejection reason if the asset is not available for this subscription tier.
+    Returns None if allowed."""
+    if isinstance(subscription, str):
+        subscription = SubscriptionTier(subscription)
+
+    if subscription in PRO_TIERS:
+        if asset_class not in PRO_ALLOWED_ASSETS:
+            return (
+                f"{asset_class.value} not available on Pro tier — "
+                f"upgrade to Elite for options, futures, and event contracts"
+            )
+    return None
+
+
+# ─── XML payload builder ──────────────────────────────────────────────────────
+
+def build_batch_xml_payload(
+    asset_class: AssetClass,
+    identifier: str,
+    entry_price: float,
+    direction: str,
+    profile_name: str,
+    macro_context: dict | None = None,
+    asset_health: dict | None = None,
+) -> str:
+    """Build structured XML payload for LLM batch scoring context."""
+    mc = macro_context or {}
+    ah = asset_health or {}
+    eff_risk = get_effective_risk(profile_name)
+    profile = PROP_RISK_MATRIX[profile_name]
+
+    vix = mc.get("vix", "N/A")
+    sp500 = mc.get("sp500_price", "N/A")
+    sp500_trend = mc.get("sp500_trend", "neutral")
+    crypto_funding = mc.get("crypto_funding_rate", "N/A")
+    high_impact = mc.get("high_impact_news_day", False)
+
+    rvol = ah.get("rvol", "N/A")
+    pe_ratio = ah.get("pe_ratio", "N/A")
+    days_to_earnings = ah.get("days_to_earnings", "N/A")
+    uoa_multiplier = ah.get("uoa_vol_oi_multiplier", "N/A")
+
+    xml = f"""<batch_signal>
+  <asset_class>{asset_class.value}</asset_class>
+  <identifier>{identifier}</identifier>
+  <entry_price>{entry_price}</entry_price>
+  <direction>{direction}</direction>
+  <macro_framework>
+    <vix_status>{vix}</vix_status>
+    <sp500_price>{sp500}</sp500_price>
+    <sp500_trend_structure>{sp500_trend}</sp500_trend_structure>
+    <crypto_funding_rates>{crypto_funding}</crypto_funding_rates>
+    <high_impact_news_day>{str(high_impact).lower()}</high_impact_news_day>
+  </macro_framework>
+  <asset_health>
+    <rvol>{rvol}</rvol>
+    <pe_ratio>{pe_ratio}</pe_ratio>
+    <days_until_earnings>{days_to_earnings}</days_until_earnings>
+    <uoa_vol_oi_multiplier>{uoa_multiplier}</uoa_vol_oi_multiplier>
+  </asset_health>
+  <tier_safety_bounds>
+    <profile>{profile_name}</profile>
+    <nominal_risk>${profile['risk_per_trade_dollar']}</nominal_risk>
+    <effective_risk_after_slippage>${eff_risk}</effective_risk_after_slippage>
+    <max_daily_loss>${profile['max_daily_loss']}</max_daily_loss>
+    <max_drawdown>${profile['max_overall_drawdown']}</max_drawdown>
+    <symmetric_reward_target>${eff_risk * RR_CONFIGS[asset_class].min_rr}</symmetric_reward_target>
+  </tier_safety_bounds>
+</batch_signal>"""
+    return xml
+
+
+# ─── Static examples for system prompt ────────────────────────────────────────
+
+STATIC_EXAMPLES_XML = """<examples>
+  <winning_momentum_trades>
+    <trade id="1">
+      <ticker>NVDA</ticker>
+      <direction>BUY</direction>
+      <entry>$131.42</entry>
+      <stop>$128.50</stop>
+      <target>$137.26</target>
+      <context>RSI 58 rising, MACD hist expanding positive, RVOL 2.1x, above SMA-50 by 4.2%</context>
+      <outcome>HIT TARGET +4.4% in 2 days — momentum continuation after AI earnings beat</outcome>
+    </trade>
+    <trade id="2">
+      <ticker>META</ticker>
+      <direction>BUY</direction>
+      <entry>$512.80</entry>
+      <stop>$502.50</stop>
+      <target>$533.40</target>
+      <context>RSI 62, BB %B 0.78, earnings whisper +3.2% above consensus, UOA call sweep 4.1x OI</context>
+      <outcome>HIT TARGET +4.0% in 3 days — pre-earnings momentum with institutional flow confirmation</outcome>
+    </trade>
+    <trade id="3">
+      <ticker>SOL</ticker>
+      <direction>BUY</direction>
+      <entry>$178.50</entry>
+      <stop>$170.00</stop>
+      <target>$195.50</target>
+      <context>RSI 55 from oversold bounce, BTC regime bullish, funding rates neutral, RVOL 1.8x</context>
+      <outcome>HIT TARGET +9.5% in 5 days — altcoin rotation following BTC breakout above 70k</outcome>
+    </trade>
+  </winning_momentum_trades>
+  <failed_chop_trades>
+    <trade id="4">
+      <ticker>TSLA</ticker>
+      <direction>BUY</direction>
+      <entry>$248.90</entry>
+      <stop>$243.10</stop>
+      <target>$260.50</target>
+      <context>RSI 52, MACD hist flat near zero, BB %B 0.51, no catalyst, RVOL 0.7x</context>
+      <outcome>STOPPED OUT -2.3% — no directional conviction in range-bound chop, low volume confirmed no follow-through</outcome>
+    </trade>
+    <trade id="5">
+      <ticker>AAPL</ticker>
+      <direction>SELL</direction>
+      <entry>$189.20</entry>
+      <stop>$193.40</stop>
+      <target>$180.80</target>
+      <context>RSI 47, SPY +2.1% above SMA-50, MACD hist contracting but still positive, earnings in 8 days</context>
+      <outcome>STOPPED OUT +2.2% — faded a stock in neutral territory during a broad uptrend, earnings bid lifted it</outcome>
+    </trade>
+    <trade id="6">
+      <ticker>ETH</ticker>
+      <direction>SELL</direction>
+      <entry>$3,420</entry>
+      <stop>$3,520</stop>
+      <target>$3,220</target>
+      <context>RSI 44, BTC regime neutral-bullish, funding rates slightly positive, RVOL 0.9x</context>
+      <outcome>STOPPED OUT +2.9% — sold into support during BTC accumulation phase, alt rotation squeezed shorts</outcome>
+    </trade>
+  </failed_chop_trades>
+</examples>"""
+
+
 # ─── Tier-filtered output ──────────────────────────────────────────────────
 
 class Tier(str, Enum):
@@ -453,7 +660,7 @@ def score_all_profiles(
                 )
 
     for name, profile in eligible_profiles.items():
-        risk_dollars = profile["risk_per_trade_dollar"]
+        risk_dollars = EFFECTIVE_RISK[name]
 
         if asset_class == AssetClass.PREDICTION_MARKET:
             contracts = compute_prediction_contracts(
@@ -498,6 +705,17 @@ def score_all_profiles(
             asset_class, risk_dollars, entry_price, stop_loss,
             futures_symbol=futures_symbol,
         )
+
+        zero_reason = check_zero_unit_rejection(units, contracts, asset_class)
+        if zero_reason:
+            allocations[name] = ProfileAllocation(
+                profile_name=name, units=0, position_value=0,
+                risk_dollars=round(risk_dollars, 2), reward_dollars=0,
+                suppressed=True,
+                suppression_reason=zero_reason,
+            )
+            continue
+
         position_value = round(units * entry_price, 2)
         reward_dollars = round(units * abs(entry_price - take_profit), 2)
 

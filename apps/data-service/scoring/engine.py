@@ -442,6 +442,35 @@ def _apply_accuracy_penalty(confidence: int, accuracy: dict | None) -> int:
     return confidence
 
 
+# ─── XML batch context helpers ───────────────────────────────────────────────
+
+def _build_macro_context_dict(benchmarks: dict | None) -> dict:
+    """Build the macro_context dict consumed by build_batch_xml_payload."""
+    bm = benchmarks or {}
+    spy = bm.get("SPY", {})
+    return {
+        "vix": "N/A",
+        "sp500_price": spy.get("price", "N/A"),
+        "sp500_trend": (
+            "strong_uptrend" if (spy.get("price_vs_sma50_pct") or 0) > 5
+            else "downtrend" if (spy.get("price_vs_sma50_pct") or 0) < 0
+            else "neutral"
+        ),
+        "crypto_funding_rate": "N/A",
+        "high_impact_news_day": False,
+    }
+
+
+def _build_asset_health_dict(meta: dict, identifier: str) -> dict:
+    """Build the asset_health dict consumed by build_batch_xml_payload."""
+    return {
+        "rvol": meta.get("volume_ratio", "N/A"),
+        "pe_ratio": meta.get("pe_ratio", "N/A"),
+        "days_to_earnings": "N/A",
+        "uoa_vol_oi_multiplier": "N/A",
+    }
+
+
 # ─── Signal writer ────────────────────────────────────────────────────────────
 
 # Set by scheduler.py's manual /run-job/ endpoint around a {"force": true}
@@ -462,9 +491,11 @@ def _write_signal(
     news_with_urls: list[dict] | None = None,
     risk_budget: "RiskBudget | None" = None,
     atr: float | None = None,
+    subscription: str | None = None,
 ) -> dict:
     from scoring.risk_engine import (
         score_setup, format_trade_setup, AssetClass, DEFAULT_ACCOUNT,
+        filter_by_subscription, SubscriptionTier,
     )
 
     accuracy = _get_asset_accuracy(identifier, asset_type)
@@ -487,8 +518,8 @@ def _write_signal(
         "prediction": AssetClass.PREDICTION_MARKET,
     }
 
-    # Run prop risk engine — compute position size, stop/target, and
-    # check against daily loss budget
+    # Subscription tier gating — Pro gets stocks/crypto only;
+    # Elite gets all asset classes
     trade_setup_data = None
     direction_field = signal.direction
     if asset_type == "prediction":
@@ -496,9 +527,29 @@ def _write_signal(
             "SELL" if getattr(signal, "direction", "HOLD") == "NO" else "HOLD"
         )
 
+    asset_cls = _ASSET_CLASS_MAP.get(asset_type, AssetClass.STOCK)
+    if subscription:
+        sub_rejection = filter_by_subscription(asset_cls, subscription)
+        if sub_rejection:
+            logger.info("{}/{}: subscription gate — {}", asset_type, identifier, sub_rejection)
+            base = {
+                "asset_type":      asset_type,
+                "identifier":      identifier,
+                "direction":       "HOLD",
+                "confidence":      0,
+                "reasoning":       f"[Subscription gate] {sub_rejection}",
+                "time_horizon":    signal.time_horizon,
+                "price_at_signal": price,
+                "news_context":    signal.news_context,
+                "news_urls":       [],
+                "is_backtest":     False,
+                "is_stale_test":   STALE_TEST_MODE,
+                "outcome":         "PENDING",
+            }
+            return base
+
     if price is not None and direction_field in ("BUY", "SELL"):
         invalidation = getattr(signal, "invalidation_price", None)
-        asset_cls = _ASSET_CLASS_MAP.get(asset_type, AssetClass.STOCK)
         setup = score_setup(
             direction=direction_field,
             asset_class=asset_cls,
@@ -610,6 +661,13 @@ def score_asset(
                        asset_type, identifier, 5)
         return None
 
+    # ── Time-of-day filter (stocks only — crypto/prediction trade 24/7) ────
+    if asset_type == "stock":
+        from scoring.risk_engine import is_after_market_cutoff
+        if is_after_market_cutoff():
+            logger.info("{}/{}: time gate — past 3:30 PM EST, skipping", asset_type, identifier)
+            return None
+
     # ── Build asset-specific context & call Claude ──────────────────────────
 
     # Reuse preloaded macro context if the caller supplied it (score_stocks/
@@ -619,6 +677,8 @@ def score_asset(
         benchmarks = _get_market_benchmark()
     if macro_events is None:
         macro_events = _get_upcoming_macro(days=2)
+
+    from scoring.risk_engine import STATIC_EXAMPLES_XML, build_batch_xml_payload, AssetClass
 
     try:
         if asset_type == "stock":
@@ -633,15 +693,29 @@ def score_asset(
                 "short_interest_context": _get_short_interest_context(identifier),
                 "corporate_actions":     _get_corporate_actions_context(identifier),
             }
+
+            macro_ctx = _build_macro_context_dict(benchmarks)
+            asset_health = _build_asset_health_dict(meta, identifier)
+            batch_xml = build_batch_xml_payload(
+                asset_class=AssetClass.STOCK,
+                identifier=identifier,
+                entry_price=current_price,
+                direction="PENDING",
+                profile_name="retail_standard",
+                macro_context=macro_ctx,
+                asset_health=asset_health,
+            )
+
             signal: StockSignal = client.chat.completions.create(
                 model=use_model,
                 max_tokens=MAX_TOKENS,
                 system=[
                     {"type": "text", "text": stocks_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": STATIC_EXAMPLES_XML, "cache_control": {"type": "ephemeral"}},
                     {"type": "text", "text": _format_market_context(benchmarks, macro_events),
                      "cache_control": {"type": "ephemeral"}},
                 ],
-                messages=[{"role": "user", "content": stocks_prompt.build_user_prompt(context)}],
+                messages=[{"role": "user", "content": batch_xml + "\n\n" + stocks_prompt.build_user_prompt(context)}],
                 response_model=StockSignal,
             )
 
@@ -656,15 +730,27 @@ def score_asset(
                 "news_headlines":      news,
                 "btc_regime":          btc_regime,
             }
+
+            macro_ctx = _build_macro_context_dict(benchmarks)
+            batch_xml = build_batch_xml_payload(
+                asset_class=AssetClass.CRYPTO,
+                identifier=identifier,
+                entry_price=current_price,
+                direction="PENDING",
+                profile_name="retail_standard",
+                macro_context=macro_ctx,
+            )
+
             signal: CryptoSignal = client.chat.completions.create(
                 model=use_model,
                 max_tokens=MAX_TOKENS,
                 system=[
                     {"type": "text", "text": crypto_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": STATIC_EXAMPLES_XML, "cache_control": {"type": "ephemeral"}},
                     {"type": "text", "text": _format_market_context(benchmarks, macro_events),
                      "cache_control": {"type": "ephemeral"}},
                 ],
-                messages=[{"role": "user", "content": crypto_prompt.build_user_prompt(context)}],
+                messages=[{"role": "user", "content": batch_xml + "\n\n" + crypto_prompt.build_user_prompt(context)}],
                 response_model=CryptoSignal,
             )
 
@@ -694,6 +780,20 @@ def score_asset(
         logger.error("{}/{}: Claude scoring failed — {}", asset_type, identifier, e)
         sentry_sdk.capture_exception(e)
         return None
+
+    # Confidence gate — reject low-confidence signals before any further processing
+    from scoring.risk_engine import check_confidence_gate, CONFIDENCE_MINIMUM
+    conf_rejection = check_confidence_gate(signal.confidence)
+    if conf_rejection and signal.direction in ("BUY", "SELL"):
+        logger.info(
+            "{}/{}: confidence gate — {} ({}%), downgrading to HOLD",
+            asset_type, identifier, signal.direction, signal.confidence,
+        )
+        signal.direction = "HOLD"
+        signal.reasoning = (
+            f"[Confidence gate] Score {signal.confidence}/100 below "
+            f"minimum {CONFIDENCE_MINIMUM} threshold. " + signal.reasoning
+        )
 
     # Circuit breaker — don't issue counter-trend signals after a large gap move.
     # A >8% gap up/down almost always means a fundamental catalyst repriced the stock;
@@ -876,7 +976,7 @@ def score_asset(
 def score_stocks() -> str:
     from scoring.scanner import scan_stocks
     from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
-    from scoring.risk_engine import RiskBudget, DEFAULT_ACCOUNT
+    from scoring.risk_engine import RiskBudget
 
     scan_results = scan_stocks(use_movers=True)
     core_always_score = {"AAPL", "NVDA", "TSLA", "GOOGL", "META", "AMZN", "MSFT", "SPY", "QQQ"}
@@ -884,7 +984,7 @@ def score_stocks() -> str:
     benchmarks   = _get_market_benchmark()
     macro_events = _get_upcoming_macro(days=2)
     breadth_tracker: dict = {"extended_buys": 0}
-    risk_budget = RiskBudget(account=DEFAULT_ACCOUNT)
+    risk_budget = RiskBudget()
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
@@ -957,14 +1057,14 @@ def score_stocks_event_only() -> str:
     Only scores stocks with intraday events (gap moves, volume surges)."""
     from scoring.scanner import scan_stocks
     from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
-    from scoring.risk_engine import RiskBudget, DEFAULT_ACCOUNT
+    from scoring.risk_engine import RiskBudget
 
     scan_results = scan_stocks(use_movers=True, event_only=True)
 
     benchmarks   = _get_market_benchmark()
     macro_events = _get_upcoming_macro(days=2)
     breadth_tracker: dict = {"extended_buys": 0}
-    risk_budget = RiskBudget(account=DEFAULT_ACCOUNT)
+    risk_budget = RiskBudget()
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
