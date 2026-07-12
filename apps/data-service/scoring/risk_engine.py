@@ -25,6 +25,10 @@ class AssetClass(str, Enum):
     CRYPTO = "crypto"
     OPTIONS = "options"
     FUTURES = "futures"
+    PREDICTION_MARKET = "prediction"
+
+
+PROP_EXCLUDED_ASSETS = frozenset({AssetClass.PREDICTION_MARKET})
 
 
 # ─── Non-linear account profiles ──────────────────────────────────────────────
@@ -95,6 +99,11 @@ RR_CONFIGS: dict[AssetClass, RiskRewardConfig] = {
     AssetClass.FUTURES: RiskRewardConfig(
         min_rr=2.0, max_rr=3.0,
         min_stop_pct=0.3, max_stop_pct=2.0,
+    ),
+    AssetClass.PREDICTION_MARKET: RiskRewardConfig(
+        min_rr=2.0, max_rr=5.0,
+        min_stop_pct=10.0, max_stop_pct=100.0,
+        is_premium_based=True,
     ),
 }
 
@@ -313,6 +322,59 @@ def compute_units(
     return round(units, 4), None
 
 
+def compute_prediction_contracts(
+    risk_dollars: float,
+    entry_price: float,
+    stop_loss: float,
+) -> int:
+    """Binary event contracts: premium between $0.00 and $1.00, each worth $1."""
+    premium_risk = abs(entry_price - stop_loss)
+    if premium_risk <= 0:
+        return 0
+    return math.floor(risk_dollars / premium_risk)
+
+
+# ─── Tier-filtered output ──────────────────────────────────────────────────
+
+class Tier(str, Enum):
+    STANDARD = "standard"
+    ELITE = "elite"
+
+
+def format_trade_setup_tiered(setup: "TradeSetup", tier: Tier = Tier.ELITE) -> dict:
+    """Format trade setup filtered by membership tier.
+
+    Standard: raw entry/stop/target only (Layer 1).
+    Elite: full dual-layer output with all profile allocations.
+    """
+    if setup.suppressed:
+        return {
+            "suppressed": True,
+            "suppression_reason": setup.suppression_reason,
+        }
+
+    base = {
+        "stop_loss": setup.stop_loss,
+        "take_profit": setup.take_profit,
+        "stop_pct": setup.stop_pct,
+        "target_pct": setup.target_pct,
+        "risk_reward_ratio": setup.risk_reward_ratio,
+    }
+
+    if tier == Tier.STANDARD:
+        return base
+
+    base["position_size"] = setup.position_size
+    base["position_value"] = setup.position_value
+    base["risk_dollars"] = setup.risk_dollars
+    base["reward_dollars"] = setup.reward_dollars
+    if setup.max_contracts is not None:
+        base["max_contracts"] = setup.max_contracts
+    if setup.allocations:
+        base["profile_allocations"] = setup.allocations
+    return base
+
+
 # ─── Multi-profile scoring (the main entry point) ──────────────────────────
 
 def score_all_profiles(
@@ -370,9 +432,44 @@ def score_all_profiles(
         target_pct=round(target_pct * 100, 2),
     )
 
+    is_prop_excluded = asset_class in PROP_EXCLUDED_ASSETS
+    if is_prop_excluded:
+        eligible_profiles = {"retail_standard": PROP_RISK_MATRIX["retail_standard"]}
+    else:
+        eligible_profiles = PROP_RISK_MATRIX
+
     allocations: dict[str, ProfileAllocation] = {}
-    for name, profile in PROP_RISK_MATRIX.items():
+
+    if is_prop_excluded:
+        for name in PROP_RISK_MATRIX:
+            if name != "retail_standard":
+                allocations[name] = ProfileAllocation(
+                    profile_name=name, units=0, position_value=0,
+                    risk_dollars=0, reward_dollars=0,
+                    suppressed=True,
+                    suppression_reason=(
+                        f"Prop firms do not support {asset_class.value} contracts"
+                    ),
+                )
+
+    for name, profile in eligible_profiles.items():
         risk_dollars = profile["risk_per_trade_dollar"]
+
+        if asset_class == AssetClass.PREDICTION_MARKET:
+            contracts = compute_prediction_contracts(
+                risk_dollars, entry_price, stop_loss,
+            )
+            position_value = round(contracts * entry_price, 2)
+            reward_dollars = round(contracts * abs(entry_price - take_profit), 2)
+            allocations[name] = ProfileAllocation(
+                profile_name=name,
+                units=float(contracts),
+                position_value=position_value,
+                risk_dollars=round(risk_dollars, 2),
+                reward_dollars=reward_dollars,
+                contracts=contracts,
+            )
+            continue
 
         if session is not None and session.is_killed(name):
             allocations[name] = ProfileAllocation(

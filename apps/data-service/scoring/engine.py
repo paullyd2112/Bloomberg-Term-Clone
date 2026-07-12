@@ -480,14 +480,27 @@ def _write_signal(
         matched_url = url_lookup.get(headline.lower().strip(), "")
         news_urls.append(matched_url)
 
+    # Map asset_type to AssetClass — prediction markets route through
+    # retail_standard only (prop firms don't support binary contracts)
+    _ASSET_CLASS_MAP = {
+        "crypto": AssetClass.CRYPTO,
+        "prediction": AssetClass.PREDICTION_MARKET,
+    }
+
     # Run prop risk engine — compute position size, stop/target, and
     # check against daily loss budget
     trade_setup_data = None
-    if price is not None and signal.direction in ("BUY", "SELL"):
+    direction_field = signal.direction
+    if asset_type == "prediction":
+        direction_field = "BUY" if getattr(signal, "direction", "HOLD") == "YES" else (
+            "SELL" if getattr(signal, "direction", "HOLD") == "NO" else "HOLD"
+        )
+
+    if price is not None and direction_field in ("BUY", "SELL"):
         invalidation = getattr(signal, "invalidation_price", None)
-        asset_cls = AssetClass.CRYPTO if asset_type == "crypto" else AssetClass.STOCK
+        asset_cls = _ASSET_CLASS_MAP.get(asset_type, AssetClass.STOCK)
         setup = score_setup(
-            direction=signal.direction,
+            direction=direction_field,
             asset_class=asset_cls,
             entry_price=price,
             confidence=adjusted_confidence,
