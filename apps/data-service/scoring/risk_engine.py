@@ -34,7 +34,7 @@ PROP_RISK_MATRIX: dict[str, dict] = {
         "account_size": 10_000,
         "max_overall_drawdown": 1_000,
         "max_daily_loss": 500,
-        "risk_per_trade_dollar": 100,
+        "risk_per_trade_dollar": 25,
         "daily_kill_switch_threshold": 400,
     },
     "25k_prop_conservative": {
