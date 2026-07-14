@@ -494,7 +494,7 @@ def _write_signal(
     subscription: str | None = None,
 ) -> dict:
     from scoring.risk_engine import (
-        score_setup, format_trade_setup, AssetClass, DEFAULT_ACCOUNT,
+        score_setup, format_trade_setup, AssetClass,
         filter_by_subscription, SubscriptionTier,
     )
 
@@ -555,7 +555,6 @@ def _write_signal(
             asset_class=asset_cls,
             entry_price=price,
             confidence=adjusted_confidence,
-            account=DEFAULT_ACCOUNT,
             budget=risk_budget,
             atr=atr,
             invalidation_level=invalidation,
