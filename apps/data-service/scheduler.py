@@ -269,14 +269,23 @@ def _is_market_open() -> bool:
     if today in US_MARKET_HOLIDAYS:
         logger.info("Market holiday — skipping stock jobs for {}", today)
         return False
-    # Scheduled jobs are also weekday-gated via CronTrigger(day_of_week="mon-fri"),
-    # so this weekday check is redundant there. It's NOT redundant for manual
-    # /run-job/ triggers, which call the raw job functions directly and have no
-    # day-of-week gate at all -- confirmed live: a Saturday debugging session
-    # generated real stock signals off stale Friday-close data with zero guard.
-    if now.weekday() >= 5:  # 5=Saturday, 6=Sunday
+    if now.weekday() >= 5:
         logger.info("Weekend — skipping stock jobs for {}", today)
         return False
+    # Hard cutoff: no stock/options scoring after 3:30 PM ET
+    try:
+        import zoneinfo
+        et_now = now.astimezone(zoneinfo.ZoneInfo("America/New_York"))
+        cutoff_minutes = 15 * 60 + 30  # 15:30 ET
+        current_minutes = et_now.hour * 60 + et_now.minute
+        if current_minutes >= cutoff_minutes:
+            logger.info("Past 3:30 PM ET hard cutoff — skipping stock jobs")
+            return False
+        if current_minutes < 9 * 60 + 30:  # before 9:30 AM ET open
+            logger.info("Before 9:30 AM ET market open — skipping stock jobs")
+            return False
+    except Exception:
+        pass
     return True
 
 
@@ -289,36 +298,54 @@ def _run_stock_job(name: str, fn):
 
 # ─── Schedule ─────────────────────────────────────────────────────────────────
 
-# Prediction markets — every 2 hours (was every 30 min)
+# Prediction markets — ingest every 30 min, score every 2 hours
 scheduler.add_job(lambda: _run_job("ingest_prediction_markets", job_ingest_prediction_markets),
                   IntervalTrigger(minutes=30), id="ingest_prediction_markets")
-# PAUSED — not burning API tokens until product is ready to ship
-# scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
-#                   CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
+scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
+                  CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
 
-# Stocks — full scoring at open + close, event-only midday, weekdays only
+# ─── Stocks / Options / Futures: market-window scoring ───────────────────
+# Morning Rush (9:45–11:30 AM ET): every 15 min — 70% of intraday breakout momentum
+scheduler.add_job(lambda: _run_stock_job("score_stocks", job_score_stocks),
+                  CronTrigger(minute="0,15,30,45", hour="10,11", day_of_week="mon-fri",
+                              timezone="America/New_York"), id="score_stocks_morning")
+scheduler.add_job(lambda: _run_stock_job("score_stocks_event", job_score_stocks_event_only),
+                  CronTrigger(minute="45", hour="9", day_of_week="mon-fri",
+                              timezone="America/New_York"), id="score_stocks_open")
+scheduler.add_job(lambda: _run_stock_job("score_options_flow", job_score_options_flow),
+                  CronTrigger(minute="0,30", hour="10,11", day_of_week="mon-fri",
+                              timezone="America/New_York"), id="score_options_morning")
+
+# Midday Lull (11:30 AM–2:00 PM ET): hourly — save tokens in chop zone
+scheduler.add_job(lambda: _run_stock_job("score_stocks_midday", job_score_stocks),
+                  CronTrigger(minute=30, hour="12,13", day_of_week="mon-fri",
+                              timezone="America/New_York"), id="score_stocks_midday")
+
+# Power Hour (2:00–3:30 PM ET): every 15 min — institutional block sweeps
+scheduler.add_job(lambda: _run_stock_job("score_stocks_power", job_score_stocks),
+                  CronTrigger(minute="0,15,30,45", hour="14,15", day_of_week="mon-fri",
+                              timezone="America/New_York"), id="score_stocks_power")
+scheduler.add_job(lambda: _run_stock_job("score_options_power", job_score_options_flow),
+                  CronTrigger(minute="0,30", hour="14,15", day_of_week="mon-fri",
+                              timezone="America/New_York"), id="score_options_power")
+# Hard cutoff at 3:30 PM ET — no stock/options scoring after this.
+# CronTrigger hour caps enforce this: hour="14,15" with _is_market_open() guard.
+
+# Stocks ingestion — align with scoring windows
 scheduler.add_job(lambda: _run_stock_job("ingest_stocks", job_ingest_stocks),
-                  CronTrigger(minute=0, hour="9,11,13,15", day_of_week="mon-fri"), id="ingest_stocks")
-# PAUSED — not burning API tokens until product is ready to ship
-# scheduler.add_job(lambda: _run_stock_job("score_stocks", job_score_stocks),
-#                   CronTrigger(minute=20, hour="9,15", day_of_week="mon-fri"), id="score_stocks")
-# scheduler.add_job(lambda: _run_stock_job("score_stocks_event", job_score_stocks_event_only),
-#                   CronTrigger(minute=20, hour="11,13", day_of_week="mon-fri"), id="score_stocks_event")
+                  CronTrigger(minute=30, hour="9,11,13,15", day_of_week="mon-fri",
+                              timezone="America/New_York"), id="ingest_stocks")
 
-# Crypto — 6x/day (3 market-hours windows + 3 overnight) to balance signal volume with stocks
+# ─── Crypto: flat 2-hour loop (24/7, decoupled from equity sessions) ────
 scheduler.add_job(lambda: _run_job("ingest_crypto", job_ingest_crypto),
-                  CronTrigger(minute=0, hour="0,4,8,12,16,20"), id="ingest_crypto")
-# PAUSED — not burning API tokens until product is ready to ship
-# scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
-#                   CronTrigger(minute=20, hour="0,4,8,12,16,20"), id="score_crypto")
+                  CronTrigger(minute=0, hour="*/2"), id="ingest_crypto")
+scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
+                  CronTrigger(minute=20, hour="*/2"), id="score_crypto")
 
 # Crypto momentum screener — every 2 hours, catches pumps/breakouts outside watchlist
 scheduler.add_job(lambda: _run_job("crypto_momentum", job_crypto_momentum),
                   CronTrigger(minute=45, hour="*/2"), id="crypto_momentum")
 
-# PAUSED — not burning API tokens until product is ready to ship
-# scheduler.add_job(lambda: _run_stock_job("score_options_flow", job_score_options_flow),
-#                   CronTrigger(minute=30, hour="10,15", day_of_week="mon-fri"), id="score_options_flow")
 
 # Enrichment — weekdays, skip holidays
 scheduler.add_job(lambda: _run_stock_job("ingest_options_flow", job_ingest_options_flow),
@@ -360,9 +387,8 @@ scheduler.add_job(lambda: _run_job("send_newsletter", job_send_newsletter),
                   CronTrigger(hour=7, minute=15, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter_retry", job_send_newsletter_retry),
                   CronTrigger(hour=7, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter_retry")
-# PAUSED — not burning API tokens until product is ready to ship
-# scheduler.add_job(lambda: _run_job("send_elite_briefings", job_send_elite_briefings),
-#                   CronTrigger(hour=7, minute=20, day_of_week="mon-fri", timezone="America/New_York"), id="send_elite_briefings")
+scheduler.add_job(lambda: _run_job("send_elite_briefings", job_send_elite_briefings),
+                  CronTrigger(hour=7, minute=20, day_of_week="mon-fri", timezone="America/New_York"), id="send_elite_briefings")
 scheduler.add_job(lambda: _run_job("send_welcome_sequence", job_send_welcome_sequence),
                   CronTrigger(hour=9, minute=0, timezone="America/New_York"), id="send_welcome_sequence")
 
