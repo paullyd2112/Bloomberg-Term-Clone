@@ -529,8 +529,10 @@ def score_asset_endpoint():
         except Exception as e:
             logger.warning("Auto-ingest failed for {}/{}: {}", asset_type, identifier, e)
 
+    subscription = body.get("subscription")
+
     try:
-        result = score_asset(asset_type, identifier, skip_hold=False)
+        result = score_asset(asset_type, identifier, skip_hold=False, subscription=subscription)
         if result is None:
             return jsonify({"status": "skipped", "reason": "recently scored or no data"})
         return jsonify({"status": "ok", "signal": result})

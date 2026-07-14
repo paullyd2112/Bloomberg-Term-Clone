@@ -448,8 +448,19 @@ def _build_macro_context_dict(benchmarks: dict | None) -> dict:
     """Build the macro_context dict consumed by build_batch_xml_payload."""
     bm = benchmarks or {}
     spy = bm.get("SPY", {})
+
+    vix = "N/A"
+    try:
+        from ingestion.fred import get_indicator_snapshot
+        snapshot = get_indicator_snapshot()
+        vix_data = snapshot.get("VIXCLS")
+        if vix_data:
+            vix = round(vix_data["value"], 2)
+    except Exception:
+        pass
+
     return {
-        "vix": "N/A",
+        "vix": vix,
         "sp500_price": spy.get("price", "N/A"),
         "sp500_trend": (
             "strong_uptrend" if (spy.get("price_vs_sma50_pct") or 0) > 5
