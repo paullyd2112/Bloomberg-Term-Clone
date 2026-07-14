@@ -46,6 +46,17 @@ POLYMARKET_MIN_VOLUME = 100
 REQUEST_TIMEOUT       = 15.0
 MAX_PAGES             = 50   # hard cap so a pagination cursor that never terminates can't hang the job forever
 
+# ─── In-memory metadata cache ────────────────────────────────────────────────
+# Static contract fields (title, category, event_slug, context_description,
+# end_date, settlement rules) rarely change. Cache them keyed by conditionId
+# so scheduled runs only update live pricing (yes_price, no_price, volume).
+# News lookups are skipped for markets already in the cache — they don't need
+# re-enriching every run. The cache lives for the process lifetime; Railway
+# restarts give a clean slate, which is fine.
+_metadata_cache: dict[str, dict] = {}
+_cache_hits = 0
+_cache_misses = 0
+
 
 def _first(item: dict, *keys: str):
     for k in keys:
@@ -165,11 +176,16 @@ async def _fetch_kalshi(client: httpx.AsyncClient) -> list[dict]:
 
 
 async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
-    """Fetch active markets from Polymarket's Gamma API. Field names below are
-    best-effort from public documentation, not verified against a live
-    response from this environment (network policy blocks polymarket.com
-    here) -- the full raw item is kept in metadata.raw so any mismatch is
-    fixable from real production data instead of guessed twice."""
+    """Fetch active markets from Polymarket's Gamma API.
+
+    Static metadata (title, category, event_slug, context_description,
+    end_date, settlement rules) is cached in-memory keyed by conditionId.
+    On repeat runs within the same process, only live pricing fields
+    (yes_price, no_price, volume) are updated — the cached static fields
+    are reused without re-processing. The full raw item is still kept in
+    metadata.raw on first sight so field mismatches are fixable from real
+    production data."""
+    global _cache_hits, _cache_misses
     records = []
     offset  = 0
 
@@ -187,8 +203,6 @@ async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
             sentry_sdk.capture_exception(e)
             break
 
-        # Gamma's /markets has returned both a bare list and a {"data": [...],
-        # "has_more": ...} envelope across versions -- handle either shape.
         if isinstance(data, list):
             markets  = data
             has_more = len(markets) >= POLYMARKET_PAGE_SIZE
@@ -231,18 +245,37 @@ async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
 
             identifier = str(_first(m, "conditionId", "condition_id", "id") or "")
 
-            # Gamma's own "category" field comes back empty in practice, so it's
-            # useless for grouping. events[0].slug (e.g. "world-cup-winner") is
-            # a real, populated grouping key -- markets on the same real-world
-            # topic share one event. events[0].eventMetadata.context_description
-            # is Polymarket's own live, current-state summary (actual results,
-            # standings, injuries) -- valuable grounding the scoring prompt
-            # otherwise never sees, since news lookups by conditionId hash
-            # never match anything.
-            events = _first(m, "events") or []
-            first_event = events[0] if events else {}
-            event_slug = first_event.get("slug") or ""
-            context_description = (first_event.get("eventMetadata") or {}).get("context_description") or ""
+            cached = _metadata_cache.get(identifier)
+            if cached is not None:
+                _cache_hits += 1
+                meta = {
+                    **cached,
+                    "yes_price": yes_price,
+                    "no_price":  no_price,
+                }
+            else:
+                _cache_misses += 1
+                events = _first(m, "events") or []
+                first_event = events[0] if events else {}
+                event_slug = first_event.get("slug") or ""
+                context_description = (first_event.get("eventMetadata") or {}).get("context_description") or ""
+
+                static_meta = {
+                    "source":              "polymarket",
+                    "title":               _first(m, "question") or "",
+                    "end_date":            _first(m, "endDate", "end_date_iso") or "",
+                    "category":            _first(m, "category") or "",
+                    "event_slug":          event_slug,
+                    "context_description": context_description,
+                    "raw":                 m,
+                }
+                _metadata_cache[identifier] = static_meta
+
+                meta = {
+                    **static_meta,
+                    "yes_price": yes_price,
+                    "no_price":  no_price,
+                }
 
             records.append({
                 "asset_type": "prediction",
@@ -250,17 +283,7 @@ async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
                 "price":      yes_price,
                 "volume":     volume,
                 "change_24h": None,
-                "metadata": {
-                    "source":              "polymarket",
-                    "title":               _first(m, "question") or "",
-                    "yes_price":           yes_price,
-                    "no_price":            no_price,
-                    "end_date":            _first(m, "endDate", "end_date_iso") or "",
-                    "category":            _first(m, "category") or "",
-                    "event_slug":          event_slug,
-                    "context_description": context_description,
-                    "raw":                 m,
-                },
+                "metadata":   meta,
             })
 
         if not has_more or len(markets) < POLYMARKET_PAGE_SIZE:
@@ -269,7 +292,8 @@ async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
     else:
         logger.warning("Polymarket: hit the {}-page cap without exhausting pagination", MAX_PAGES)
 
-    logger.info("Polymarket: fetched {} active markets", len(records))
+    logger.info("Polymarket: fetched {} active markets (cache: {} hits, {} misses, {} total cached)",
+                len(records), _cache_hits, _cache_misses, len(_metadata_cache))
     return records
 
 
@@ -336,9 +360,17 @@ async def _fetch_news_for_market(
     return len(rows)
 
 
+_news_fetched_ids: set[str] = set()
+
 async def _fetch_news_batch(markets: list[dict]) -> int:
-    """Fetch news for top 10 markets concurrently."""
+    """Fetch news for top 10 markets concurrently. Skips markets whose news
+    was already fetched in a prior run this process — static metadata doesn't
+    change, so re-fetching the same 3 articles is pure waste."""
     top = sorted(markets, key=lambda r: r.get("volume") or 0, reverse=True)[:10]
+    new_markets = [m for m in top if m["identifier"] not in _news_fetched_ids]
+    if not new_markets:
+        logger.debug("News: all top-10 markets already enriched, skipping")
+        return 0
     async with httpx.AsyncClient() as client:
         tasks = [
             _fetch_news_for_market(
@@ -346,10 +378,12 @@ async def _fetch_news_batch(markets: list[dict]) -> int:
                 m.get("metadata", {}).get("title", ""),
                 m["identifier"],
             )
-            for m in top
+            for m in new_markets
             if m.get("metadata", {}).get("title")
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
+    for m in new_markets:
+        _news_fetched_ids.add(m["identifier"])
     return sum(r for r in results if isinstance(r, int))
 
 
