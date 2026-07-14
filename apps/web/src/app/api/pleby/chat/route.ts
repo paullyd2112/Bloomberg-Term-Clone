@@ -91,7 +91,9 @@ export async function POST(req: Request) {
 
   messages.push({ role: "user", content: message });
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("Missing ANTHROPIC_API_KEY");
+  const client = new Anthropic({ apiKey });
 
   const stream = new ReadableStream({
     async start(controller) {

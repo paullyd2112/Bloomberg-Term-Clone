@@ -463,11 +463,22 @@ def _build_macro_context_dict(benchmarks: dict | None) -> dict:
 
 def _build_asset_health_dict(meta: dict, identifier: str) -> dict:
     """Build the asset_health dict consumed by build_batch_xml_payload."""
+    days_to_earnings = "N/A"
+    uoa_multiplier = "N/A"
+
+    earnings = _get_earnings_context(identifier)
+    if earnings and earnings.get("hours_until") is not None:
+        days_to_earnings = max(earnings["hours_until"] // 24, 0)
+
+    options = _get_options_context(identifier)
+    if options and options.get("put_call_ratio") is not None:
+        uoa_multiplier = options.get("put_call_ratio", "N/A")
+
     return {
         "rvol": meta.get("volume_ratio", "N/A"),
         "pe_ratio": meta.get("pe_ratio", "N/A"),
-        "days_to_earnings": "N/A",
-        "uoa_vol_oi_multiplier": "N/A",
+        "days_to_earnings": days_to_earnings,
+        "uoa_vol_oi_multiplier": uoa_multiplier,
     }
 
 
@@ -605,6 +616,7 @@ def score_asset(
     btc_regime: dict | None = None,
     skip_hold: bool = True,
     risk_budget: "RiskBudget | None" = None,
+    subscription: str | None = None,
 ) -> dict | None:
     """
     Build context from Supabase, call Claude via Instructor,
@@ -947,7 +959,7 @@ def score_asset(
     try:
         record = _write_signal(
             asset_type, identifier, current_price, signal, news_with_urls,
-            risk_budget=risk_budget, atr=atr_value,
+            risk_budget=risk_budget, atr=atr_value, subscription=subscription,
         )
         logger.info(
             "{}/{}: {} {}% confidence — {}",

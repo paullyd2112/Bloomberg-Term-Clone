@@ -6,7 +6,9 @@ import { requireUser, getUserTier } from "@/lib/user";
 
 export const maxDuration = 60;
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+import { ANTHROPIC_API_KEY } from "@/lib/env";
+
+const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY() });
 
 const Body = z.object({
   goal:              z.enum(["short_term", "medium_term", "long_term"]),

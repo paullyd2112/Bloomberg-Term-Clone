@@ -94,7 +94,7 @@ function computeResults(signals: RawSignal[], tradeSize: number): BacktestResult
   let confSum = 0;
 
   for (const sig of pricedSignals) {
-    const pnl = tradePnl(sig, tradeSize)!;
+    const pnl = tradePnl(sig, tradeSize) ?? 0;
     if (sig.outcome === "WIN")       wins++;
     else if (sig.outcome === "LOSS") losses++;
     else                             neutrals++;
