@@ -298,11 +298,18 @@ def _run_stock_job(name: str, fn):
 
 # ─── Schedule ─────────────────────────────────────────────────────────────────
 
-# Prediction markets — ingest every 30 min, score every 2 hours
+# Prediction markets — dual-scan (9 AM + 6 PM ET), not a flat loop.
+# Ingest runs 15 min before each scoring window to refresh live prices.
+# On-demand trigger via POST /api/v1/scanners/prediction-markets/trigger
 scheduler.add_job(lambda: _run_job("ingest_prediction_markets", job_ingest_prediction_markets),
-                  IntervalTrigger(minutes=30), id="ingest_prediction_markets")
-scheduler.add_job(lambda: _run_job("score_prediction_markets", job_score_prediction_markets),
-                  CronTrigger(hour="*/2", minute=15), id="score_prediction_markets")
+                  CronTrigger(hour="8,17", minute=45, timezone="America/New_York"),
+                  id="ingest_prediction_markets")
+scheduler.add_job(lambda: _run_job("score_prediction_markets_am", job_score_prediction_markets),
+                  CronTrigger(hour=9, minute=0, timezone="America/New_York"),
+                  id="score_prediction_markets_am")
+scheduler.add_job(lambda: _run_job("score_prediction_markets_pm", job_score_prediction_markets),
+                  CronTrigger(hour=18, minute=0, timezone="America/New_York"),
+                  id="score_prediction_markets_pm")
 
 # ─── Stocks / Options / Futures: market-window scoring ───────────────────
 # Morning Rush (9:45–11:30 AM ET): every 15 min — 70% of intraday breakout momentum
@@ -716,6 +723,52 @@ def run_job_manual(job_name: str):
 @app.route("/run-job/<job_name>/status")
 def run_job_status(job_name: str):
     state = _job_state.get(f"manual_{job_name}", {"status": "never_run"})
+    return jsonify(state)
+
+
+@app.route("/api/v1/scanners/prediction-markets/trigger", methods=["POST"])
+def trigger_prediction_scan():
+    """On-demand prediction market scan — call 5 min after CPI/FOMC/Jobs via webhook."""
+    import threading
+    from flask import request as flask_request
+
+    body = flask_request.get_json(silent=True) or {}
+    catalyst = body.get("catalyst", "manual")
+
+    def _run():
+        try:
+            _job_state["prediction_trigger"] = {
+                "status": "running", "catalyst": catalyst,
+                "started": datetime.now(timezone.utc).isoformat(),
+            }
+            ingest_result = job_ingest_prediction_markets()
+            score_result = job_score_prediction_markets()
+            _job_state["prediction_trigger"] = {
+                "status": "ok", "catalyst": catalyst,
+                "ingest": str(ingest_result), "score": str(score_result),
+                "finished": datetime.now(timezone.utc).isoformat(),
+            }
+            logger.info("Prediction trigger ({}): ingest={}, score={}", catalyst, ingest_result, score_result)
+        except Exception as e:
+            import traceback
+            _job_state["prediction_trigger"] = {
+                "status": "error", "catalyst": catalyst,
+                "error": str(e), "traceback": traceback.format_exc(),
+            }
+            logger.error("Prediction trigger ({}) failed: {}", catalyst, e)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return jsonify({
+        "status": "started",
+        "catalyst": catalyst,
+        "check": "/api/v1/scanners/prediction-markets/trigger/status",
+    })
+
+
+@app.route("/api/v1/scanners/prediction-markets/trigger/status")
+def trigger_prediction_status():
+    state = _job_state.get("prediction_trigger", {"status": "never_run"})
     return jsonify(state)
 
 

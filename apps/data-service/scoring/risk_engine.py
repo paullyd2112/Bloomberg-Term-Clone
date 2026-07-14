@@ -31,6 +31,8 @@ class AssetClass(str, Enum):
 
 PROP_EXCLUDED_ASSETS = frozenset({AssetClass.PREDICTION_MARKET})
 
+PREDICTION_MAX_RISK_DOLLARS = 25
+
 
 # ─── Non-linear account profiles ──────────────────────────────────────────────
 
@@ -719,6 +721,8 @@ def score_all_profiles(
         risk_dollars = EFFECTIVE_RISK[name]
 
         if asset_class == AssetClass.PREDICTION_MARKET:
+            risk_dollars = min(risk_dollars,
+                               PREDICTION_MAX_RISK_DOLLARS * (1 - SLIPPAGE_FRICTION_PCT))
             contracts = compute_prediction_contracts(
                 risk_dollars, entry_price, stop_loss,
             )
