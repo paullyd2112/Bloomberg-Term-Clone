@@ -71,6 +71,51 @@ FUTURES_POINT_VALUES: dict[str, float] = {
     "ES": 50, "NQ": 20, "MES": 5, "MNQ": 2,
 }
 
+ETF_TO_CME_PROXY: dict[str, dict] = {
+    "SPY": {"full": "ES", "micro": "MES", "full_pv": 50, "micro_pv": 5},
+    "QQQ": {"full": "NQ", "micro": "MNQ", "full_pv": 20, "micro_pv": 2},
+}
+
+def translate_etf_to_futures(
+    identifier: str,
+    entry_price: float,
+    stop_loss: float,
+    take_profit: float,
+    direction: str,
+    risk_dollars: float,
+) -> dict | None:
+    """Translate an ETF breakout signal into equivalent CME futures contracts.
+
+    Returns a dict with full and micro contract sizing, or None if the
+    identifier has no CME proxy.
+    """
+    mapping = ETF_TO_CME_PROXY.get(identifier.upper())
+    if mapping is None:
+        return None
+
+    stop_points = abs(entry_price - stop_loss)
+    target_points = abs(entry_price - take_profit)
+    if stop_points <= 0:
+        return None
+
+    result = {}
+    for variant in ("full", "micro"):
+        symbol = mapping[variant]
+        pv = mapping[f"{variant}_pv"]
+        contracts = math.floor(risk_dollars / (stop_points * pv))
+        result[variant] = {
+            "symbol": symbol,
+            "point_value": pv,
+            "contracts": contracts,
+            "risk_per_contract": round(stop_points * pv, 2),
+            "reward_per_contract": round(target_points * pv, 2),
+            "total_risk": round(contracts * stop_points * pv, 2),
+            "total_reward": round(contracts * target_points * pv, 2),
+            "rejected": contracts <= 0,
+        }
+
+    return result
+
 # ─── Slippage friction buffer (10% haircut on nominal risk) ──────────────────
 # Production guardrail: assume 10% slippage/fees on every entry so position
 # sizing never relies on perfect fills. Each profile's effective risk per trade
@@ -172,6 +217,7 @@ class ProfileAllocation:
 class DualLayerSetup:
     alpha: CoreAlpha
     allocations: dict[str, ProfileAllocation] = field(default_factory=dict)
+    futures_proxy: dict | None = None
 
     @property
     def is_valid(self) -> bool:
@@ -357,7 +403,16 @@ def compute_prediction_contracts(
     entry_price: float,
     stop_loss: float,
 ) -> int:
-    """Binary event contracts: premium between $0.00 and $1.00, each worth $1."""
+    """Binary event contracts: premium between $0.00 and $1.00, each worth $1.
+
+    If stop_loss is $0.00 (hold-to-settlement), the entire entry premium is at
+    risk: contracts = floor(risk_dollars / entry_price).
+    Otherwise: contracts = floor(risk_dollars / (entry_price - stop_loss)).
+    """
+    if stop_loss <= 0:
+        if entry_price <= 0:
+            return 0
+        return math.floor(risk_dollars / entry_price)
     premium_risk = abs(entry_price - stop_loss)
     if premium_risk <= 0:
         return 0
@@ -593,6 +648,7 @@ def score_all_profiles(
     atr: float | None = None,
     invalidation_level: float | None = None,
     futures_symbol: str | None = None,
+    identifier: str | None = None,
 ) -> DualLayerSetup:
     if isinstance(asset_class, str):
         asset_class = AssetClass(asset_class)
@@ -736,7 +792,15 @@ def score_all_profiles(
         rr_ratio, len(allocations),
     )
 
-    return DualLayerSetup(alpha=alpha, allocations=allocations)
+    futures_proxy = None
+    if identifier and asset_class == AssetClass.STOCK:
+        elite_risk = EFFECTIVE_RISK.get("150k_prop_boss", 0)
+        futures_proxy = translate_etf_to_futures(
+            identifier, entry_price, stop_loss, take_profit,
+            direction, elite_risk,
+        )
+
+    return DualLayerSetup(alpha=alpha, allocations=allocations, futures_proxy=futures_proxy)
 
 
 # ─── Single-profile scoring (backward compat for engine.py) ────────────────
@@ -759,6 +823,7 @@ class TradeSetup:
     suppressed: bool = False
     suppression_reason: str = ""
     allocations: dict[str, dict] | None = None
+    futures_proxy: dict | None = None
 
     @property
     def is_valid(self) -> bool:
@@ -774,6 +839,7 @@ def score_setup(
     budget: RiskBudget | None = None,
     atr: float | None = None,
     invalidation_level: float | None = None,
+    identifier: str | None = None,
 ) -> TradeSetup:
     """Backward-compatible single-profile entry point.
 
@@ -791,6 +857,7 @@ def score_setup(
         confidence=confidence,
         atr=atr,
         invalidation_level=invalidation_level,
+        identifier=identifier,
     )
 
     if dual.alpha.suppressed:
@@ -892,6 +959,7 @@ def score_setup(
         target_pct=dual.alpha.target_pct,
         max_contracts=default_alloc.contracts,
         allocations=all_allocs,
+        futures_proxy=dual.futures_proxy,
     )
 
 
@@ -934,4 +1002,6 @@ def format_trade_setup(setup: TradeSetup) -> dict:
         base["max_contracts"] = setup.max_contracts
     if setup.allocations:
         base["profile_allocations"] = setup.allocations
+    if setup.futures_proxy:
+        base["futures_proxy"] = setup.futures_proxy
     return base

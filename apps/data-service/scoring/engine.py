@@ -588,6 +588,7 @@ def _write_signal(
             budget=risk_budget,
             atr=atr,
             invalidation_level=invalidation,
+            identifier=identifier,
         )
         trade_setup_data = format_trade_setup(setup)
 
