@@ -230,10 +230,18 @@ def _get_options_context(ticker: str) -> dict | None:
         )
         largest = all_premiums[0] if all_premiums else None
 
+        vol_oi_ratios = [
+            float(r["volume_oi_ratio"])
+            for r in result.data
+            if r.get("volume_oi_ratio") is not None
+        ]
+        max_vol_oi = round(max(vol_oi_ratios), 2) if vol_oi_ratios else None
+
         return {
             "unusual_calls":               len(calls),
             "unusual_puts":                len(puts),
             "put_call_ratio":              round(len(puts) / len(calls), 2) if calls else None,
+            "max_vol_oi_ratio":            max_vol_oi,
             "largest_single_trade_direction": largest.get("contract_type") if largest else None,
             "largest_premium":             largest.get("premium_usd") if largest else None,
         }
@@ -482,8 +490,8 @@ def _build_asset_health_dict(meta: dict, identifier: str) -> dict:
         days_to_earnings = max(earnings["hours_until"] // 24, 0)
 
     options = _get_options_context(identifier)
-    if options and options.get("put_call_ratio") is not None:
-        uoa_multiplier = options.get("put_call_ratio", "N/A")
+    if options and options.get("max_vol_oi_ratio") is not None:
+        uoa_multiplier = options["max_vol_oi_ratio"]
 
     return {
         "rvol": meta.get("volume_ratio", "N/A"),
@@ -995,7 +1003,7 @@ def score_asset(
 
 # ─── Batch scoring functions (called by scheduler) ───────────────────────────
 
-def score_stocks() -> str:
+def score_stocks(subscription: str | None = None) -> str:
     from scoring.scanner import scan_stocks
     from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
     from scoring.risk_engine import RiskBudget
@@ -1017,7 +1025,8 @@ def score_stocks() -> str:
         if ticker in core_always_score:
             try:
                 result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events,
-                                      breadth_tracker=breadth_tracker, risk_budget=risk_budget)
+                                      breadth_tracker=breadth_tracker, risk_budget=risk_budget,
+                                      subscription=subscription)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -1044,7 +1053,8 @@ def score_stocks() -> str:
 
         try:
             result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events,
-                                  breadth_tracker=breadth_tracker, risk_budget=risk_budget)
+                                  breadth_tracker=breadth_tracker, risk_budget=risk_budget,
+                                  subscription=subscription)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -1059,7 +1069,8 @@ def score_stocks() -> str:
         if not any(s["ticker"] == core_ticker for s in scan_results):
             try:
                 result = score_asset("stock", core_ticker, benchmarks=benchmarks, macro_events=macro_events,
-                                      breadth_tracker=breadth_tracker, risk_budget=risk_budget)
+                                      breadth_tracker=breadth_tracker, risk_budget=risk_budget,
+                                      subscription=subscription)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -1074,7 +1085,7 @@ def score_stocks() -> str:
             f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet")
 
 
-def score_stocks_event_only() -> str:
+def score_stocks_event_only(subscription: str | None = None) -> str:
     """Midday event-driven scan — skips core tickers and daily-bar indicators.
     Only scores stocks with intraday events (gap moves, volume surges)."""
     from scoring.scanner import scan_stocks
@@ -1109,7 +1120,8 @@ def score_stocks_event_only() -> str:
 
         try:
             result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events,
-                                  breadth_tracker=breadth_tracker, risk_budget=risk_budget)
+                                  breadth_tracker=breadth_tracker, risk_budget=risk_budget,
+                                  subscription=subscription)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -1133,7 +1145,7 @@ TIER1_CRYPTO  = {
 CRYPTO_MOVER_THRESHOLD = 5.0  # % change to qualify lower-tier coins
 
 
-def score_crypto() -> str:
+def score_crypto(subscription: str | None = None) -> str:
     from scoring.haiku_prescreen import prescreen_crypto, should_escalate_to_sonnet
 
     try:
@@ -1199,7 +1211,7 @@ def score_crypto() -> str:
         if sym in CORE_CRYPTO:
             try:
                 result = score_asset("crypto", sym, benchmarks=benchmarks, macro_events=macro_events,
-                                      btc_regime=btc_regime)
+                                      btc_regime=btc_regime, subscription=subscription)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -1228,7 +1240,7 @@ def score_crypto() -> str:
 
         try:
             result = score_asset("crypto", sym, benchmarks=benchmarks, macro_events=macro_events,
-                                  btc_regime=btc_regime)
+                                  btc_regime=btc_regime, subscription=subscription)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -1248,7 +1260,7 @@ PREDICTION_CANDIDATE_LIMIT = 20   # diversified candidates actually prescreened
 PREDICTION_MAX_PER_EVENT   = 2    # cap per real-world event/topic
 
 
-def score_prediction_markets() -> str:
+def score_prediction_markets(subscription: str | None = None) -> str:
     from scoring.haiku_prescreen import prescreen_prediction, should_escalate_to_sonnet
 
     # raw_prices is a time-series table -- every market gets a new row each
@@ -1317,7 +1329,7 @@ def score_prediction_markets() -> str:
             continue
 
         try:
-            result = score_asset("prediction", ident)
+            result = score_asset("prediction", ident, subscription=subscription)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
