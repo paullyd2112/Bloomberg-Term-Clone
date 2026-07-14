@@ -48,13 +48,17 @@ DATE_TO   = "2026-07-02"
 
 # ─── Signal constants ─────────────────────────────────────────────────────────
 
-HOLD_DAYS             = 10     # trading days per position
+HOLD_DAYS             = 10     # trading days per position (signal accuracy eval)
+MAX_TRADE_LIFESPAN_BARS = 4    # pessimistic decay TTL for paper sim
 CIRCUIT_BREAKER       = 8.0    # % single-day gap that overrides signal
 MIN_CONFIDENCE        = 68     # requires meaningful confluence
 PAPER_MIN_CONFIDENCE  = 68
 VOLUME_CONFIRM        = 1.5    # volume ratio threshold for boost
 SIGNAL_COOLDOWN_BARS  = 8      # min bars between signals per ticker
 TRAILING_STOP_PCT     = 5.0    # exit if price falls 5% from peak
+STOP_LOSS_PCT         = 2.0    # pessimistic decay stop-loss %
+TAKE_PROFIT_PCT       = 4.0    # pessimistic decay take-profit %
+SLIPPAGE_CUSHION      = 0.10   # 10% friction subtracted from risk alloc
 LONG_ONLY             = True   # no shorts in bull market
 
 # ─── Paper trading ────────────────────────────────────────────────────────────
@@ -615,17 +619,27 @@ def _backtest_ticker(
     return records, stats
 
 
-# ─── Paper trading simulation ─────────────────────────────────────────────────
+# ─── Paper trading simulation (Pessimistic Decay) ────────────────────────────
 
-def _run_paper_sim(all_records: list[SignalRecord]) -> dict:
+def _run_paper_sim(
+    all_records: list[SignalRecord],
+    ohlcv_cache: dict[str, pd.DataFrame] | None = None,
+) -> dict:
     """
-    Chronological simulation starting with INITIAL_CAPITAL.
-    Only actionable signals (BUY / SELL). Position size = 10% of portfolio.
-    Exit after HOLD_DAYS trading days (using the recorded forward return).
-    Short selling is included (SELL signals = short position).
+    Pessimistic Decay paper simulation starting with INITIAL_CAPITAL.
+
+    Three pessimistic rules:
+      1. Overlapping Bar — if a bar's range touches both entry+stop (or
+         stop+target), the trade is recorded as a LOSS (stop hit first).
+      2. TTL — MAX_TRADE_LIFESPAN_BARS bar limit; auto-close at close price
+         of the final bar with actual floating P&L.
+      3. Opposite Signal Cancellation — a fresh opposite-direction signal
+         on the same ticker closes the open trade at that bar's open price
+         and opens the new setup.
+
+    10% slippage cushion applied to all position sizing.
+    Zero-unit guard: trades sizing to <$1 invested are suppressed.
     """
-    # Sort by date — only high-conviction actionable signals make it to paper trading.
-    # PAPER_MIN_CONFIDENCE > MIN_CONFIDENCE means we surface setups, not every blip.
     signals = sorted(
         [r for r in all_records
          if r.direction != "HOLD"
@@ -634,108 +648,156 @@ def _run_paper_sim(all_records: list[SignalRecord]) -> dict:
         key=lambda r: r.date,
     )
 
+    ohlcv = ohlcv_cache or {}
+
     portfolio  = INITIAL_CAPITAL
     peak       = INITIAL_CAPITAL
     max_dd     = 0.0
-    open_pos: list[dict] = []   # {exit_date, pnl_pct, direction, invested}
+    open_pos: dict[str, dict] = {}  # ticker → position
     completed: list[Trade] = []
 
-    # We'll process day-by-day using the signal dates
-    all_dates = sorted({r.date for r in signals})
-
-    for today in all_dates:
-        # Close positions that exit on or before today
-        still_open = []
-        for pos in open_pos:
-            if pos["exit_date"] <= today:
-                pnl_pct = pos["pnl_pct"]
-                invested = pos["invested"]
-                pnl = invested * pnl_pct / 100
-                portfolio += invested + pnl
-                peak = max(peak, portfolio)
-                drawdown = (peak - portfolio) / peak * 100
-                max_dd = max(max_dd, drawdown)
-                completed.append(Trade(
-                    ticker=pos["ticker"],
-                    asset_class=pos["asset_class"],
-                    direction=pos["direction"],
-                    entry_date=pos["entry_date"],
-                    exit_date=pos["exit_date"],
-                    entry_price=pos["entry_price"],
-                    exit_price=pos["exit_price"],
-                    invested=invested,
-                    pnl=round(pnl, 2),
-                    return_pct=round(pnl_pct, 2),
-                    outcome="WIN" if pnl > 0 else "LOSS",
-                ))
-            else:
-                still_open.append(pos)
-        open_pos = still_open
-
-        # Open new positions from today's signals
-        todays = [r for r in signals if r.date == today]
-        # Sort by confidence descending — highest conviction first
-        todays.sort(key=lambda r: r.confidence, reverse=True)
-
-        for sig in todays:
-            if len(open_pos) >= MAX_POSITIONS:
-                break
-            # Don't double-dip same ticker
-            if any(p["ticker"] == sig.ticker for p in open_pos):
-                continue
-
-            # Confidence-weighted sizing: 68→5%, 84→10%, 100→15%
-            conf_frac = max(0, min(1, (sig.confidence - MIN_CONFIDENCE) / (100 - MIN_CONFIDENCE)))
-            size_pct = POSITION_SIZE_MIN + conf_frac * (POSITION_SIZE_MAX - POSITION_SIZE_MIN)
-            invest = portfolio * size_pct
-            if invest < 1:
-                continue
-
-            portfolio -= invest  # capital locked in position
-
-            # For SELL (short): win means price went down, fwd_return already flipped positive
-            pnl_pct = sig.forward_return_5d  # already sign-corrected in _evaluate_outcome
-
-            # Approximate exit date (10 trading days ≈ 14 calendar days)
-            from datetime import datetime, timedelta
-            entry_dt = datetime.strptime(sig.date, "%Y-%m-%d")
-            exit_dt  = entry_dt + timedelta(days=14)
-            exit_date = exit_dt.strftime("%Y-%m-%d")
-
-            exit_price = sig.price * (1 + (sig.forward_return_5d or 0) / 100) if sig.direction == "BUY" \
-                         else sig.price * (1 - (sig.forward_return_5d or 0) / 100)
-
-            open_pos.append({
-                "ticker":      sig.ticker,
-                "asset_class": sig.asset_class,
-                "direction":   sig.direction,
-                "entry_date":  sig.date,
-                "exit_date":   exit_date,
-                "entry_price": sig.price,
-                "exit_price":  round(exit_price, 4),
-                "invested":    invest,
-                "pnl_pct":     pnl_pct or 0.0,
-            })
-
-    # Close any remaining open positions at last known return
-    for pos in open_pos:
-        pnl_pct = pos["pnl_pct"]
+    def _close_position(pos: dict, exit_price: float, exit_date: str):
+        nonlocal portfolio, peak, max_dd
         invested = pos["invested"]
+        if pos["direction"] == "BUY":
+            pnl_pct = (exit_price - pos["entry_price"]) / pos["entry_price"] * 100
+        else:
+            pnl_pct = (pos["entry_price"] - exit_price) / pos["entry_price"] * 100
         pnl = invested * pnl_pct / 100
         portfolio += invested + pnl
+        peak = max(peak, portfolio)
+        drawdown = (peak - portfolio) / peak * 100 if peak > 0 else 0
+        max_dd = max(max_dd, drawdown)
         completed.append(Trade(
             ticker=pos["ticker"],
             asset_class=pos["asset_class"],
             direction=pos["direction"],
             entry_date=pos["entry_date"],
-            exit_date=pos["exit_date"],
+            exit_date=exit_date,
             entry_price=pos["entry_price"],
-            exit_price=pos["exit_price"],
+            exit_price=round(exit_price, 4),
             invested=invested,
             pnl=round(pnl, 2),
             return_pct=round(pnl_pct, 2),
             outcome="WIN" if pnl > 0 else "LOSS",
         ))
+
+    def _walk_bars(pos: dict) -> tuple[float, str] | None:
+        """Walk bar-by-bar with pessimistic decay rules. Returns (exit_price, exit_date) or None if still open."""
+        ticker = pos["ticker"]
+        df = ohlcv.get(ticker)
+        if df is None or df.empty:
+            return None
+
+        entry_price = pos["entry_price"]
+        if pos["direction"] == "BUY":
+            stop   = entry_price * (1 - STOP_LOSS_PCT / 100)
+            target = entry_price * (1 + TAKE_PROFIT_PCT / 100)
+        else:
+            stop   = entry_price * (1 + STOP_LOSS_PCT / 100)
+            target = entry_price * (1 - TAKE_PROFIT_PCT / 100)
+
+        entry_date = pd.Timestamp(pos["entry_date"])
+        mask = df.index > entry_date
+        future_bars = df.loc[mask]
+
+        for bar_num, (dt, bar) in enumerate(future_bars.iterrows(), 1):
+            if bar_num > MAX_TRADE_LIFESPAN_BARS:
+                break
+
+            hi = float(bar["high"])
+            lo = float(bar["low"])
+
+            if pos["direction"] == "BUY":
+                touches_stop   = lo <= stop
+                touches_target = hi >= target
+            else:
+                touches_stop   = hi >= stop
+                touches_target = lo <= target
+
+            # Rule 1: Overlapping bar — pessimistic, always LOSS
+            if touches_stop and touches_target:
+                return stop, str(dt.date()) if hasattr(dt, 'date') else str(dt)
+            if touches_stop:
+                return stop, str(dt.date()) if hasattr(dt, 'date') else str(dt)
+            if touches_target:
+                return target, str(dt.date()) if hasattr(dt, 'date') else str(dt)
+
+        # Rule 2: TTL expired — close at last available bar's close
+        ttl_bars = future_bars.iloc[:MAX_TRADE_LIFESPAN_BARS]
+        if not ttl_bars.empty:
+            last_bar = ttl_bars.iloc[-1]
+            last_dt = ttl_bars.index[-1]
+            return float(last_bar["close"]), str(last_dt.date()) if hasattr(last_dt, 'date') else str(last_dt)
+        return None
+
+    all_dates = sorted({r.date for r in signals})
+
+    for today in all_dates:
+        # Walk open positions — check bar-by-bar exits
+        closed_tickers = []
+        for ticker, pos in open_pos.items():
+            result = _walk_bars(pos)
+            if result:
+                exit_price, exit_date = result
+                if exit_date <= today:
+                    _close_position(pos, exit_price, exit_date)
+                    closed_tickers.append(ticker)
+        for t in closed_tickers:
+            del open_pos[t]
+
+        todays = [r for r in signals if r.date == today]
+        todays.sort(key=lambda r: r.confidence, reverse=True)
+
+        for sig in todays:
+            # Rule 3: Opposite signal cancellation
+            existing = open_pos.get(sig.ticker)
+            if existing and existing["direction"] != sig.direction:
+                cancel_price = sig.price
+                _close_position(existing, cancel_price, today)
+                del open_pos[sig.ticker]
+
+            if sig.ticker in open_pos:
+                continue
+
+            if len(open_pos) >= MAX_POSITIONS:
+                break
+
+            conf_frac = max(0, min(1, (sig.confidence - MIN_CONFIDENCE) / (100 - MIN_CONFIDENCE)))
+            size_pct = POSITION_SIZE_MIN + conf_frac * (POSITION_SIZE_MAX - POSITION_SIZE_MIN)
+            effective_portfolio = portfolio * (1 - SLIPPAGE_CUSHION)
+            invest = effective_portfolio * size_pct
+
+            # Zero-unit guard
+            if invest < 1:
+                continue
+
+            portfolio -= invest
+
+            open_pos[sig.ticker] = {
+                "ticker":      sig.ticker,
+                "asset_class": sig.asset_class,
+                "direction":   sig.direction,
+                "entry_date":  sig.date,
+                "entry_price": sig.price,
+                "invested":    invest,
+            }
+
+    # Close remaining positions at their walked exit or last known return
+    for ticker, pos in open_pos.items():
+        result = _walk_bars(pos)
+        if result:
+            _close_position(pos, result[0], result[1])
+        else:
+            fwd = next(
+                (r.forward_return_5d for r in all_records
+                 if r.ticker == ticker and r.date == pos["entry_date"]
+                 and r.forward_return_5d is not None),
+                0.0,
+            )
+            exit_price = pos["entry_price"] * (1 + fwd / 100) if pos["direction"] == "BUY" \
+                else pos["entry_price"] * (1 - fwd / 100)
+            _close_position(pos, exit_price, pos["entry_date"])
 
     final   = round(portfolio, 2)
     total_r = round((final - INITIAL_CAPITAL) / INITIAL_CAPITAL * 100, 2)
@@ -994,6 +1056,7 @@ def run_backtest(
 
     all_records: list[SignalRecord] = []
     all_stats:   list[TickerStats]  = []
+    ohlcv_cache: dict[str, pd.DataFrame] = {}
 
     logger.info("Backtest: {} stocks + {} crypto | {} → {}",
                 len(stocks), len(CRYPTO_ASSETS), DATE_FROM, DATE_TO)
@@ -1007,6 +1070,7 @@ def run_backtest(
             all_stats.append(TickerStats(ticker=ticker, asset_class="stock"))
             time.sleep(0.3)
             continue
+        ohlcv_cache[ticker] = df
         recs, stats = _backtest_ticker(ticker, "stock", df)
         all_records.extend(recs)
         all_stats.append(stats)
@@ -1021,6 +1085,7 @@ def run_backtest(
             all_stats.append(TickerStats(ticker=symbol, asset_class="crypto"))
             time.sleep(0.5)
             continue
+        ohlcv_cache[symbol] = df
         recs, stats = _backtest_ticker(symbol, "crypto", df)
         all_records.extend(recs)
         all_stats.append(stats)
@@ -1028,8 +1093,8 @@ def run_backtest(
 
     agg = _aggregate(all_stats, all_records)
 
-    # Paper trading sim
-    paper = _run_paper_sim(all_records)
+    # Pessimistic Decay paper simulation
+    paper = _run_paper_sim(all_records, ohlcv_cache=ohlcv_cache)
     agg["paper_trading"] = paper
 
     if export_csv:
@@ -1066,7 +1131,7 @@ def _print_report(agg: dict) -> None:
     final = pt.get("final_portfolio", 0)
     ret   = pt.get("total_return_pct", 0)
     pnl   = pt.get("total_pnl", 0)
-    print(f"\n  💰 PAPER TRADING (${start:,.0f} starting, ≥{PAPER_MIN_CONFIDENCE}% confidence only)")
+    print(f"\n  💰 PESSIMISTIC DECAY SIM (${start:,.0f} starting, ≥{PAPER_MIN_CONFIDENCE}% conf, TTL={MAX_TRADE_LIFESPAN_BARS} bars)")
     print(f"     Final portfolio : ${final:,.2f}")
     print(f"     Total return    : {ret:+.2f}%  (${pnl:+,.2f})")
     print(f"     Trades taken    : {pt.get('trades_taken', 0)}")

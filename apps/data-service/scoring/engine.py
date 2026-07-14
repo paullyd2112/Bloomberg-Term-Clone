@@ -230,10 +230,18 @@ def _get_options_context(ticker: str) -> dict | None:
         )
         largest = all_premiums[0] if all_premiums else None
 
+        vol_oi_ratios = [
+            float(r["volume_oi_ratio"])
+            for r in result.data
+            if r.get("volume_oi_ratio") is not None
+        ]
+        max_vol_oi = round(max(vol_oi_ratios), 2) if vol_oi_ratios else None
+
         return {
             "unusual_calls":               len(calls),
             "unusual_puts":                len(puts),
             "put_call_ratio":              round(len(puts) / len(calls), 2) if calls else None,
+            "max_vol_oi_ratio":            max_vol_oi,
             "largest_single_trade_direction": largest.get("contract_type") if largest else None,
             "largest_premium":             largest.get("premium_usd") if largest else None,
         }
@@ -442,6 +450,57 @@ def _apply_accuracy_penalty(confidence: int, accuracy: dict | None) -> int:
     return confidence
 
 
+# ─── XML batch context helpers ───────────────────────────────────────────────
+
+def _build_macro_context_dict(benchmarks: dict | None) -> dict:
+    """Build the macro_context dict consumed by build_batch_xml_payload."""
+    bm = benchmarks or {}
+    spy = bm.get("SPY", {})
+
+    vix = "N/A"
+    try:
+        from ingestion.fred import get_indicator_snapshot
+        snapshot = get_indicator_snapshot()
+        vix_data = snapshot.get("VIXCLS")
+        if vix_data:
+            vix = round(vix_data["value"], 2)
+    except Exception:
+        pass
+
+    return {
+        "vix": vix,
+        "sp500_price": spy.get("price", "N/A"),
+        "sp500_trend": (
+            "strong_uptrend" if (spy.get("price_vs_sma50_pct") or 0) > 5
+            else "downtrend" if (spy.get("price_vs_sma50_pct") or 0) < 0
+            else "neutral"
+        ),
+        "crypto_funding_rate": "N/A",
+        "high_impact_news_day": False,
+    }
+
+
+def _build_asset_health_dict(meta: dict, identifier: str) -> dict:
+    """Build the asset_health dict consumed by build_batch_xml_payload."""
+    days_to_earnings = "N/A"
+    uoa_multiplier = "N/A"
+
+    earnings = _get_earnings_context(identifier)
+    if earnings and earnings.get("hours_until") is not None:
+        days_to_earnings = max(earnings["hours_until"] // 24, 0)
+
+    options = _get_options_context(identifier)
+    if options and options.get("max_vol_oi_ratio") is not None:
+        uoa_multiplier = options["max_vol_oi_ratio"]
+
+    return {
+        "rvol": meta.get("volume_ratio", "N/A"),
+        "pe_ratio": meta.get("pe_ratio", "N/A"),
+        "days_to_earnings": days_to_earnings,
+        "uoa_vol_oi_multiplier": uoa_multiplier,
+    }
+
+
 # ─── Signal writer ────────────────────────────────────────────────────────────
 
 # Set by scheduler.py's manual /run-job/ endpoint around a {"force": true}
@@ -462,9 +521,11 @@ def _write_signal(
     news_with_urls: list[dict] | None = None,
     risk_budget: "RiskBudget | None" = None,
     atr: float | None = None,
+    subscription: str | None = None,
 ) -> dict:
     from scoring.risk_engine import (
-        score_setup, format_trade_setup, AssetClass, DEFAULT_ACCOUNT,
+        score_setup, format_trade_setup, AssetClass,
+        filter_by_subscription, SubscriptionTier,
     )
 
     accuracy = _get_asset_accuracy(identifier, asset_type)
@@ -487,8 +548,8 @@ def _write_signal(
         "prediction": AssetClass.PREDICTION_MARKET,
     }
 
-    # Run prop risk engine — compute position size, stop/target, and
-    # check against daily loss budget
+    # Subscription tier gating — Pro gets stocks/crypto only;
+    # Elite gets all asset classes
     trade_setup_data = None
     direction_field = signal.direction
     if asset_type == "prediction":
@@ -496,18 +557,38 @@ def _write_signal(
             "SELL" if getattr(signal, "direction", "HOLD") == "NO" else "HOLD"
         )
 
+    asset_cls = _ASSET_CLASS_MAP.get(asset_type, AssetClass.STOCK)
+    if subscription:
+        sub_rejection = filter_by_subscription(asset_cls, subscription)
+        if sub_rejection:
+            logger.info("{}/{}: subscription gate — {}", asset_type, identifier, sub_rejection)
+            base = {
+                "asset_type":      asset_type,
+                "identifier":      identifier,
+                "direction":       "HOLD",
+                "confidence":      0,
+                "reasoning":       f"[Subscription gate] {sub_rejection}",
+                "time_horizon":    signal.time_horizon,
+                "price_at_signal": price,
+                "news_context":    signal.news_context,
+                "news_urls":       [],
+                "is_backtest":     False,
+                "is_stale_test":   STALE_TEST_MODE,
+                "outcome":         "PENDING",
+            }
+            return base
+
     if price is not None and direction_field in ("BUY", "SELL"):
         invalidation = getattr(signal, "invalidation_price", None)
-        asset_cls = _ASSET_CLASS_MAP.get(asset_type, AssetClass.STOCK)
         setup = score_setup(
             direction=direction_field,
             asset_class=asset_cls,
             entry_price=price,
             confidence=adjusted_confidence,
-            account=DEFAULT_ACCOUNT,
             budget=risk_budget,
             atr=atr,
             invalidation_level=invalidation,
+            identifier=identifier,
         )
         trade_setup_data = format_trade_setup(setup)
 
@@ -543,6 +624,45 @@ def _write_signal(
     return result.data[0] if result.data else base
 
 
+# ─── Tier-gated API response formatting ──────────────────────────────────────
+
+_PRO_ALLOWED_ASSET_TYPES = frozenset({"stock", "crypto"})
+
+def format_signal_for_tier(signal: dict, tier: str | None) -> dict | None:
+    """Filter a signal dict based on subscription tier before API delivery.
+
+    Pro: stocks and crypto only — raw alpha (entry/stop/target), no futures
+    proxy, no profile allocations.
+    Elite: complete package including futures proxy and all profile allocations.
+    None/missing: treated as pro (safest default).
+    """
+    from scoring.risk_engine import SubscriptionTier, PRO_TIERS, ELITE_TIERS
+
+    if tier:
+        try:
+            sub = SubscriptionTier(tier)
+        except ValueError:
+            sub = None
+    else:
+        sub = None
+
+    is_elite = sub in ELITE_TIERS if sub else False
+    asset_type = signal.get("asset_type", "")
+
+    if not is_elite and asset_type not in _PRO_ALLOWED_ASSET_TYPES:
+        return None
+
+    result = dict(signal)
+
+    if not is_elite:
+        ts = result.get("trade_setup")
+        if isinstance(ts, dict):
+            ts.pop("futures_proxy", None)
+            ts.pop("profile_allocations", None)
+
+    return result
+
+
 # ─── Core scoring function ────────────────────────────────────────────────────
 
 def score_asset(
@@ -555,6 +675,7 @@ def score_asset(
     btc_regime: dict | None = None,
     skip_hold: bool = True,
     risk_budget: "RiskBudget | None" = None,
+    subscription: str | None = None,
 ) -> dict | None:
     """
     Build context from Supabase, call Claude via Instructor,
@@ -610,6 +731,13 @@ def score_asset(
                        asset_type, identifier, 5)
         return None
 
+    # ── Time-of-day filter (stocks only — crypto/prediction trade 24/7) ────
+    if asset_type == "stock":
+        from scoring.risk_engine import is_after_market_cutoff
+        if is_after_market_cutoff():
+            logger.info("{}/{}: time gate — past 3:30 PM EST, skipping", asset_type, identifier)
+            return None
+
     # ── Build asset-specific context & call Claude ──────────────────────────
 
     # Reuse preloaded macro context if the caller supplied it (score_stocks/
@@ -619,6 +747,8 @@ def score_asset(
         benchmarks = _get_market_benchmark()
     if macro_events is None:
         macro_events = _get_upcoming_macro(days=2)
+
+    from scoring.risk_engine import STATIC_EXAMPLES_XML, build_batch_xml_payload, AssetClass
 
     try:
         if asset_type == "stock":
@@ -633,15 +763,29 @@ def score_asset(
                 "short_interest_context": _get_short_interest_context(identifier),
                 "corporate_actions":     _get_corporate_actions_context(identifier),
             }
+
+            macro_ctx = _build_macro_context_dict(benchmarks)
+            asset_health = _build_asset_health_dict(meta, identifier)
+            batch_xml = build_batch_xml_payload(
+                asset_class=AssetClass.STOCK,
+                identifier=identifier,
+                entry_price=current_price,
+                direction="PENDING",
+                profile_name="retail_standard",
+                macro_context=macro_ctx,
+                asset_health=asset_health,
+            )
+
             signal: StockSignal = client.chat.completions.create(
                 model=use_model,
                 max_tokens=MAX_TOKENS,
                 system=[
                     {"type": "text", "text": stocks_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": STATIC_EXAMPLES_XML, "cache_control": {"type": "ephemeral"}},
                     {"type": "text", "text": _format_market_context(benchmarks, macro_events),
                      "cache_control": {"type": "ephemeral"}},
                 ],
-                messages=[{"role": "user", "content": stocks_prompt.build_user_prompt(context)}],
+                messages=[{"role": "user", "content": batch_xml + "\n\n" + stocks_prompt.build_user_prompt(context)}],
                 response_model=StockSignal,
             )
 
@@ -656,15 +800,27 @@ def score_asset(
                 "news_headlines":      news,
                 "btc_regime":          btc_regime,
             }
+
+            macro_ctx = _build_macro_context_dict(benchmarks)
+            batch_xml = build_batch_xml_payload(
+                asset_class=AssetClass.CRYPTO,
+                identifier=identifier,
+                entry_price=current_price,
+                direction="PENDING",
+                profile_name="retail_standard",
+                macro_context=macro_ctx,
+            )
+
             signal: CryptoSignal = client.chat.completions.create(
                 model=use_model,
                 max_tokens=MAX_TOKENS,
                 system=[
                     {"type": "text", "text": crypto_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": STATIC_EXAMPLES_XML, "cache_control": {"type": "ephemeral"}},
                     {"type": "text", "text": _format_market_context(benchmarks, macro_events),
                      "cache_control": {"type": "ephemeral"}},
                 ],
-                messages=[{"role": "user", "content": crypto_prompt.build_user_prompt(context)}],
+                messages=[{"role": "user", "content": batch_xml + "\n\n" + crypto_prompt.build_user_prompt(context)}],
                 response_model=CryptoSignal,
             )
 
@@ -678,11 +834,27 @@ def score_asset(
                 "close_time":    meta.get("close_time") or meta.get("end_date"),
                 "news_headlines": news,
             }
+
+            macro_ctx = _build_macro_context_dict(benchmarks)
+            batch_xml = build_batch_xml_payload(
+                asset_class=AssetClass.PREDICTION_MARKET,
+                identifier=identifier,
+                entry_price=current_price,
+                direction="PENDING",
+                profile_name="retail_standard",
+                macro_context=macro_ctx,
+            )
+
             signal: PredictionSignal = client.chat.completions.create(
                 model=use_model,
                 max_tokens=MAX_TOKENS,
-                system=[{"type": "text", "text": pred_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
-                messages=[{"role": "user", "content": pred_prompt.build_user_prompt(context)}],
+                system=[
+                    {"type": "text", "text": pred_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": STATIC_EXAMPLES_XML, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": _format_market_context(benchmarks, macro_events),
+                     "cache_control": {"type": "ephemeral"}},
+                ],
+                messages=[{"role": "user", "content": batch_xml + "\n\n" + pred_prompt.build_user_prompt(context)}],
                 response_model=PredictionSignal,
             )
 
@@ -694,6 +866,20 @@ def score_asset(
         logger.error("{}/{}: Claude scoring failed — {}", asset_type, identifier, e)
         sentry_sdk.capture_exception(e)
         return None
+
+    # Confidence gate — reject low-confidence signals before any further processing
+    from scoring.risk_engine import check_confidence_gate, CONFIDENCE_MINIMUM
+    conf_rejection = check_confidence_gate(signal.confidence)
+    if conf_rejection and signal.direction in ("BUY", "SELL"):
+        logger.info(
+            "{}/{}: confidence gate — {} ({}%), downgrading to HOLD",
+            asset_type, identifier, signal.direction, signal.confidence,
+        )
+        signal.direction = "HOLD"
+        signal.reasoning = (
+            f"[Confidence gate] Score {signal.confidence}/100 below "
+            f"minimum {CONFIDENCE_MINIMUM} threshold. " + signal.reasoning
+        )
 
     # Circuit breaker — don't issue counter-trend signals after a large gap move.
     # A >8% gap up/down almost always means a fundamental catalyst repriced the stock;
@@ -848,7 +1034,7 @@ def score_asset(
     try:
         record = _write_signal(
             asset_type, identifier, current_price, signal, news_with_urls,
-            risk_budget=risk_budget, atr=atr_value,
+            risk_budget=risk_budget, atr=atr_value, subscription=subscription,
         )
         logger.info(
             "{}/{}: {} {}% confidence — {}",
@@ -873,10 +1059,10 @@ def score_asset(
 
 # ─── Batch scoring functions (called by scheduler) ───────────────────────────
 
-def score_stocks() -> str:
+def score_stocks(subscription: str | None = None) -> str:
     from scoring.scanner import scan_stocks
     from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
-    from scoring.risk_engine import RiskBudget, DEFAULT_ACCOUNT
+    from scoring.risk_engine import RiskBudget
 
     scan_results = scan_stocks(use_movers=True)
     core_always_score = {"AAPL", "NVDA", "TSLA", "GOOGL", "META", "AMZN", "MSFT", "SPY", "QQQ"}
@@ -884,7 +1070,7 @@ def score_stocks() -> str:
     benchmarks   = _get_market_benchmark()
     macro_events = _get_upcoming_macro(days=2)
     breadth_tracker: dict = {"extended_buys": 0}
-    risk_budget = RiskBudget(account=DEFAULT_ACCOUNT)
+    risk_budget = RiskBudget()
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
@@ -895,7 +1081,8 @@ def score_stocks() -> str:
         if ticker in core_always_score:
             try:
                 result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events,
-                                      breadth_tracker=breadth_tracker, risk_budget=risk_budget)
+                                      breadth_tracker=breadth_tracker, risk_budget=risk_budget,
+                                      subscription=subscription)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -922,7 +1109,8 @@ def score_stocks() -> str:
 
         try:
             result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events,
-                                  breadth_tracker=breadth_tracker, risk_budget=risk_budget)
+                                  breadth_tracker=breadth_tracker, risk_budget=risk_budget,
+                                  subscription=subscription)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -937,7 +1125,8 @@ def score_stocks() -> str:
         if not any(s["ticker"] == core_ticker for s in scan_results):
             try:
                 result = score_asset("stock", core_ticker, benchmarks=benchmarks, macro_events=macro_events,
-                                      breadth_tracker=breadth_tracker, risk_budget=risk_budget)
+                                      breadth_tracker=breadth_tracker, risk_budget=risk_budget,
+                                      subscription=subscription)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -952,19 +1141,19 @@ def score_stocks() -> str:
             f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet")
 
 
-def score_stocks_event_only() -> str:
+def score_stocks_event_only(subscription: str | None = None) -> str:
     """Midday event-driven scan — skips core tickers and daily-bar indicators.
     Only scores stocks with intraday events (gap moves, volume surges)."""
     from scoring.scanner import scan_stocks
     from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
-    from scoring.risk_engine import RiskBudget, DEFAULT_ACCOUNT
+    from scoring.risk_engine import RiskBudget
 
     scan_results = scan_stocks(use_movers=True, event_only=True)
 
     benchmarks   = _get_market_benchmark()
     macro_events = _get_upcoming_macro(days=2)
     breadth_tracker: dict = {"extended_buys": 0}
-    risk_budget = RiskBudget(account=DEFAULT_ACCOUNT)
+    risk_budget = RiskBudget()
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
@@ -987,7 +1176,8 @@ def score_stocks_event_only() -> str:
 
         try:
             result = score_asset("stock", ticker, benchmarks=benchmarks, macro_events=macro_events,
-                                  breadth_tracker=breadth_tracker, risk_budget=risk_budget)
+                                  breadth_tracker=breadth_tracker, risk_budget=risk_budget,
+                                  subscription=subscription)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -1011,7 +1201,7 @@ TIER1_CRYPTO  = {
 CRYPTO_MOVER_THRESHOLD = 5.0  # % change to qualify lower-tier coins
 
 
-def score_crypto() -> str:
+def score_crypto(subscription: str | None = None) -> str:
     from scoring.haiku_prescreen import prescreen_crypto, should_escalate_to_sonnet
 
     try:
@@ -1077,7 +1267,7 @@ def score_crypto() -> str:
         if sym in CORE_CRYPTO:
             try:
                 result = score_asset("crypto", sym, benchmarks=benchmarks, macro_events=macro_events,
-                                      btc_regime=btc_regime)
+                                      btc_regime=btc_regime, subscription=subscription)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -1106,7 +1296,7 @@ def score_crypto() -> str:
 
         try:
             result = score_asset("crypto", sym, benchmarks=benchmarks, macro_events=macro_events,
-                                  btc_regime=btc_regime)
+                                  btc_regime=btc_regime, subscription=subscription)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -1126,7 +1316,7 @@ PREDICTION_CANDIDATE_LIMIT = 20   # diversified candidates actually prescreened
 PREDICTION_MAX_PER_EVENT   = 2    # cap per real-world event/topic
 
 
-def score_prediction_markets() -> str:
+def score_prediction_markets(subscription: str | None = None) -> str:
     from scoring.haiku_prescreen import prescreen_prediction, should_escalate_to_sonnet
 
     # raw_prices is a time-series table -- every market gets a new row each
@@ -1195,7 +1385,7 @@ def score_prediction_markets() -> str:
             continue
 
         try:
-            result = score_asset("prediction", ident)
+            result = score_asset("prediction", ident, subscription=subscription)
             sonnet_calls += 1
             if result is None:
                 skipped += 1

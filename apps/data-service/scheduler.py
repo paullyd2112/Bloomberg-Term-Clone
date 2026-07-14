@@ -529,11 +529,21 @@ def score_asset_endpoint():
         except Exception as e:
             logger.warning("Auto-ingest failed for {}/{}: {}", asset_type, identifier, e)
 
+    subscription = body.get("subscription")
+
     try:
-        result = score_asset(asset_type, identifier, skip_hold=False)
+        result = score_asset(asset_type, identifier, skip_hold=False, subscription=subscription)
         if result is None:
             return jsonify({"status": "skipped", "reason": "recently scored or no data"})
-        return jsonify({"status": "ok", "signal": result})
+
+        from scoring.engine import format_signal_for_tier
+        filtered = format_signal_for_tier(result, subscription)
+        if filtered is None:
+            return jsonify({
+                "status": "rejected",
+                "reason": f"{asset_type} not available on this subscription tier",
+            }), 403
+        return jsonify({"status": "ok", "signal": filtered})
     except Exception as e:
         logger.error("On-demand score failed for {}/{}: {}", asset_type, identifier, e)
         return jsonify({"error": str(e)}), 500

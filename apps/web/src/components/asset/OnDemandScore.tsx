@@ -41,8 +41,8 @@ export default function OnDemandScore({ assetType, identifier }: Props) {
     }
   }
 
-  if (result?.status === "ok" || result?.status === "cached") {
-    const s = result.signal!;
+  if ((result?.status === "ok" || result?.status === "cached") && result.signal) {
+    const s = result.signal;
     const color =
       s.direction === "BUY" || s.direction === "YES"
         ? "text-emerald-400"

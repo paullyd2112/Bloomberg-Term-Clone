@@ -1,10 +1,11 @@
 import Stripe from "stripe";
+import { STRIPE_SECRET_KEY } from "@/lib/env";
 
 let _stripe: Stripe | null = null;
 
 export function getStripe(): Stripe {
   if (!_stripe) {
-    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    _stripe = new Stripe(STRIPE_SECRET_KEY(), {
       apiVersion: "2026-04-22.dahlia",
       typescript: true,
     });
@@ -29,7 +30,9 @@ export const PLANS = {
 export type PlanKey = keyof typeof PLANS;
 
 export function getPriceId(plan: PlanKey): string {
-  return process.env[PLANS[plan].priceEnvKey]!;
+  const val = process.env[PLANS[plan].priceEnvKey];
+  if (!val) throw new Error(`Missing env var: ${PLANS[plan].priceEnvKey}`);
+  return val;
 }
 
 export function getTierForPlan(plan: string): "pro" | "elite" | "free" {
