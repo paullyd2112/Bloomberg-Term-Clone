@@ -624,6 +624,45 @@ def _write_signal(
     return result.data[0] if result.data else base
 
 
+# ─── Tier-gated API response formatting ──────────────────────────────────────
+
+_PRO_ALLOWED_ASSET_TYPES = frozenset({"stock", "crypto"})
+
+def format_signal_for_tier(signal: dict, tier: str | None) -> dict | None:
+    """Filter a signal dict based on subscription tier before API delivery.
+
+    Pro: stocks and crypto only — raw alpha (entry/stop/target), no futures
+    proxy, no profile allocations.
+    Elite: complete package including futures proxy and all profile allocations.
+    None/missing: treated as pro (safest default).
+    """
+    from scoring.risk_engine import SubscriptionTier, PRO_TIERS, ELITE_TIERS
+
+    if tier:
+        try:
+            sub = SubscriptionTier(tier)
+        except ValueError:
+            sub = None
+    else:
+        sub = None
+
+    is_elite = sub in ELITE_TIERS if sub else False
+    asset_type = signal.get("asset_type", "")
+
+    if not is_elite and asset_type not in _PRO_ALLOWED_ASSET_TYPES:
+        return None
+
+    result = dict(signal)
+
+    if not is_elite:
+        ts = result.get("trade_setup")
+        if isinstance(ts, dict):
+            ts.pop("futures_proxy", None)
+            ts.pop("profile_allocations", None)
+
+    return result
+
+
 # ─── Core scoring function ────────────────────────────────────────────────────
 
 def score_asset(
@@ -795,11 +834,27 @@ def score_asset(
                 "close_time":    meta.get("close_time") or meta.get("end_date"),
                 "news_headlines": news,
             }
+
+            macro_ctx = _build_macro_context_dict(benchmarks)
+            batch_xml = build_batch_xml_payload(
+                asset_class=AssetClass.PREDICTION_MARKET,
+                identifier=identifier,
+                entry_price=current_price,
+                direction="PENDING",
+                profile_name="retail_standard",
+                macro_context=macro_ctx,
+            )
+
             signal: PredictionSignal = client.chat.completions.create(
                 model=use_model,
                 max_tokens=MAX_TOKENS,
-                system=[{"type": "text", "text": pred_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
-                messages=[{"role": "user", "content": pred_prompt.build_user_prompt(context)}],
+                system=[
+                    {"type": "text", "text": pred_prompt.SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": STATIC_EXAMPLES_XML, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": _format_market_context(benchmarks, macro_events),
+                     "cache_control": {"type": "ephemeral"}},
+                ],
+                messages=[{"role": "user", "content": batch_xml + "\n\n" + pred_prompt.build_user_prompt(context)}],
                 response_model=PredictionSignal,
             )
 
