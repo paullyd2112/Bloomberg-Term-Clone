@@ -26,6 +26,16 @@ MODEL              = "claude-sonnet-4-6"
 SIGNAL_COOLDOWN_H  = 4      # skip if signal generated within this many hours
 MAX_TOKENS         = 1024
 ENGINE_CUTOFF      = "2026-07-04T11:00:00Z"  # signals before this date are unreliable
+
+# Emergency launch tuning — stricter stock BUY filters (July 2026)
+STOCK_RVOL_MINIMUM        = 2.5   # minimum relative volume for equity signals
+MAX_STOCK_SIGNALS_PER_DAY = 3     # hard cap on stock signals per calendar day
+
+# High-beta semiconductor & crypto-proxy tickers — backtest showed these
+# drove the entire -4.13% stock loss via intra-bar volatility whipsaws.
+# Elevated RVOL threshold and sector-trend alignment required.
+HIGH_BETA_VOLATILITY_WATCHLIST = frozenset({"AMD", "NVDA", "COIN", "SMCI", "AVGO"})
+HIGH_BETA_RVOL_MINIMUM = 3.5
 # Bumped from 2026-06-22 (the prior engine overhaul, #20) to just after
 # 2026-07-04T10:27:30Z (#59), the fix for the case-sensitive ta indicator
 # matcher + tz-aware ingest merge crash that left live stock/crypto scoring
@@ -318,6 +328,60 @@ def _get_market_benchmark() -> dict:
         except Exception:
             pass
     return benchmarks
+
+
+# ─── Emergency launch tuning helpers ──────────────────────────────────────────
+
+_spy_1h_cache: dict[str, tuple[float, bool]] = {}
+
+def _spy_below_1h_sma20() -> bool:
+    """Check if SPY is trading below its 20-period SMA on 1-hour candles.
+    Returns True (= reject stock BUYs) when SPY < SMA-20 on the 1h chart.
+    Caches the result for the current hour to avoid repeated API calls."""
+    now = datetime.now(timezone.utc)
+    cache_key = now.strftime("%Y-%m-%d-%H")
+    if cache_key in _spy_1h_cache:
+        return _spy_1h_cache[cache_key][1]
+
+    try:
+        from ingestion.alpaca_client import fetch_stock_bars
+        df = fetch_stock_bars("SPY", days=5, timeframe="1Hour")
+        if df is None or len(df) < 20:
+            logger.warning("SPY 1h gate: insufficient data ({} bars) — defaulting to pass",
+                           len(df) if df is not None else 0)
+            _spy_1h_cache[cache_key] = (now.timestamp(), False)
+            return False
+
+        sma_20 = df["close"].rolling(20).mean()
+        latest_close = float(df["close"].iloc[-1])
+        latest_sma = float(sma_20.iloc[-1])
+        below = latest_close < latest_sma
+        _spy_1h_cache[cache_key] = (now.timestamp(), below)
+        logger.info("SPY 1h SMA-20 gate: close={:.2f}, SMA-20={:.2f}, below={}",
+                    latest_close, latest_sma, below)
+        return below
+    except Exception as e:
+        logger.warning("SPY 1h gate error: {} — defaulting to pass", e)
+        _spy_1h_cache[cache_key] = (now.timestamp(), False)
+        return False
+
+
+def _stock_signals_today_count() -> int:
+    """Count how many stock signals have been written today (UTC)."""
+    try:
+        today_start = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+        result = (
+            supabase.table("signals")
+            .select("id", count="exact")
+            .eq("asset_type", "stock")
+            .gte("created_at", today_start)
+            .neq("direction", "HOLD")
+            .execute()
+        )
+        return result.count or 0
+    except Exception as e:
+        logger.warning("Daily stock signal count query failed: {} — defaulting to 0", e)
+        return 0
 
 
 def _get_upcoming_macro(days: int = 2) -> list[str]:
@@ -947,6 +1011,77 @@ def score_asset(
                     + signal.reasoning
                 )
 
+    # SPY 1-hour SMA-20 gate — stricter intraday regime check.
+    # The daily SMA-50 gate above catches multi-week downtrends; this catches
+    # intraday weakness. If SPY is below its 20-period SMA on 1h candles,
+    # reject ALL stock BUYs regardless of single-stock strength.
+    if asset_type == "stock" and signal.direction == "BUY":
+        if _spy_below_1h_sma20():
+            logger.warning(
+                "{}/{}: SPY 1h SMA-20 gate — SPY below 20-period SMA on 1h chart, rejecting BUY",
+                asset_type, identifier,
+            )
+            signal.direction  = "HOLD"
+            signal.confidence = min(signal.confidence, 40)
+            signal.reasoning  = (
+                "[SPY 1h gate] SPY is trading below its 20-period SMA on the 1-hour chart — "
+                "intraday momentum is bearish. Rejecting BUY. "
+                + signal.reasoning
+            )
+
+    # RVOL minimum gate — require 2.5x relative volume for equity signals,
+    # elevated to 3.5x for high-beta volatility watchlist tickers.
+    if asset_type == "stock" and signal.direction in ("BUY", "SELL"):
+        is_high_beta = identifier in HIGH_BETA_VOLATILITY_WATCHLIST
+        rvol_threshold = HIGH_BETA_RVOL_MINIMUM if is_high_beta else STOCK_RVOL_MINIMUM
+        rvol = meta.get("volume_ratio")
+        if rvol is not None:
+            try:
+                rvol_f = float(rvol)
+                if rvol_f < rvol_threshold:
+                    tag = "High-beta RVOL gate" if is_high_beta else "RVOL gate"
+                    logger.warning(
+                        "{}/{}: {} — {:.2f}x < {:.1f}x minimum, downgrading {} to HOLD",
+                        asset_type, identifier, tag, rvol_f, rvol_threshold, signal.direction,
+                    )
+                    signal.direction  = "HOLD"
+                    signal.confidence = min(signal.confidence, 40)
+                    signal.reasoning  = (
+                        f"[{tag}] Relative volume {rvol_f:.2f}x is below the {rvol_threshold:.1f}x "
+                        f"minimum — insufficient institutional participation"
+                        f"{' for high-beta semiconductor/crypto-proxy' if is_high_beta else ''}. "
+                        + signal.reasoning
+                    )
+            except (TypeError, ValueError):
+                pass
+
+    # High-beta sector trend alignment gate — for watchlist tickers that
+    # passed the elevated RVOL check, verify the sector is trending favorably.
+    # Uses QQQ as the sector proxy (all watchlist names are tech/semi-heavy).
+    if (asset_type == "stock" and identifier in HIGH_BETA_VOLATILITY_WATCHLIST
+            and signal.direction == "BUY"):
+        qqq_data = (benchmarks or {}).get("QQQ", {})
+        qqq_change = qqq_data.get("change_24h")
+        if qqq_change is not None:
+            try:
+                qqq_change_f = float(qqq_change)
+                if qqq_change_f < 0:
+                    logger.warning(
+                        "{}/{}: sector alignment gate — QQQ {:.2f}% today, "
+                        "high-beta BUY requires sector above daily open",
+                        asset_type, identifier, qqq_change_f,
+                    )
+                    signal.direction  = "HOLD"
+                    signal.confidence = min(signal.confidence, 35)
+                    signal.reasoning  = (
+                        f"[Sector alignment gate] QQQ is {qqq_change_f:.2f}% today — "
+                        f"sector trading below daily open. High-beta {identifier} BUY "
+                        f"requires sector tailwind. "
+                        + signal.reasoning
+                    )
+            except (TypeError, ValueError):
+                pass
+
     # Deterministic BTC regime gate — same "prompt gate had no real data
     # behind it" bug as SPY above. The crypto prompt's HARD GATE tells the
     # model to check BTC's MACD, but nothing fetched BTC's indicators for
@@ -1064,6 +1199,13 @@ def score_stocks(subscription: str | None = None) -> str:
     from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
     from scoring.risk_engine import RiskBudget
 
+    # Daily stock signal volume throttle — hard cap at MAX_STOCK_SIGNALS_PER_DAY
+    existing_today = _stock_signals_today_count()
+    if existing_today >= MAX_STOCK_SIGNALS_PER_DAY:
+        logger.warning("Daily stock signal cap reached ({}/{}) — skipping entire stock scan",
+                       existing_today, MAX_STOCK_SIGNALS_PER_DAY)
+        return f"0 scored, 0 skipped, 0 failed — daily cap reached ({existing_today}/{MAX_STOCK_SIGNALS_PER_DAY})"
+
     scan_results = scan_stocks(use_movers=True)
     core_always_score = {"AAPL", "NVDA", "TSLA", "GOOGL", "META", "AMZN", "MSFT", "SPY", "QQQ"}
 
@@ -1071,11 +1213,18 @@ def score_stocks(subscription: str | None = None) -> str:
     macro_events = _get_upcoming_macro(days=2)
     breadth_tracker: dict = {"extended_buys": 0}
     risk_budget = RiskBudget()
+    signals_written_this_run = 0
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
 
+    remaining_budget = MAX_STOCK_SIGNALS_PER_DAY - existing_today
+    cap_hit = False
+
     for item in scan_results:
+        if cap_hit:
+            skipped += 1
+            continue
         ticker = item["ticker"]
 
         if ticker in core_always_score:
@@ -1088,6 +1237,11 @@ def score_stocks(subscription: str | None = None) -> str:
                     skipped += 1
                 else:
                     success += 1
+                    signals_written_this_run += 1
+                    if signals_written_this_run >= remaining_budget:
+                        logger.warning("Daily stock signal cap reached mid-run ({}/{})",
+                                       existing_today + signals_written_this_run, MAX_STOCK_SIGNALS_PER_DAY)
+                        cap_hit = True
             except Exception as e:
                 logger.error("score_stocks error for {}: {}", ticker, e)
                 sentry_sdk.capture_exception(e)
@@ -1116,12 +1270,20 @@ def score_stocks(subscription: str | None = None) -> str:
                 skipped += 1
             else:
                 success += 1
+                signals_written_this_run += 1
+                if signals_written_this_run >= remaining_budget:
+                    logger.warning("Daily stock signal cap reached mid-run ({}/{})",
+                                   existing_today + signals_written_this_run, MAX_STOCK_SIGNALS_PER_DAY)
+                    cap_hit = True
         except Exception as e:
             logger.error("score_stocks error for {}: {}", ticker, e)
             sentry_sdk.capture_exception(e)
             failed += 1
 
     for core_ticker in core_always_score:
+        if cap_hit:
+            skipped += 1
+            continue
         if not any(s["ticker"] == core_ticker for s in scan_results):
             try:
                 result = score_asset("stock", core_ticker, benchmarks=benchmarks, macro_events=macro_events,
@@ -1132,13 +1294,19 @@ def score_stocks(subscription: str | None = None) -> str:
                     skipped += 1
                 else:
                     success += 1
+                    signals_written_this_run += 1
+                    if signals_written_this_run >= remaining_budget:
+                        logger.warning("Daily stock signal cap reached mid-run ({}/{})",
+                                       existing_today + signals_written_this_run, MAX_STOCK_SIGNALS_PER_DAY)
+                        cap_hit = True
             except Exception as e:
                 logger.error("score_stocks error for {}: {}", core_ticker, e)
                 sentry_sdk.capture_exception(e)
                 failed += 1
 
+    cap_note = f", daily cap: {existing_today + signals_written_this_run}/{MAX_STOCK_SIGNALS_PER_DAY}" if cap_hit else ""
     return (f"{success} scored, {skipped} skipped, {failed} failed — "
-            f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet")
+            f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet{cap_note}")
 
 
 def score_stocks_event_only(subscription: str | None = None) -> str:
@@ -1148,17 +1316,29 @@ def score_stocks_event_only(subscription: str | None = None) -> str:
     from scoring.haiku_prescreen import prescreen_stock, should_escalate_to_sonnet
     from scoring.risk_engine import RiskBudget
 
+    existing_today = _stock_signals_today_count()
+    if existing_today >= MAX_STOCK_SIGNALS_PER_DAY:
+        logger.warning("[event-only] Daily stock signal cap reached ({}/{}) — skipping",
+                       existing_today, MAX_STOCK_SIGNALS_PER_DAY)
+        return f"[event-only] 0 scored — daily cap reached ({existing_today}/{MAX_STOCK_SIGNALS_PER_DAY})"
+
     scan_results = scan_stocks(use_movers=True, event_only=True)
 
     benchmarks   = _get_market_benchmark()
     macro_events = _get_upcoming_macro(days=2)
     breadth_tracker: dict = {"extended_buys": 0}
     risk_budget = RiskBudget()
+    signals_written_this_run = 0
+    remaining_budget = MAX_STOCK_SIGNALS_PER_DAY - existing_today
+    cap_hit = False
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
 
     for item in scan_results:
+        if cap_hit:
+            skipped += 1
+            continue
         ticker = item["ticker"]
 
         meta = {
@@ -1183,13 +1363,19 @@ def score_stocks_event_only(subscription: str | None = None) -> str:
                 skipped += 1
             else:
                 success += 1
+                signals_written_this_run += 1
+                if signals_written_this_run >= remaining_budget:
+                    logger.warning("[event-only] Daily stock signal cap reached mid-run ({}/{})",
+                                   existing_today + signals_written_this_run, MAX_STOCK_SIGNALS_PER_DAY)
+                    cap_hit = True
         except Exception as e:
             logger.error("score_stocks_event_only error for {}: {}", ticker, e)
             sentry_sdk.capture_exception(e)
             failed += 1
 
+    cap_note = f", daily cap: {existing_today + signals_written_this_run}/{MAX_STOCK_SIGNALS_PER_DAY}" if cap_hit else ""
     return (f"[event-only] {success} scored, {skipped} skipped, {failed} failed — "
-            f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet")
+            f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet{cap_note}")
 
 
 CORE_CRYPTO   = {"BTC", "ETH", "SOL", "XRP", "ADA"}
@@ -1197,6 +1383,9 @@ TIER1_CRYPTO  = {
     "BNB", "DOGE", "AVAX", "DOT", "LINK", "UNI", "ATOM",
     "LTC", "NEAR", "APT", "ARB", "OP", "FIL", "INJ", "SUI", "SEI",
     "PEPE", "WIF", "SHIB", "TIA", "AAVE", "MKR", "RENDER", "FET",
+    "MATIC", "HBAR", "VET", "ALGO", "XLM", "ICP", "SAND", "MANA",
+    "AXS", "CRV", "SNX", "COMP", "BAL", "SUSHI", "IMX", "GRT",
+    "STX", "RUNE", "JASMY", "FLOW", "GALA", "ENS", "LDO", "RPL",
 }
 CRYPTO_MOVER_THRESHOLD = 5.0  # % change to qualify lower-tier coins
 

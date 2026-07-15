@@ -33,6 +33,12 @@ PROP_EXCLUDED_ASSETS = frozenset({AssetClass.PREDICTION_MARKET})
 
 PREDICTION_MAX_RISK_DOLLARS = 25
 
+# High-beta tickers that require elevated validation before sizing.
+# If the scoring engine flags one as REDUCED_CONFIDENCE (via the
+# high-beta gates), the risk engine forces zero allocation.
+HIGH_BETA_VOLATILITY_WATCHLIST = frozenset({"AMD", "NVDA", "COIN", "SMCI", "AVGO"})
+REDUCED_CONFIDENCE_THRESHOLD = 40
+
 
 # ─── Non-linear account profiles ──────────────────────────────────────────────
 
@@ -683,6 +689,31 @@ def score_all_profiles(
                 target_pct=round(target_pct * 100, 2),
                 suppressed=True,
                 suppression_reason=f"R:R {rr_ratio:.1f}:1 below minimum {config.min_rr}:1",
+            )
+        )
+
+    # High-beta governor: if a watchlist ticker arrives with reduced
+    # confidence (set by the scoring engine's high-beta gates), force
+    # zero allocation — the zero-unit guard will reject the trade.
+    if (identifier and identifier in HIGH_BETA_VOLATILITY_WATCHLIST
+            and confidence <= REDUCED_CONFIDENCE_THRESHOLD):
+        logger.warning(
+            "risk_engine: {} high-beta governor — confidence {} <= {} threshold, "
+            "suppressing trade setup",
+            identifier, confidence, REDUCED_CONFIDENCE_THRESHOLD,
+        )
+        return DualLayerSetup(
+            alpha=CoreAlpha(
+                direction=direction, asset_class=asset_class,
+                entry_price=entry_price, stop_loss=stop_loss,
+                take_profit=take_profit, risk_reward_ratio=round(rr_ratio, 2),
+                stop_pct=round(stop_pct * 100, 2),
+                target_pct=round(target_pct * 100, 2),
+                suppressed=True,
+                suppression_reason=(
+                    f"High-beta governor: {identifier} confidence {confidence} "
+                    f"below {REDUCED_CONFIDENCE_THRESHOLD} — zero allocation enforced"
+                ),
             )
         )
 
