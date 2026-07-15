@@ -1383,6 +1383,9 @@ TIER1_CRYPTO  = {
     "BNB", "DOGE", "AVAX", "DOT", "LINK", "UNI", "ATOM",
     "LTC", "NEAR", "APT", "ARB", "OP", "FIL", "INJ", "SUI", "SEI",
     "PEPE", "WIF", "SHIB", "TIA", "AAVE", "MKR", "RENDER", "FET",
+    "MATIC", "HBAR", "VET", "ALGO", "XLM", "ICP", "SAND", "MANA",
+    "AXS", "CRV", "SNX", "COMP", "BAL", "SUSHI", "IMX", "GRT",
+    "STX", "RUNE", "JASMY", "FLOW", "GALA", "ENS", "LDO", "RPL",
 }
 CRYPTO_MOVER_THRESHOLD = 5.0  # % change to qualify lower-tier coins
 

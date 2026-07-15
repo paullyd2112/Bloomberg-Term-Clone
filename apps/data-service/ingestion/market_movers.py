@@ -49,19 +49,35 @@ def fetch_market_movers() -> list[str]:
     return sorted(tickers)
 
 
+def fetch_alpaca_most_actives() -> list[str]:
+    """Pull most-active stocks from Alpaca's screener (volume-based)."""
+    try:
+        from ingestion.alpaca_client import fetch_most_active_stocks
+        actives = fetch_most_active_stocks(top_n=50)
+        tickers = [a["symbol"] for a in actives]
+        logger.info("Alpaca most-actives: {} tickers for scan universe", len(tickers))
+        return tickers
+    except Exception as e:
+        logger.debug("Alpaca most-actives fetch failed in market_movers: {}", e)
+        return []
+
+
 def get_expanded_scan_universe() -> list[str]:
     """
-    Combine the fixed watchlist with dynamic market movers.
-    This is the full universe the scanner will screen.
+    Combine the fixed watchlist with dynamic market movers from FMP
+    and Alpaca most-actives. Zero AI cost — all filtering happens
+    downstream in the scanner's technical gates.
     """
     from ingestion.stocks import get_default_watchlist
 
     watchlist = set(get_default_watchlist())
-    movers = set(fetch_market_movers())
-    combined = watchlist | movers
+    fmp_movers = set(fetch_market_movers())
+    alpaca_actives = set(fetch_alpaca_most_actives())
+    combined = watchlist | fmp_movers | alpaca_actives
 
     logger.info(
-        "Scan universe: {} tickers ({} watchlist + {} movers, {} overlap)",
-        len(combined), len(watchlist), len(movers), len(watchlist & movers),
+        "Scan universe: {} tickers ({} watchlist + {} FMP movers + {} Alpaca actives, {} new from movers)",
+        len(combined), len(watchlist), len(fmp_movers), len(alpaca_actives),
+        len(combined - watchlist),
     )
     return sorted(combined)

@@ -264,6 +264,36 @@ def fetch_multi_stock_snapshots(tickers: list[str]) -> dict:
         return {}
 
 
+def fetch_most_active_stocks(top_n: int = 50) -> list[dict]:
+    """Fetch most-active stocks from Alpaca's screener endpoint.
+    Returns list of dicts with 'symbol', 'volume', 'trade_count', 'price'."""
+    if not _is_configured():
+        return []
+    try:
+        resp = httpx.get(
+            f"{DATA_BASE}/v1beta1/screener/stocks/most-actives",
+            params={"by": "volume", "top": top_n},
+            headers=_headers(),
+            timeout=REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        raw = resp.json().get("most_actives", [])
+        results = []
+        for item in raw:
+            sym = item.get("symbol", "")
+            if sym and "." not in sym and len(sym) <= 5:
+                results.append({
+                    "symbol": sym.upper(),
+                    "volume": item.get("volume", 0),
+                    "trade_count": item.get("trade_count", 0),
+                })
+        logger.info("Alpaca most-actives: {} stocks returned", len(results))
+        return results
+    except Exception as e:
+        logger.debug("Alpaca most-actives screener failed — {}", e)
+        return []
+
+
 CORPORATE_ACTION_TYPES = [
     "forward_split", "reverse_split", "unit_split",
     "cash_dividend", "stock_dividend",
