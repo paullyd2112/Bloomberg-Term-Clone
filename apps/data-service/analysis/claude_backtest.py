@@ -1116,6 +1116,11 @@ def run_claude_backtest(
     regime_filtered = 0
     conviction_filtered = 0
     breadth_filtered = 0
+    rvol_filtered = 0
+    spy_1h_filtered = 0
+    daily_cap_filtered = 0
+    STOCK_RVOL_MINIMUM = 2.5
+    MAX_STOCK_SIGNALS_PER_DAY = 3
     # Per-date extended-BUY counts -- mirrors production's breadth_tracker,
     # keyed by date since a "batch run" here is everything scored on one
     # sample date, not the whole backtest. Order of the ticker/date loop
@@ -1123,6 +1128,13 @@ def run_claude_backtest(
     EXTENDED_VS_SMA50_PCT = 8.0
     MAX_EXTENDED_BUYS_PER_RUN = 4
     breadth_by_date: dict[str, int] = {}
+    signals_by_date: dict[str, int] = {}
+
+    # SPY SMA-5 on daily bars proxies the 1h 20-period SMA for backtesting
+    spy_sma5: pd.Series | None = None
+    spy_df = benchmark_data.get("SPY")
+    if spy_df is not None and "close" in spy_df.columns:
+        spy_sma5 = spy_df["close"].rolling(5).mean()
 
     for ticker, df in stock_data.items():
         for date_str in sample_dates:
@@ -1176,6 +1188,39 @@ def run_claude_backtest(
                         logger.info("[claude_backtest] {} {} BUY suppressed: {} extended BUYs already this date",
                                     ticker, actual_date, count - 1)
                         signal.direction = "HOLD"
+
+                # ── SPY 1h SMA-20 gate (proxied via daily SMA-5) ──
+                if signal.direction == "BUY" and spy_sma5 is not None:
+                    target_ts = pd.Timestamp(actual_date)
+                    sidx = spy_sma5.index.get_indexer([target_ts], method="ffill")[0]
+                    if sidx >= 0 and pd.notna(spy_sma5.iloc[sidx]):
+                        spy_close = float(spy_df["close"].iloc[sidx])
+                        spy_sma_val = float(spy_sma5.iloc[sidx])
+                        if spy_close < spy_sma_val:
+                            spy_1h_filtered += 1
+                            logger.info("[claude_backtest] {} {} BUY suppressed: SPY below SMA-5 (1h proxy)",
+                                        ticker, actual_date)
+                            signal.direction = "HOLD"
+
+                # ── RVOL minimum gate: 2.5x for equities ──
+                if signal.direction in ("BUY", "SELL") and pd.notna(row.get("volume_ratio")):
+                    vr = float(row["volume_ratio"])
+                    if vr < STOCK_RVOL_MINIMUM:
+                        rvol_filtered += 1
+                        logger.info("[claude_backtest] {} {} {} suppressed: RVOL {:.2f}x < {:.1f}x",
+                                    ticker, actual_date, signal.direction, vr, STOCK_RVOL_MINIMUM)
+                        signal.direction = "HOLD"
+
+                # ── Daily signal cap: max 3 stock signals per date ──
+                if signal.direction in ("BUY", "SELL"):
+                    day_count = signals_by_date.get(actual_date, 0)
+                    if day_count >= MAX_STOCK_SIGNALS_PER_DAY:
+                        daily_cap_filtered += 1
+                        logger.info("[claude_backtest] {} {} {} suppressed: daily cap {}/{}",
+                                    ticker, actual_date, signal.direction, day_count, MAX_STOCK_SIGNALS_PER_DAY)
+                        signal.direction = "HOLD"
+                    else:
+                        signals_by_date[actual_date] = day_count + 1
 
                 sl_tp = {"intraday": (3.0, 6.0), "swing": (7.0, 16.0), "longterm": (10.0, 25.0)}
                 sl_pct, tp_pct = sl_tp.get(signal.time_horizon, (7.0, 16.0))
@@ -1326,6 +1371,9 @@ def run_claude_backtest(
         "conviction_floor": CONVICTION_FLOOR,
         "signals_below_floor": conviction_filtered,
         "spy_regime_suppressed": regime_filtered,
+        "spy_1h_sma20_suppressed": spy_1h_filtered,
+        "rvol_suppressed": rvol_filtered,
+        "daily_cap_suppressed": daily_cap_filtered,
         "btc_regime_suppressed": btc_gated,
         "breadth_suppressed": breadth_filtered,
     }
