@@ -166,7 +166,13 @@ export async function POST(req: Request) {
 
         const plan = sub.metadata?.plan ?? "";
         const tier = getTierForPlan(plan);
-        const interval = (sub.items.data[0]?.price.recurring?.interval ?? null) as string | null;
+        const rawInterval = sub.items.data[0]?.price.recurring?.interval ?? null;
+        const INTERVAL_MAP: Record<string, string> = {
+          month: "monthly",
+          quarter: "quarterly",
+          year: "annual",
+        };
+        const interval = rawInterval ? (INTERVAL_MAP[rawInterval] ?? rawInterval) : null;
         const active   = ["active", "trialing"].includes(sub.status);
 
         // If user cancels during trial, revoke access immediately.

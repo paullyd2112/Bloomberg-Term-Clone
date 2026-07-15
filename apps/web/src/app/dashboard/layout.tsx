@@ -13,8 +13,13 @@ export default async function DashboardLayout({
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const tier = await getUserTier();
-  const profile = await getUserProfile();
+  let tier: Awaited<ReturnType<typeof getUserTier>> = "free";
+  let profile: Awaited<ReturnType<typeof getUserProfile>> = null;
+  try {
+    [tier, profile] = await Promise.all([getUserTier(), getUserProfile()]);
+  } catch (e) {
+    console.error("DashboardLayout: failed to load profile/tier, falling back to free", e);
+  }
 
   return (
     <div className="flex h-screen bg-background text-white overflow-hidden">
