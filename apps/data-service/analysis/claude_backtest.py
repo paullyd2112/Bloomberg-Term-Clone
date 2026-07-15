@@ -1649,3 +1649,303 @@ if __name__ == "__main__":
         )
 
     print(json.dumps(out, indent=2, default=str))
+
+
+# ─── Rules-engine backtest ($0 cost — no Claude calls) ───────────────────────
+
+def run_rules_backtest(
+    stocks: list[str] | None = None,
+    crypto: list[tuple[str, str]] | None = None,
+    sample_dates: list[str] | None = None,
+    output_dir: str | None = None,
+) -> dict:
+    """Backtest the deterministic rules engine against historical data.
+    Same data, same evaluation, same gates — but pattern-matching replaces Claude.
+    Cost: $0 (no API calls)."""
+    from scoring.rules_engine import _score_from_patterns
+    from scoring.validated_factors import classify_indicators
+
+    stocks       = SAMPLE_STOCKS if stocks is None else stocks
+    crypto       = CRYPTO_ASSETS if crypto is None else crypto
+    sample_dates = SAMPLE_DATES if sample_dates is None else sample_dates
+    output_dir   = output_dir or "/tmp/rules_backtest"
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    results: list[ClaudeSignalResult] = []
+
+    logger.info("[rules_backtest] Starting — {} stocks, {} crypto, {} sample dates",
+                len(stocks), len(crypto), len(sample_dates))
+
+    # ── Stocks ───────────────────────────────────────────────────────────────
+    stock_data: dict[str, pd.DataFrame] = {}
+    for ticker in stocks:
+        logger.info("[rules_backtest] Fetching stock data: {}", ticker)
+        df = _fetch_stock_ohlcv(ticker)
+        if df is not None and not df.empty:
+            stock_data[ticker] = _compute_indicators(df)
+        time.sleep(0.3)
+
+    benchmark_data: dict[str, pd.DataFrame] = {}
+    for bm_ticker in ("SPY", "QQQ"):
+        if bm_ticker not in stock_data:
+            df = _fetch_stock_ohlcv(bm_ticker)
+            if df is not None and not df.empty:
+                benchmark_data[bm_ticker] = _compute_indicators(df)
+            time.sleep(0.3)
+        else:
+            benchmark_data[bm_ticker] = stock_data[bm_ticker]
+
+    def _get_benchmarks_for_date(date_str: str) -> dict:
+        bm: dict = {}
+        for sym, bdf in benchmark_data.items():
+            target = pd.Timestamp(date_str)
+            bidx = bdf.index.get_indexer([target], method="ffill")[0]
+            if bidx >= 0:
+                brow = bdf.iloc[bidx]
+                entry = {
+                    "price": round(float(brow["close"]), 2),
+                    "change_24h": round(float(brow["change_1d"]), 2) if pd.notna(brow.get("change_1d")) else None,
+                }
+                if pd.notna(brow.get("price_vs_sma50")):
+                    entry["vs_sma50_pct"] = round(float(brow["price_vs_sma50"]), 2)
+                    entry["price_vs_sma50_pct"] = entry["vs_sma50_pct"]
+                bm[sym] = entry
+        return bm
+
+    # Gate counters
+    regime_filtered = 0
+    rvol_filtered = 0
+    high_beta_rvol_filtered = 0
+    high_beta_sector_filtered = 0
+    spy_1h_filtered = 0
+    daily_cap_filtered = 0
+    breadth_filtered = 0
+
+    spy_sma5: pd.Series | None = None
+    spy_df = benchmark_data.get("SPY")
+    if spy_df is not None and "close" in spy_df.columns:
+        spy_sma5 = spy_df["close"].rolling(5).mean()
+
+    EXTENDED_VS_SMA50_PCT = 8.0
+    MAX_EXTENDED_BUYS_PER_RUN = 4
+    breadth_by_date: dict[str, int] = {}
+    signals_by_date: dict[str, int] = {}
+
+    for ticker, df in stock_data.items():
+        for date_str in sample_dates:
+            try:
+                target = pd.Timestamp(date_str)
+                idx = df.index.get_indexer([target], method="ffill")[0]
+                if idx < 0 or idx < 50:
+                    continue
+                row = df.iloc[idx]
+                context = _build_stock_context(ticker, row, df, _get_benchmarks_for_date(date_str))
+                meta = context["technical_indicators"]
+                benchmarks = _get_benchmarks_for_date(date_str)
+                entry_price = float(row["close"])
+
+                # SPY regime gate (daily SMA-5 proxy for 1h SMA-20)
+                if spy_sma5 is not None:
+                    spy_idx = spy_df.index.get_indexer([target], method="ffill")[0]
+                    if spy_idx >= 0 and pd.notna(spy_sma5.iloc[spy_idx]):
+                        if float(spy_df.iloc[spy_idx]["close"]) < float(spy_sma5.iloc[spy_idx]):
+                            spy_1h_filtered += 1
+
+                # Score using rules engine
+                signal = _score_from_patterns(meta, "stock")
+
+                # Apply SPY regime gate
+                spy_vs_sma50 = benchmarks.get("SPY", {}).get("vs_sma50_pct")
+                if spy_vs_sma50 is not None:
+                    if spy_vs_sma50 < 0 and signal["direction"] == "BUY":
+                        signal["direction"] = "HOLD"
+                        signal["confidence"] = min(signal["confidence"], 45)
+                        signal["reasoning"] = f"[Regime gate] SPY {spy_vs_sma50:.1f}% below SMA-50. " + signal["reasoning"]
+                        regime_filtered += 1
+                    elif spy_vs_sma50 > 5 and signal["direction"] == "SELL":
+                        signal["direction"] = "HOLD"
+                        signal["confidence"] = min(signal["confidence"], 45)
+                        signal["reasoning"] = f"[Regime gate] SPY {spy_vs_sma50:.1f}% above SMA-50. " + signal["reasoning"]
+                        regime_filtered += 1
+
+                # RVOL gate
+                if signal["direction"] in ("BUY", "SELL"):
+                    is_hb = ticker in HIGH_BETA_VOLATILITY_WATCHLIST
+                    rvol_min = HIGH_BETA_RVOL_MINIMUM if is_hb else STOCK_RVOL_MINIMUM
+                    vr = meta.get("volume_ratio")
+                    if vr is not None and float(vr) < rvol_min:
+                        signal["direction"] = "HOLD"
+                        signal["confidence"] = min(signal["confidence"], 40)
+                        if is_hb:
+                            high_beta_rvol_filtered += 1
+                        else:
+                            rvol_filtered += 1
+
+                # High-beta sector gate
+                if ticker in HIGH_BETA_VOLATILITY_WATCHLIST and signal["direction"] == "BUY":
+                    qqq_chg = benchmarks.get("QQQ", {}).get("change_24h")
+                    if qqq_chg is not None and float(qqq_chg) < 0:
+                        signal["direction"] = "HOLD"
+                        signal["confidence"] = min(signal["confidence"], 35)
+                        high_beta_sector_filtered += 1
+
+                # Breadth gate
+                if signal["direction"] == "BUY":
+                    vs50 = meta.get("price_vs_sma50_pct")
+                    if vs50 is not None and float(vs50) > EXTENDED_VS_SMA50_PCT:
+                        breadth_by_date[date_str] = breadth_by_date.get(date_str, 0) + 1
+                        if breadth_by_date[date_str] > MAX_EXTENDED_BUYS_PER_RUN:
+                            signal["direction"] = "HOLD"
+                            signal["confidence"] = min(signal["confidence"], 45)
+                            breadth_filtered += 1
+
+                # Daily cap
+                if signal["direction"] != "HOLD":
+                    signals_by_date[date_str] = signals_by_date.get(date_str, 0) + 1
+                    if signals_by_date[date_str] > MAX_STOCK_SIGNALS_PER_DAY:
+                        signal["direction"] = "HOLD"
+                        signal["confidence"] = min(signal["confidence"], 40)
+                        daily_cap_filtered += 1
+
+                # Circuit breaker
+                change_1d = meta.get("change_24h") or context.get("change_24h")
+                if change_1d is not None:
+                    try:
+                        cf = float(change_1d)
+                        if cf >= 8.0 and signal["direction"] == "SELL":
+                            signal["direction"] = "HOLD"
+                        elif cf <= -8.0 and signal["direction"] == "BUY":
+                            signal["direction"] = "HOLD"
+                    except (TypeError, ValueError):
+                        pass
+
+                result = ClaudeSignalResult(
+                    ticker=ticker,
+                    asset_class="stock",
+                    sample_date=date_str,
+                    direction=signal["direction"],
+                    confidence=signal["confidence"],
+                    time_horizon=signal.get("time_horizon", "swing"),
+                    reasoning=signal["reasoning"],
+                    entry_price=entry_price,
+                    rsi=float(meta.get("rsi_14")) if meta.get("rsi_14") is not None else None,
+                    macd_hist=float(meta.get("macd_hist")) if meta.get("macd_hist") is not None else None,
+                    volume_ratio=float(meta.get("volume_ratio")) if meta.get("volume_ratio") is not None else None,
+                )
+
+                result = _evaluate_claude_signal(result, df, idx)
+                results.append(result)
+
+            except Exception as e:
+                logger.warning("[rules_backtest] {}/{} error: {}", ticker, date_str, e)
+
+    # ── Crypto ───────────────────────────────────────────────────────────────
+    crypto_data: dict[str, pd.DataFrame] = {}
+    crypto_hl: dict[str, pd.DataFrame] = {}
+    fg_history = _fetch_fear_greed_history()
+
+    for sym, cg_id in crypto:
+        logger.info("[rules_backtest] Fetching crypto data: {}", sym)
+        df = _crypto_alpaca(sym)
+        used_alpaca = df is not None and len(df) >= MIN_ROWS_FOR_SOLE_SOURCE
+        if not used_alpaca:
+            df = _fetch_crypto_ohlcv_coingecko(cg_id)
+        if df is not None and not df.empty:
+            crypto_data[sym] = _compute_indicators(df)
+            if used_alpaca:
+                crypto_hl[sym] = df[["open", "high", "low", "close"]]
+            else:
+                hl = _fetch_crypto_ohlc_candles(cg_id)
+                if hl is not None and not hl.empty:
+                    crypto_hl[sym] = hl
+        time.sleep(1.5)
+
+    btc_df = crypto_data.get("BTC")
+    btc_gated = 0
+
+    for sym, cg_id in crypto:
+        if sym not in crypto_data:
+            continue
+        df = crypto_data[sym]
+        hl_df = crypto_hl.get(sym)
+
+        for date_str in sample_dates:
+            try:
+                target = pd.Timestamp(date_str)
+                idx = df.index.get_indexer([target], method="ffill")[0]
+                if idx < 0 or idx < 50:
+                    continue
+                row = df.iloc[idx]
+                fg = _lookup_fear_greed(fg_history, date_str)
+                context = _build_crypto_context(sym, row, fg)
+                meta = context["technical_indicators"]
+                # Add prev_macd_hist for pattern matching
+                loc = df.index.get_loc(row.name)
+                loc_idx = loc if isinstance(loc, int) else (loc.start if isinstance(loc, slice) else int(np.argmax(loc)))
+                if loc_idx >= 1:
+                    prev_row = df.iloc[loc_idx - 1]
+                    if pd.notna(prev_row.get("_macd_hist")):
+                        meta["prev_macd_hist"] = round(float(prev_row["_macd_hist"]), 4)
+                # Add price_vs_sma50_pct for pattern matching
+                if pd.notna(row.get("price_vs_sma50")):
+                    meta["price_vs_sma50_pct"] = round(float(row["price_vs_sma50"]), 2)
+                entry_price = float(row["close"])
+
+                # Score using rules engine
+                signal = _score_from_patterns(meta, "crypto")
+
+                # BTC regime gate
+                if sym != "BTC" and btc_df is not None:
+                    btc_idx = btc_df.index.get_indexer([target], method="ffill")[0]
+                    if btc_idx >= 1:
+                        btc_hist = btc_df.iloc[btc_idx].get("_macd_hist")
+                        btc_prev = btc_df.iloc[btc_idx - 1].get("_macd_hist")
+                        if (pd.notna(btc_hist) and pd.notna(btc_prev)
+                                and float(btc_hist) < 0 and float(btc_hist) < float(btc_prev)
+                                and signal["direction"] == "BUY"):
+                            signal["direction"] = "HOLD"
+                            signal["confidence"] = min(signal["confidence"], 45)
+                            btc_gated += 1
+
+                result = ClaudeSignalResult(
+                    ticker=sym,
+                    asset_class="crypto",
+                    sample_date=date_str,
+                    direction=signal["direction"],
+                    confidence=signal["confidence"],
+                    time_horizon=signal.get("time_horizon", "swing"),
+                    reasoning=signal["reasoning"],
+                    entry_price=entry_price,
+                    rsi=float(meta.get("rsi_14")) if meta.get("rsi_14") is not None else None,
+                    macd_hist=float(meta.get("macd_hist")) if meta.get("macd_hist") is not None else None,
+                )
+
+                result = _evaluate_claude_signal(result, df, idx, hl_df=hl_df)
+                results.append(result)
+
+            except Exception as e:
+                logger.warning("[rules_backtest] {}/{} error: {}", sym, date_str, e)
+
+    # ── Aggregate ────────────────────────────────────────────────────────────
+    agg = _aggregate_claude_results(results, api_calls=0, errors=0)
+    agg["backtest_type"] = "rules_engine"
+    agg["model"] = "none (deterministic)"
+    agg["api_cost_estimate"] = "$0.00"
+    agg["filters"] = {
+        "spy_regime_suppressed": regime_filtered,
+        "spy_1h_sma20_suppressed": spy_1h_filtered,
+        "rvol_suppressed": rvol_filtered,
+        "high_beta_rvol_suppressed": high_beta_rvol_filtered,
+        "high_beta_sector_suppressed": high_beta_sector_filtered,
+        "daily_cap_suppressed": daily_cap_filtered,
+        "breadth_suppressed": breadth_filtered,
+        "btc_regime_suppressed": btc_gated,
+    }
+
+    json_path = str(Path(output_dir) / "rules_backtest_results.json")
+    with open(json_path, "w") as f:
+        json.dump(agg, f, indent=2, default=str)
+    agg["json_path"] = json_path
+
+    logger.info("[rules_backtest] Complete — {} signals, $0 API cost", len(results))
+    return agg

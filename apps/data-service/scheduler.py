@@ -1230,6 +1230,71 @@ def claude_backtest_status():
     return jsonify(state)
 
 
+@app.route("/backtest/rules", methods=["GET", "POST"])
+def run_rules_backtest_endpoint():
+    """
+    Run rules-engine backtest — deterministic pattern matching, $0 API cost.
+    POST /backtest/rules
+    """
+    from flask import request as flask_request
+    from analysis.claude_backtest import run_rules_backtest
+    import threading
+
+    body = flask_request.get_json(silent=True) or {}
+    output_dir = str(body.get("output_dir", "/tmp/rules_backtest"))
+    stocks_only = bool(body.get("stocks_only", False)) or flask_request.args.get("stocks_only") == "true"
+
+    def _run():
+        import traceback
+        _job_state["rules_backtest"] = {
+            "status": "running",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "mode": "stocks_only" if stocks_only else "full",
+        }
+        try:
+            crypto_list = [] if stocks_only else None
+            agg = run_rules_backtest(output_dir=output_dir, crypto=crypto_list)
+            _job_state["rules_backtest"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "ok",
+                "summary": {
+                    "total_signals": agg.get("total_signals", 0),
+                    "win_rate":      agg.get("win_rate", 0),
+                    "avg_return":    agg.get("avg_return_pct", 0),
+                    "profit_factor": agg.get("profit_factor", 0),
+                    "stocks":        agg.get("by_asset_class", {}).get("stocks", {}),
+                    "crypto":        agg.get("by_asset_class", {}).get("crypto", {}),
+                    "portfolio_sim": agg.get("portfolio_sim", {}),
+                    "filters":       agg.get("filters", {}),
+                    "api_cost":      "$0.00",
+                },
+                "signals": agg.get("signals", []),
+            }
+        except Exception as e:
+            _job_state["rules_backtest"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "error",
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }
+            logger.error("Rules backtest failed: {}", e)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    return jsonify({
+        "status": "started",
+        "message": "Rules backtest running in background ($0 cost). Check /backtest/rules/status for results.",
+        "output_dir": output_dir,
+    })
+
+
+@app.route("/backtest/rules/status")
+def rules_backtest_status():
+    state = _job_state.get("rules_backtest", {"status": "never_run"})
+    return jsonify(state)
+
+
 @app.route("/backfill-alpaca", methods=["GET", "POST"])
 def backfill_alpaca():
     """
