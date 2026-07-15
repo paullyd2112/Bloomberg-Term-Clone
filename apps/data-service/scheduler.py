@@ -25,7 +25,8 @@ from ingestion.news import ingest_news
 from ingestion.tech_news import ingest_tech_news
 from ingestion.geopolitics_news import ingest_geopolitics_news
 from ingestion.crypto_momentum import ingest_momentum_coins
-from scoring.engine import score_stocks, score_stocks_event_only, score_crypto, score_prediction_markets, score_options_flow
+from scoring.engine import score_stocks_event_only, score_prediction_markets, score_options_flow
+from scoring.rules_engine import score_stocks_rules, score_crypto_rules
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
 from briefing.newsletter import generate_newsletter
@@ -81,7 +82,7 @@ def job_ingest_stocks():
     return ingest_stocks()
 
 def job_score_stocks():
-    return score_stocks()
+    return score_stocks_rules()
 
 def job_score_stocks_event_only():
     return score_stocks_event_only()
@@ -90,7 +91,7 @@ def job_ingest_crypto():
     return ingest_crypto()
 
 def job_score_crypto():
-    return score_crypto()
+    return score_crypto_rules()
 
 def job_ingest_options_flow():
     return ingest_options_flow()
@@ -601,14 +602,15 @@ def score_now():
             from ingestion.stocks import ingest_stocks
             from ingestion.crypto import ingest_crypto
             from ingestion.prediction_markets import ingest_prediction_markets
-            from scoring.engine import score_stocks, score_crypto, score_prediction_markets
+            from scoring.rules_engine import score_stocks_rules, score_crypto_rules
+            from scoring.engine import score_prediction_markets
 
             results = {}
             results["ingest_stocks"] = ingest_stocks()
             results["ingest_crypto"] = ingest_crypto()
             results["ingest_predictions"] = ingest_prediction_markets()
-            results["score_stocks"] = score_stocks()
-            results["score_crypto"] = score_crypto()
+            results["score_stocks"] = score_stocks_rules()
+            results["score_crypto"] = score_crypto_rules()
             results["score_predictions"] = score_prediction_markets()
 
             _job_state["score_now"] = {
@@ -687,6 +689,8 @@ def run_job_manual(job_name: str):
         "score_crypto": job_score_crypto,
         "score_prediction_markets": job_score_prediction_markets,
         "score_options_flow": job_score_options_flow,
+        "score_stocks_rules": job_score_stocks,
+        "score_crypto_rules": job_score_crypto,
         "crypto_momentum": job_crypto_momentum,
         "generate_newsletter": job_generate_newsletter,
         "send_newsletter": job_send_newsletter,
@@ -812,8 +816,8 @@ def score_now_debug():
         return jsonify({"status": "error", "env": env_diag, "db_test": db_test, "steps": steps})
 
     try:
-        from scoring.engine import score_crypto
-        steps["score_crypto"] = score_crypto()
+        from scoring.rules_engine import score_crypto_rules
+        steps["score_crypto"] = score_crypto_rules()
     except Exception as e:
         steps["score_crypto_error"] = traceback.format_exc()
         return jsonify({"status": "error", "env": env_diag, "db_test": db_test, "steps": steps})

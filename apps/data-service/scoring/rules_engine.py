@@ -1,15 +1,17 @@
 """
-Deterministic rules-based scoring engine — generates BUY/SELL/HOLD signals
-from validated factor patterns and technical indicators WITHOUT calling Claude.
+Hybrid rules + AI scoring engine — SELL signals are handled entirely by
+deterministic pattern-matching ($0), BUY signals are escalated to Claude
+for confirmation (saves ~60-70% vs full AI scoring).
 
 Uses the same gate stack as engine.py (SPY regime, RVOL, circuit breaker,
 BTC regime, breadth cap, evidence gate) but replaces the Claude call with
-pattern-matching against the validated_factors table.
+pattern-matching against the validated_factors table for SELL/HOLD decisions.
 
-Claude is only called as an optional "second opinion" for edge cases where
-the rules engine produces a borderline score (configurable via ESCALATE_TO_AI).
+BUY signals are escalated to Claude for a second opinion because the BUY
+patterns are newer (partially theoretical, not all empirically validated
+at n>=100) and warrant AI confirmation before acting.
 
-Cost: ~$0/day for pure rules mode, ~$0.50-1/day with AI escalation enabled.
+Cost: ~$0.50-2/day depending on how many BUY setups trigger.
 """
 
 from __future__ import annotations
@@ -37,7 +39,8 @@ HIGH_BETA_VOLATILITY_WATCHLIST = frozenset({"AMD", "NVDA", "COIN", "SMCI", "AVGO
 HIGH_BETA_RVOL_MINIMUM = 3.5
 MAX_STOCK_SIGNALS_PER_DAY = 3
 
-ESCALATE_TO_AI = False
+ESCALATE_TO_AI = True
+ESCALATE_BUY_ONLY = True
 ESCALATE_CONFIDENCE_RANGE = (45, 60)
 
 # Minimum confidence to emit a signal (below this → HOLD)
@@ -401,10 +404,14 @@ def score_asset_rules(
     )
 
     if ESCALATE_TO_AI and signal["direction"] != "HOLD":
-        lo, hi = ESCALATE_CONFIDENCE_RANGE
-        if lo <= signal["confidence"] <= hi:
-            logger.info("{}/{}: rules confidence {} in escalation range — deferring to Claude",
-                        asset_type, identifier, signal["confidence"])
+        should_escalate = (
+            signal["direction"] == "BUY"
+            if ESCALATE_BUY_ONLY
+            else True
+        )
+        if should_escalate:
+            logger.info("{}/{}: rules {} confidence {} — escalating to Claude for confirmation",
+                        asset_type, identifier, signal["direction"], signal["confidence"])
             from scoring.engine import score_asset
             return score_asset(
                 asset_type, identifier,

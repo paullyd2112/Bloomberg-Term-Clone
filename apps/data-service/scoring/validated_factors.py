@@ -19,6 +19,12 @@ The headline story the data tells, in plain English:
     where contraction is just a buyable pause.
   - Mild weakness bleeds: RSI 30-45 with a positive-but-fading MACD kept
     falling. That's a "stand aside or sell" state, not a dip to buy.
+
+Expanded BUY patterns (July 2026): added 6 moderate-condition BUY patterns
+to close the BUY coverage gap. These are theoretically grounded (MACD
+crossovers, moderate uptrend continuation, oversold bounces) but haven't
+cleared the n>=100 out-of-sample bar yet. They're marked "theoretical" in
+stats and are escalated to Claude for confirmation via the hybrid engine.
 """
 
 from __future__ import annotations
@@ -98,6 +104,43 @@ VALIDATED_PATTERNS: list[dict] = [
         "direction": "BUY",
         "requires": {"rsi": "rsi_55-70", "macd": "macd_neg_recovering"},
         "stats": "3d: test n=149, 59.7% up, avg +1.6%",
+    },
+    # ── BUY-favorable (expanded — broader coverage for moderate setups) ──────
+    {
+        "id": "moderate_uptrend_macd_expanding",
+        "direction": "BUY",
+        "requires": {"macd": "macd_pos_expanding", "sma50": "sma50_+5-15%"},
+        "stats": "theoretical: momentum continuation in moderate uptrend",
+    },
+    {
+        "id": "macd_crossover_above_sma50",
+        "direction": "BUY",
+        "requires": {"macd": "macd_cross_up", "sma50": "sma50_+5-15%"},
+        "stats": "theoretical: bullish MACD crossover in uptrend",
+    },
+    {
+        "id": "macd_crossover_healthy_rsi",
+        "direction": "BUY",
+        "requires": {"rsi": "rsi_55-70", "macd": "macd_cross_up"},
+        "stats": "theoretical: bullish crossover with healthy momentum",
+    },
+    {
+        "id": "oversold_bounce_recovering",
+        "direction": "BUY",
+        "requires": {"rsi": "rsi<30", "macd": "macd_neg_recovering"},
+        "stats": "theoretical: oversold with MACD turning up — mean reversion",
+    },
+    {
+        "id": "healthy_rsi_expanding_moderate_trend",
+        "direction": "BUY",
+        "requires": {"rsi": "rsi_55-70", "macd": "macd_pos_expanding"},
+        "stats": "theoretical: healthy RSI + expanding MACD = trend continuation",
+    },
+    {
+        "id": "macd_crossover_deep_uptrend",
+        "direction": "BUY",
+        "requires": {"macd": "macd_cross_up", "sma50": "sma50>+15%"},
+        "stats": "theoretical: bullish crossover in deep uptrend — strong setup",
     },
     # ── SELL-favorable ───────────────────────────────────────────────────────
     {
