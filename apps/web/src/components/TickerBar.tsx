@@ -134,9 +134,10 @@ export default function TickerBar({ showStatus = true }: { showStatus?: boolean 
       const res = await fetch("/api/ticker");
       if (!res.ok) return;
       const data = await res.json();
-      if (Array.isArray(data.items) && data.items.length > 0) {
-        baseItems.current = data.items;
-        setItems(data.items);
+      const valid = (data.items as TickerItem[]).filter((i) => i.price != null);
+      if (valid.length > 0) {
+        baseItems.current = valid;
+        setItems(valid);
         setLoaded(true);
       }
     } catch {}

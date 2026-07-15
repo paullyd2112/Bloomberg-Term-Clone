@@ -63,7 +63,9 @@ export default function LiveSignalFeed() {
       if (!res.ok) return;
       const data = (await res.json()) as { items: TickerItem[] };
       const map: Record<string, TickerItem> = {};
-      for (const item of data.items) map[item.identifier] = item;
+      for (const item of data.items) {
+        if (item.price != null) map[item.identifier] = item;
+      }
       basePrices.current = map;
       setPrices(map);
       setLoaded(true);

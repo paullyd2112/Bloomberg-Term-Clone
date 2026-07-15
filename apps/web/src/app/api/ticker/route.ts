@@ -288,5 +288,6 @@ export async function GET() {
     merged.set(item.identifier, item);
   }
 
-  return NextResponse.json({ items: Array.from(merged.values()) });
+  const items = Array.from(merged.values()).filter((i) => i.price != null);
+  return NextResponse.json({ items });
 }
