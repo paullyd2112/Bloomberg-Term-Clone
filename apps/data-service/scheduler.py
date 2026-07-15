@@ -36,7 +36,7 @@ from briefing.welcome_emails import send_welcome_sequence
 
 load_dotenv()
 
-# ─── Logging ──────────────────────────────────────────────────────────────────
+# ─── Logging ──────────────────────────────────────────────────────────────────────
 os.makedirs("logs", exist_ok=True)
 logger.remove()
 logger.add(sys.stdout, level="INFO", colorize=True,
@@ -44,10 +44,10 @@ logger.add(sys.stdout, level="INFO", colorize=True,
 logger.add("logs/data-service.log", level="DEBUG", rotation="1 day",
            retention="7 days", compression="zip")
 
-# ─── Sentry ───────────────────────────────────────────────────────────────────
+# ─── Sentry ─────────────────────────────────────────────────────────────────────
 init_sentry()
 
-# ─── Scheduler ────────────────────────────────────────────────────────────────
+# ─── Scheduler ──────────────────────────────────────────────────────────────────
 scheduler = BackgroundScheduler(timezone="America/New_York")
 
 # Track last run times and error counts for health endpoint
@@ -70,7 +70,7 @@ def _run_job(name: str, fn):
             logger.error("Job failed: {} — {}", name, e)
 
 
-# ─── Job stubs (bodies filled in subsequent prompts) ─────────────────────────
+# ─── Job stubs (bodies filled in subsequent prompts) ─────────────────────
 
 def job_ingest_prediction_markets():
     return ingest_prediction_markets()
@@ -233,7 +233,7 @@ def job_uptime_check():
     return f"DOWN: {down_urls}"
 
 
-# ─── US Market Holiday Guard ──────────────────────────────────────────────────
+# ─── US Market Holiday Guard ──────────────────────────────────────────────
 
 US_MARKET_HOLIDAYS_2026 = {
     "2026-01-01",  # New Year's Day
@@ -312,7 +312,7 @@ scheduler.add_job(lambda: _run_job("score_prediction_markets_pm", job_score_pred
                   CronTrigger(hour=18, minute=0, timezone="America/New_York"),
                   id="score_prediction_markets_pm")
 
-# ─── Stocks / Options / Futures: market-window scoring ───────────────────
+# ─── Stocks / Options / Futures: market-window scoring ───────────────
 # Morning Rush (9:45–11:30 AM ET): every 15 min — 70% of intraday breakout momentum
 scheduler.add_job(lambda: _run_stock_job("score_stocks", job_score_stocks),
                   CronTrigger(minute="0,15,30,45", hour="10,11", day_of_week="mon-fri",
@@ -423,7 +423,7 @@ scheduler.add_job(
 )
 
 
-# ─── Health endpoint ──────────────────────────────────────────────────────────
+# ─── Health endpoint ────────────────────────────────────────────────────────
 app = Flask(__name__)
 
 @app.after_request
@@ -938,7 +938,7 @@ def health():
     })
 
 
-# ─── Accuracy dashboard endpoint ─────────────────────────────────────────────
+# ─── Accuracy dashboard endpoint ───────────────────────────────────────────
 
 @app.route("/accuracy")
 def accuracy_dashboard():
@@ -1048,7 +1048,7 @@ def accuracy_dashboard():
     })
 
 
-# ─── Backtest endpoint ────────────────────────────────────────────────────────
+# ─── Backtest endpoint ────────────────────────────────────────────────────
 @app.route("/backtest", methods=["GET", "POST"])
 def run_backtest_endpoint():
     """
@@ -1161,7 +1161,7 @@ def factor_discovery_status():
     return jsonify(state)
 
 
-# ─── Claude backtest endpoint ────────────────────────────────────────────────
+# ─── Claude backtest endpoint ──────────────────────────────────────────
 
 @app.route("/backtest/claude", methods=["GET", "POST"])
 def run_claude_backtest_endpoint():
@@ -1614,7 +1614,7 @@ def pipeline_check():
     return jsonify(checks)
 
 
-# ─── Entry point ──────────────────────────────────────────────────────────────
+# ─── Entry point ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
     logger.info("Starting Plebs data service")
     if os.environ.get("ENABLE_SCHEDULER", "false").lower() == "true":

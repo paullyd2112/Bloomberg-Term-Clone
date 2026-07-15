@@ -69,12 +69,12 @@ def _bucket_sma50(pct) -> str | None:
     return "sma50<-5%"
 
 
-# ─── Enforcement table (test-period n >= ~100 only) ─────────────────────────
+# ─── Enforcement table (test-period n >= ~100 only) ─────────────────────
 # "requires" keys: rsi / macd / sma50 — a pattern matches when every listed
 # bucket matches the current indicator state (unlisted factors are ignored).
 
 VALIDATED_PATTERNS: list[dict] = [
-    # ── BUY-favorable ────────────────────────────────────────────────────────
+    # ── BUY-favorable ────────────────────────────────────────────────────────────
     {
         "id": "deep_uptrend_macd_expanding",
         "direction": "BUY",
@@ -142,7 +142,7 @@ VALIDATED_PATTERNS: list[dict] = [
         "requires": {"macd": "macd_cross_up", "sma50": "sma50>+15%"},
         "stats": "theoretical: bullish crossover in deep uptrend — strong setup",
     },
-    # ── SELL-favorable ───────────────────────────────────────────────────────
+    # ── SELL-favorable ───────────────────────────────────────────────────────────
     {
         "id": "fading_momentum_below_sma50",
         "direction": "SELL",

@@ -79,7 +79,7 @@ def _stock_signals_today_count() -> int:
         return 0
 
 
-# ─── Pattern scoring logic ──────────────────────────────────────────────────
+# ─── Pattern scoring logic ──────────────────────────────────────────────
 
 def _score_from_patterns(meta: dict, asset_type: str) -> dict:
     """Score an asset purely from technical indicator patterns.
@@ -230,7 +230,7 @@ def _apply_gates(
     if asset_type == "stock":
         spy_vs_sma50 = benchmarks.get("SPY", {}).get("price_vs_sma50_pct")
         if spy_vs_sma50 is not None:
-            if spy_vs_sma50 < 0 and signal["direction"] == "BUY":
+            if spy_vs_sma50 < -2 and signal["direction"] == "BUY":
                 signal["direction"] = "HOLD"
                 signal["confidence"] = min(signal["confidence"], 45)
                 signal["reasoning"] = (
@@ -248,12 +248,13 @@ def _apply_gates(
     if asset_type == "stock" and signal["direction"] == "BUY":
         from scoring.engine import _spy_below_1h_sma20
         if _spy_below_1h_sma20():
-            signal["direction"] = "HOLD"
-            signal["confidence"] = min(signal["confidence"], 40)
+            signal["confidence"] = max(signal["confidence"] - 15, 40)
             signal["reasoning"] = (
-                "[SPY 1h gate] SPY below 20-period SMA on 1h — intraday bearish. "
+                "[SPY 1h caution] SPY below 20-period SMA on 1h — confidence reduced. "
                 + signal["reasoning"]
             )
+            if signal["confidence"] < RULES_CONFIDENCE_MINIMUM:
+                signal["direction"] = "HOLD"
 
     if asset_type == "stock" and signal["direction"] in ("BUY", "SELL"):
         is_high_beta = identifier in HIGH_BETA_VOLATILITY_WATCHLIST
@@ -315,7 +316,7 @@ def _apply_gates(
     return signal
 
 
-# ─── Signal writer ───────────────────────────────────────────────────────────
+# ─── Signal writer ───────────────────────────────────────────────────────
 
 def _write_rules_signal(
     asset_type: str,
@@ -352,7 +353,7 @@ def _write_rules_signal(
     return None
 
 
-# ─── Main scoring function ──────────────────────────────────────────────────
+# ─── Main scoring function ────────────────────────────────────────────
 
 def score_asset_rules(
     asset_type: str,
