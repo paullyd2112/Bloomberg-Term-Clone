@@ -25,7 +25,8 @@ from ingestion.news import ingest_news
 from ingestion.tech_news import ingest_tech_news
 from ingestion.geopolitics_news import ingest_geopolitics_news
 from ingestion.crypto_momentum import ingest_momentum_coins
-from scoring.engine import score_stocks, score_stocks_event_only, score_crypto, score_prediction_markets, score_options_flow
+from scoring.engine import score_stocks_event_only, score_prediction_markets, score_options_flow
+from scoring.rules_engine import score_stocks_rules, score_crypto_rules
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
 from briefing.newsletter import generate_newsletter
@@ -35,7 +36,7 @@ from briefing.welcome_emails import send_welcome_sequence
 
 load_dotenv()
 
-# ─── Logging ──────────────────────────────────────────────────────────────────
+# ─── Logging ──────────────────────────────────────────────────────────────────────
 os.makedirs("logs", exist_ok=True)
 logger.remove()
 logger.add(sys.stdout, level="INFO", colorize=True,
@@ -43,10 +44,10 @@ logger.add(sys.stdout, level="INFO", colorize=True,
 logger.add("logs/data-service.log", level="DEBUG", rotation="1 day",
            retention="7 days", compression="zip")
 
-# ─── Sentry ───────────────────────────────────────────────────────────────────
+# ─── Sentry ─────────────────────────────────────────────────────────────────────
 init_sentry()
 
-# ─── Scheduler ────────────────────────────────────────────────────────────────
+# ─── Scheduler ──────────────────────────────────────────────────────────────────
 scheduler = BackgroundScheduler(timezone="America/New_York")
 
 # Track last run times and error counts for health endpoint
@@ -69,7 +70,7 @@ def _run_job(name: str, fn):
             logger.error("Job failed: {} — {}", name, e)
 
 
-# ─── Job stubs (bodies filled in subsequent prompts) ─────────────────────────
+# ─── Job stubs (bodies filled in subsequent prompts) ─────────────────────
 
 def job_ingest_prediction_markets():
     return ingest_prediction_markets()
@@ -81,7 +82,7 @@ def job_ingest_stocks():
     return ingest_stocks()
 
 def job_score_stocks():
-    return score_stocks()
+    return score_stocks_rules()
 
 def job_score_stocks_event_only():
     return score_stocks_event_only()
@@ -90,7 +91,7 @@ def job_ingest_crypto():
     return ingest_crypto()
 
 def job_score_crypto():
-    return score_crypto()
+    return score_crypto_rules()
 
 def job_ingest_options_flow():
     return ingest_options_flow()
@@ -232,7 +233,7 @@ def job_uptime_check():
     return f"DOWN: {down_urls}"
 
 
-# ─── US Market Holiday Guard ──────────────────────────────────────────────────
+# ─── US Market Holiday Guard ──────────────────────────────────────────────
 
 US_MARKET_HOLIDAYS_2026 = {
     "2026-01-01",  # New Year's Day
@@ -311,7 +312,7 @@ scheduler.add_job(lambda: _run_job("score_prediction_markets_pm", job_score_pred
                   CronTrigger(hour=18, minute=0, timezone="America/New_York"),
                   id="score_prediction_markets_pm")
 
-# ─── Stocks / Options / Futures: market-window scoring ───────────────────
+# ─── Stocks / Options / Futures: market-window scoring ───────────────
 # Morning Rush (9:45–11:30 AM ET): every 15 min — 70% of intraday breakout momentum
 scheduler.add_job(lambda: _run_stock_job("score_stocks", job_score_stocks),
                   CronTrigger(minute="0,15,30,45", hour="10,11", day_of_week="mon-fri",
@@ -422,7 +423,7 @@ scheduler.add_job(
 )
 
 
-# ─── Health endpoint ──────────────────────────────────────────────────────────
+# ─── Health endpoint ────────────────────────────────────────────────────────
 app = Flask(__name__)
 
 @app.after_request
@@ -601,14 +602,15 @@ def score_now():
             from ingestion.stocks import ingest_stocks
             from ingestion.crypto import ingest_crypto
             from ingestion.prediction_markets import ingest_prediction_markets
-            from scoring.engine import score_stocks, score_crypto, score_prediction_markets
+            from scoring.rules_engine import score_stocks_rules, score_crypto_rules
+            from scoring.engine import score_prediction_markets
 
             results = {}
             results["ingest_stocks"] = ingest_stocks()
             results["ingest_crypto"] = ingest_crypto()
             results["ingest_predictions"] = ingest_prediction_markets()
-            results["score_stocks"] = score_stocks()
-            results["score_crypto"] = score_crypto()
+            results["score_stocks"] = score_stocks_rules()
+            results["score_crypto"] = score_crypto_rules()
             results["score_predictions"] = score_prediction_markets()
 
             _job_state["score_now"] = {
@@ -687,6 +689,8 @@ def run_job_manual(job_name: str):
         "score_crypto": job_score_crypto,
         "score_prediction_markets": job_score_prediction_markets,
         "score_options_flow": job_score_options_flow,
+        "score_stocks_rules": job_score_stocks,
+        "score_crypto_rules": job_score_crypto,
         "crypto_momentum": job_crypto_momentum,
         "generate_newsletter": job_generate_newsletter,
         "send_newsletter": job_send_newsletter,
@@ -812,8 +816,8 @@ def score_now_debug():
         return jsonify({"status": "error", "env": env_diag, "db_test": db_test, "steps": steps})
 
     try:
-        from scoring.engine import score_crypto
-        steps["score_crypto"] = score_crypto()
+        from scoring.rules_engine import score_crypto_rules
+        steps["score_crypto"] = score_crypto_rules()
     except Exception as e:
         steps["score_crypto_error"] = traceback.format_exc()
         return jsonify({"status": "error", "env": env_diag, "db_test": db_test, "steps": steps})
@@ -934,7 +938,7 @@ def health():
     })
 
 
-# ─── Accuracy dashboard endpoint ─────────────────────────────────────────────
+# ─── Accuracy dashboard endpoint ───────────────────────────────────────────
 
 @app.route("/accuracy")
 def accuracy_dashboard():
@@ -1044,7 +1048,7 @@ def accuracy_dashboard():
     })
 
 
-# ─── Backtest endpoint ────────────────────────────────────────────────────────
+# ─── Backtest endpoint ────────────────────────────────────────────────────
 @app.route("/backtest", methods=["GET", "POST"])
 def run_backtest_endpoint():
     """
@@ -1157,7 +1161,7 @@ def factor_discovery_status():
     return jsonify(state)
 
 
-# ─── Claude backtest endpoint ────────────────────────────────────────────────
+# ─── Claude backtest endpoint ──────────────────────────────────────────
 
 @app.route("/backtest/claude", methods=["GET", "POST"])
 def run_claude_backtest_endpoint():
@@ -1610,7 +1614,7 @@ def pipeline_check():
     return jsonify(checks)
 
 
-# ─── Entry point ──────────────────────────────────────────────────────────────
+# ─── Entry point ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
     logger.info("Starting Plebs data service")
     if os.environ.get("ENABLE_SCHEDULER", "false").lower() == "true":
