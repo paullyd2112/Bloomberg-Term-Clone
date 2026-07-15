@@ -28,8 +28,14 @@ MAX_TOKENS         = 1024
 ENGINE_CUTOFF      = "2026-07-04T11:00:00Z"  # signals before this date are unreliable
 
 # Emergency launch tuning — stricter stock BUY filters (July 2026)
-STOCK_RVOL_MINIMUM       = 2.5   # minimum relative volume for equity signals
-MAX_STOCK_SIGNALS_PER_DAY = 3    # hard cap on stock signals per calendar day
+STOCK_RVOL_MINIMUM        = 2.5   # minimum relative volume for equity signals
+MAX_STOCK_SIGNALS_PER_DAY = 3     # hard cap on stock signals per calendar day
+
+# High-beta semiconductor & crypto-proxy tickers — backtest showed these
+# drove the entire -4.13% stock loss via intra-bar volatility whipsaws.
+# Elevated RVOL threshold and sector-trend alignment required.
+HIGH_BETA_VOLATILITY_WATCHLIST = frozenset({"AMD", "NVDA", "COIN", "SMCI", "AVGO"})
+HIGH_BETA_RVOL_MINIMUM = 3.5
 # Bumped from 2026-06-22 (the prior engine overhaul, #20) to just after
 # 2026-07-04T10:27:30Z (#59), the fix for the case-sensitive ta indicator
 # matcher + tz-aware ingest merge crash that left live stock/crypto scoring
@@ -1023,22 +1029,54 @@ def score_asset(
                 + signal.reasoning
             )
 
-    # RVOL minimum gate — require 2.5x relative volume for equity signals.
+    # RVOL minimum gate — require 2.5x relative volume for equity signals,
+    # elevated to 3.5x for high-beta volatility watchlist tickers.
     if asset_type == "stock" and signal.direction in ("BUY", "SELL"):
+        is_high_beta = identifier in HIGH_BETA_VOLATILITY_WATCHLIST
+        rvol_threshold = HIGH_BETA_RVOL_MINIMUM if is_high_beta else STOCK_RVOL_MINIMUM
         rvol = meta.get("volume_ratio")
         if rvol is not None:
             try:
                 rvol_f = float(rvol)
-                if rvol_f < STOCK_RVOL_MINIMUM:
+                if rvol_f < rvol_threshold:
+                    tag = "High-beta RVOL gate" if is_high_beta else "RVOL gate"
                     logger.warning(
-                        "{}/{}: RVOL gate — {:.2f}x < {:.1f}x minimum, downgrading {} to HOLD",
-                        asset_type, identifier, rvol_f, STOCK_RVOL_MINIMUM, signal.direction,
+                        "{}/{}: {} — {:.2f}x < {:.1f}x minimum, downgrading {} to HOLD",
+                        asset_type, identifier, tag, rvol_f, rvol_threshold, signal.direction,
                     )
                     signal.direction  = "HOLD"
                     signal.confidence = min(signal.confidence, 40)
                     signal.reasoning  = (
-                        f"[RVOL gate] Relative volume {rvol_f:.2f}x is below the {STOCK_RVOL_MINIMUM:.1f}x "
-                        f"minimum — insufficient institutional participation. "
+                        f"[{tag}] Relative volume {rvol_f:.2f}x is below the {rvol_threshold:.1f}x "
+                        f"minimum — insufficient institutional participation"
+                        f"{' for high-beta semiconductor/crypto-proxy' if is_high_beta else ''}. "
+                        + signal.reasoning
+                    )
+            except (TypeError, ValueError):
+                pass
+
+    # High-beta sector trend alignment gate — for watchlist tickers that
+    # passed the elevated RVOL check, verify the sector is trending favorably.
+    # Uses QQQ as the sector proxy (all watchlist names are tech/semi-heavy).
+    if (asset_type == "stock" and identifier in HIGH_BETA_VOLATILITY_WATCHLIST
+            and signal.direction == "BUY"):
+        qqq_data = (benchmarks or {}).get("QQQ", {})
+        qqq_change = qqq_data.get("change_24h")
+        if qqq_change is not None:
+            try:
+                qqq_change_f = float(qqq_change)
+                if qqq_change_f < 0:
+                    logger.warning(
+                        "{}/{}: sector alignment gate — QQQ {:.2f}% today, "
+                        "high-beta BUY requires sector above daily open",
+                        asset_type, identifier, qqq_change_f,
+                    )
+                    signal.direction  = "HOLD"
+                    signal.confidence = min(signal.confidence, 35)
+                    signal.reasoning  = (
+                        f"[Sector alignment gate] QQQ is {qqq_change_f:.2f}% today — "
+                        f"sector trading below daily open. High-beta {identifier} BUY "
+                        f"requires sector tailwind. "
                         + signal.reasoning
                     )
             except (TypeError, ValueError):

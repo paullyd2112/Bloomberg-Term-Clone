@@ -1119,7 +1119,11 @@ def run_claude_backtest(
     rvol_filtered = 0
     spy_1h_filtered = 0
     daily_cap_filtered = 0
+    high_beta_rvol_filtered = 0
+    high_beta_sector_filtered = 0
     STOCK_RVOL_MINIMUM = 2.5
+    HIGH_BETA_RVOL_MINIMUM = 3.5
+    HIGH_BETA_VOLATILITY_WATCHLIST = frozenset({"AMD", "NVDA", "COIN", "SMCI", "AVGO"})
     MAX_STOCK_SIGNALS_PER_DAY = 3
     # Per-date extended-BUY counts -- mirrors production's breadth_tracker,
     # keyed by date since a "batch run" here is everything scored on one
@@ -1202,13 +1206,30 @@ def run_claude_backtest(
                                         ticker, actual_date)
                             signal.direction = "HOLD"
 
-                # ── RVOL minimum gate: 2.5x for equities ──
+                # ── RVOL minimum gate (elevated for high-beta watchlist) ──
                 if signal.direction in ("BUY", "SELL") and pd.notna(row.get("volume_ratio")):
+                    is_high_beta = ticker in HIGH_BETA_VOLATILITY_WATCHLIST
+                    rvol_min = HIGH_BETA_RVOL_MINIMUM if is_high_beta else STOCK_RVOL_MINIMUM
                     vr = float(row["volume_ratio"])
-                    if vr < STOCK_RVOL_MINIMUM:
-                        rvol_filtered += 1
-                        logger.info("[claude_backtest] {} {} {} suppressed: RVOL {:.2f}x < {:.1f}x",
-                                    ticker, actual_date, signal.direction, vr, STOCK_RVOL_MINIMUM)
+                    if vr < rvol_min:
+                        if is_high_beta:
+                            high_beta_rvol_filtered += 1
+                        else:
+                            rvol_filtered += 1
+                        logger.info("[claude_backtest] {} {} {} suppressed: RVOL {:.2f}x < {:.1f}x{}",
+                                    ticker, actual_date, signal.direction, vr, rvol_min,
+                                    " (high-beta)" if is_high_beta else "")
+                        signal.direction = "HOLD"
+
+                # ── High-beta sector alignment gate (QQQ above daily open) ──
+                if (signal.direction == "BUY"
+                        and ticker in HIGH_BETA_VOLATILITY_WATCHLIST):
+                    qqq_bm = benchmarks.get("QQQ", {})
+                    qqq_change = qqq_bm.get("change_24h")
+                    if qqq_change is not None and float(qqq_change) < 0:
+                        high_beta_sector_filtered += 1
+                        logger.info("[claude_backtest] {} {} BUY suppressed: QQQ {:.2f}% (sector below open)",
+                                    ticker, actual_date, float(qqq_change))
                         signal.direction = "HOLD"
 
                 # ── Daily signal cap: max 3 stock signals per date ──
@@ -1373,6 +1394,8 @@ def run_claude_backtest(
         "spy_regime_suppressed": regime_filtered,
         "spy_1h_sma20_suppressed": spy_1h_filtered,
         "rvol_suppressed": rvol_filtered,
+        "high_beta_rvol_suppressed": high_beta_rvol_filtered,
+        "high_beta_sector_suppressed": high_beta_sector_filtered,
         "daily_cap_suppressed": daily_cap_filtered,
         "btc_regime_suppressed": btc_gated,
         "breadth_suppressed": breadth_filtered,
