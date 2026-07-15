@@ -1119,8 +1119,8 @@ def run_claude_backtest(
     daily_cap_filtered = 0
     high_beta_rvol_filtered = 0
     high_beta_sector_filtered = 0
-    STOCK_RVOL_MINIMUM = 2.5
-    HIGH_BETA_RVOL_MINIMUM = 3.5
+    STOCK_RVOL_MINIMUM = 1.5
+    HIGH_BETA_RVOL_MINIMUM = 2.5
     HIGH_BETA_VOLATILITY_WATCHLIST = frozenset({"AMD", "NVDA", "COIN", "SMCI", "AVGO"})
     MAX_STOCK_SIGNALS_PER_DAY = 3
     # Per-date extended-BUY counts -- mirrors production's breadth_tracker,
@@ -1191,18 +1191,7 @@ def run_claude_backtest(
                                     ticker, actual_date, count - 1)
                         signal.direction = "HOLD"
 
-                # ── SPY 1h SMA-20 gate (proxied via daily SMA-5) ──
-                if signal.direction == "BUY" and spy_sma5 is not None:
-                    target_ts = pd.Timestamp(actual_date)
-                    sidx = spy_sma5.index.get_indexer([target_ts], method="ffill")[0]
-                    if sidx >= 0 and pd.notna(spy_sma5.iloc[sidx]):
-                        spy_close = float(spy_df["close"].iloc[sidx])
-                        spy_sma_val = float(spy_sma5.iloc[sidx])
-                        if spy_close < spy_sma_val:
-                            spy_1h_filtered += 1
-                            logger.info("[claude_backtest] {} {} BUY suppressed: SPY below SMA-5 (1h proxy)",
-                                        ticker, actual_date)
-                            signal.direction = "HOLD"
+                # ── SPY 1h SMA-20 gate REMOVED (was too aggressive, blocked 60/69 stocks) ──
 
                 # ── RVOL minimum gate (elevated for high-beta watchlist) ──
                 if signal.direction in ("BUY", "SELL") and pd.notna(row.get("volume_ratio")):
@@ -1744,12 +1733,7 @@ def run_rules_backtest(
                 benchmarks = _get_benchmarks_for_date(date_str)
                 entry_price = float(row["close"])
 
-                # SPY regime gate (daily SMA-5 proxy for 1h SMA-20)
-                if spy_sma5 is not None:
-                    spy_idx = spy_df.index.get_indexer([target], method="ffill")[0]
-                    if spy_idx >= 0 and pd.notna(spy_sma5.iloc[spy_idx]):
-                        if float(spy_df.iloc[spy_idx]["close"]) < float(spy_sma5.iloc[spy_idx]):
-                            spy_1h_filtered += 1
+                # SPY 1h SMA-20 gate REMOVED (was too aggressive)
 
                 # Score using rules engine
                 signal = _score_from_patterns(meta, "stock")
@@ -1757,7 +1741,7 @@ def run_rules_backtest(
                 # Apply SPY regime gate
                 spy_vs_sma50 = benchmarks.get("SPY", {}).get("vs_sma50_pct")
                 if spy_vs_sma50 is not None:
-                    if spy_vs_sma50 < 0 and signal["direction"] == "BUY":
+                    if spy_vs_sma50 < -2 and signal["direction"] == "BUY":
                         signal["direction"] = "HOLD"
                         signal["confidence"] = min(signal["confidence"], 45)
                         signal["reasoning"] = f"[Regime gate] SPY {spy_vs_sma50:.1f}% below SMA-50. " + signal["reasoning"]
