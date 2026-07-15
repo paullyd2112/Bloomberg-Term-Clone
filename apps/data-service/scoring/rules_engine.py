@@ -33,9 +33,9 @@ from scoring.validated_factors import (
 SIGNAL_COOLDOWN_H = 4
 ENGINE_CUTOFF = "2026-07-04T11:00:00Z"
 
-STOCK_RVOL_MINIMUM = 2.5
+STOCK_RVOL_MINIMUM = 1.5
 HIGH_BETA_VOLATILITY_WATCHLIST = frozenset({"AMD", "NVDA", "COIN", "SMCI", "AVGO"})
-HIGH_BETA_RVOL_MINIMUM = 3.5
+HIGH_BETA_RVOL_MINIMUM = 2.5
 MAX_STOCK_SIGNALS_PER_DAY = 3
 
 ESCALATE_TO_AI = True
@@ -243,17 +243,6 @@ def _apply_gates(
                     f"[Regime gate] SPY {spy_vs_sma50:.1f}% above SMA-50 — strong uptrend. "
                     + signal["reasoning"]
                 )
-
-    if asset_type == "stock" and signal["direction"] == "BUY":
-        from scoring.engine import _spy_below_1h_sma20
-        if _spy_below_1h_sma20():
-            signal["confidence"] = max(signal["confidence"] - 15, 40)
-            signal["reasoning"] = (
-                "[SPY 1h caution] SPY below 20-period SMA on 1h — confidence reduced. "
-                + signal["reasoning"]
-            )
-            if signal["confidence"] < RULES_CONFIDENCE_MINIMUM:
-                signal["direction"] = "HOLD"
 
     if asset_type == "stock" and signal["direction"] in ("BUY", "SELL"):
         is_high_beta = identifier in HIGH_BETA_VOLATILITY_WATCHLIST
