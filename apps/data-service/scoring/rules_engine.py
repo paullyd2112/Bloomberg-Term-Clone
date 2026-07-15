@@ -1,5 +1,4 @@
-"""
-Hybrid rules + AI scoring engine — SELL signals are handled entirely by
+"""Hybrid rules + AI scoring engine — SELL signals are handled entirely by
 deterministic pattern-matching ($0), BUY signals are escalated to Claude
 for confirmation (saves ~60-70% vs full AI scoring).
 
@@ -79,7 +78,7 @@ def _stock_signals_today_count() -> int:
         return 0
 
 
-# ─── Pattern scoring logic ──────────────────────────────────────────────
+# ─── Pattern scoring logic ──────────────────────────────────────────────────
 
 def _score_from_patterns(meta: dict, asset_type: str) -> dict:
     """Score an asset purely from technical indicator patterns.
@@ -316,7 +315,7 @@ def _apply_gates(
     return signal
 
 
-# ─── Signal writer ───────────────────────────────────────────────────────
+# ─── Signal writer ───────────────────────────────────────────────────────────
 
 def _write_rules_signal(
     asset_type: str,
@@ -353,7 +352,7 @@ def _write_rules_signal(
     return None
 
 
-# ─── Main scoring function ────────────────────────────────────────────
+# ─── Main scoring function ──────────────────────────────────────────────────
 
 def score_asset_rules(
     asset_type: str,
