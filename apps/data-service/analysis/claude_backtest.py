@@ -56,13 +56,11 @@ AV_URL         = "https://www.alphavantage.co/query"
 DATE_FROM = "2025-09-01"
 DATE_TO   = "2026-07-02"
 
-# ~7 months of sampling (mid-Dec through mid-June), biweekly cadence.
-# DATE_FROM starts ~3.5 months before the first sample date so the 50-day
-# SMA/RSI/MACD warmup is satisfied; the last sample date sits ~3 weeks
-# before DATE_TO so even longterm-horizon signals (15-trading-day eval
-# window) have enough runway to resolve to WIN/LOSS/NEUTRAL.
-SAMPLE_DATES = ["2025-12-15", "2025-12-29", "2026-01-12", "2026-01-26",
-                "2026-02-09", "2026-02-23", "2026-03-09", "2026-03-23",
+# Post-March 2026 only — earlier dates predate the indicator pipeline fix
+# (#57/#59, July 4) and test a broken data path that no longer exists.
+# Biweekly cadence, DATE_FROM still provides 50-day warmup, last sample
+# sits 3 weeks before DATE_TO for longterm eval runway.
+SAMPLE_DATES = ["2026-03-09", "2026-03-23",
                 "2026-04-06", "2026-04-20", "2026-05-04", "2026-05-18",
                 "2026-06-01", "2026-06-12"]
 
