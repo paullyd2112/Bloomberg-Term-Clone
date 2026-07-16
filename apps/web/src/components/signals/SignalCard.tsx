@@ -115,13 +115,18 @@ export default function SignalCard({ signal }: { signal: Signal }) {
       </span>
 
       {/* Ticker + type */}
-      <div className="relative z-10 flex w-[4.5rem] min-w-0 flex-shrink-0 items-baseline gap-1.5 sm:w-32">
+      <div className={clsx(
+        "relative z-10 flex min-w-0 items-baseline gap-1.5",
+        isPrediction ? "flex-1 max-w-[16rem] sm:max-w-[22rem]" : "w-[4.5rem] flex-shrink-0 sm:w-32",
+      )}>
         <Link
           href={`/dashboard/asset/${signal.asset_type}/${encodeURIComponent(signal.identifier)}`}
           title={isPrediction ? displayName : undefined}
           className={clsx(
-            "truncate font-semibold text-white transition-colors hover:text-emerald-400",
-            isPrediction ? "text-xs" : "font-mono text-sm",
+            "font-semibold text-white transition-colors hover:text-emerald-400",
+            isPrediction
+              ? "text-xs leading-snug line-clamp-2"
+              : "truncate font-mono text-sm",
           )}
         >
           {displayName}

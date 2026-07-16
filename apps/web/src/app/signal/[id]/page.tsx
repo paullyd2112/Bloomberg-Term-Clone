@@ -229,7 +229,7 @@ export default async function SharedSignalPage({
         ) : (
           <>
             <p className="text-zinc-400 text-sm">
-              Get live signals for stocks and crypto.
+              Get live AI signals for crypto and prediction markets.
             </p>
             <div className="flex gap-3 justify-center">
               <Link

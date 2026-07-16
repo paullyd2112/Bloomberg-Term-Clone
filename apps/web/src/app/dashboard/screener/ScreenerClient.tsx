@@ -5,8 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import SignalList from "@/components/signals/SignalList";
 import { type Signal } from "@/components/signals/SignalCard";
 
-type AssetFilter     = "all" | "stock" | "crypto";
-type DirectionFilter = "all" | "BUY" | "SELL";
+type AssetFilter     = "all" | "crypto" | "prediction";
+type DirectionFilter = "all" | "BUY" | "SELL" | "YES" | "NO";
 type HorizonFilter   = "all" | "intraday" | "swing" | "longterm";
 type OutcomeFilter   = "all" | "PENDING" | "WIN" | "LOSS";
 
@@ -34,7 +34,6 @@ const CONF_STEPS = [0, 50, 70, 80, 90] as const;
 
 export default function ScreenerClient() {
   const [signals, setSignals]   = useState<Signal[]>([]);
-  const [insiderBuyTickers, setInsiderBuyTickers] = useState<Set<string>>(new Set());
   const [loading, setLoading]   = useState(true);
   const [filters, setFilters]   = useState<Filters>(DEFAULT_FILTERS);
   const [, startTransition]     = useTransition();
@@ -42,31 +41,41 @@ export default function ScreenerClient() {
   useEffect(() => {
     const supabase = createClient();
     (async () => {
-      const [signalRes, insiderRes] = await Promise.all([
-        supabase
-          .from("signals")
-          .select("id, asset_type, identifier, direction, confidence, reasoning, time_horizon, price_at_signal, news_context, created_at, outcome")
-          .eq("is_backtest", false)
-          .neq("asset_type", "prediction")
-          .gte("confidence", 70)
-          .order("created_at", { ascending: false })
-          .limit(500),
-        // Tickers with insider BUYs in the last 90 days, for the insider filter.
-        supabase
-          .from("insider_trades")
-          .select("ticker")
-          .eq("transaction", "buy")
-          .order("trade_date", { ascending: false })
-          .limit(1000),
-      ]);
+      const signalRes = await supabase
+        .from("signals")
+        .select("id, asset_type, identifier, direction, confidence, reasoning, time_horizon, price_at_signal, news_context, created_at, outcome")
+        .eq("is_backtest", false)
+        .in("asset_type", ["crypto", "prediction"])
+        .gte("confidence", 70)
+        .order("created_at", { ascending: false })
+        .limit(500);
 
-      setSignals((signalRes.data as Signal[]) ?? []);
-      const tickers = new Set<string>(
-        ((insiderRes.data as { ticker: string }[]) ?? [])
-          .map((r) => (r.ticker ?? "").toUpperCase())
-          .filter(Boolean),
+      const signals = (signalRes.data as Signal[]) ?? [];
+
+      const predictionIds = Array.from(
+        new Set(signals.filter((s) => s.asset_type === "prediction").map((s) => s.identifier)),
       );
-      setInsiderBuyTickers(tickers);
+      if (predictionIds.length > 0) {
+        const { data: priceRows } = await supabase
+          .from("raw_prices")
+          .select("identifier, metadata")
+          .eq("asset_type", "prediction")
+          .in("identifier", predictionIds);
+        const titleByIdentifier = new Map<string, string>();
+        for (const row of priceRows ?? []) {
+          const title = (row.metadata as Record<string, unknown> | null)?.title;
+          if (typeof title === "string" && title && !titleByIdentifier.has(row.identifier)) {
+            titleByIdentifier.set(row.identifier, title);
+          }
+        }
+        for (const s of signals) {
+          if (s.asset_type === "prediction") {
+            s.market_title = titleByIdentifier.get(s.identifier) ?? null;
+          }
+        }
+      }
+
+      setSignals(signals);
       setLoading(false);
     })();
   }, []);
@@ -78,14 +87,15 @@ export default function ScreenerClient() {
       if (filters.horizon !== "all" && s.time_horizon !== filters.horizon) return false;
       if (filters.outcome !== "all" && s.outcome !== filters.outcome) return false;
       if (s.confidence < filters.minConf) return false;
-      if (filters.insiderBuy && !insiderBuyTickers.has(s.identifier.toUpperCase())) return false;
+      if (filters.insiderBuy) return false;
       if (filters.search) {
         const q = filters.search.toUpperCase();
-        if (!s.identifier.toUpperCase().includes(q)) return false;
+        const searchable = (s.market_title ?? s.identifier).toUpperCase();
+        if (!searchable.includes(q) && !s.identifier.toUpperCase().includes(q)) return false;
       }
       return true;
     });
-  }, [signals, filters, insiderBuyTickers]);
+  }, [signals, filters]);
 
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     startTransition(() => setFilters((f) => ({ ...f, [key]: value })));
@@ -124,7 +134,7 @@ export default function ScreenerClient() {
         {/* Search */}
         <input
           type="text"
-          placeholder="Search ticker…"
+          placeholder="Search ticker or market…"
           value={filters.search}
           onChange={(e) => set("search", e.target.value)}
           className="w-full sm:w-64 bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500/50"
@@ -132,10 +142,8 @@ export default function ScreenerClient() {
 
         <div className="flex flex-wrap gap-x-6 gap-y-3">
           <FilterGroup label="Asset">
-            {/* Crypto-only pivot (July 2026): "Stocks" option hidden while
-                stock scoring is off. AssetFilter type kept for re-enable. */}
             <Segmented
-              options={[["all", "All"], ["crypto", "Crypto"]] as const}
+              options={[["all", "All"], ["crypto", "Crypto"], ["prediction", "Predictions"]] as const}
               value={filters.asset}
               onChange={(v) => set("asset", v as AssetFilter)}
             />
@@ -143,7 +151,7 @@ export default function ScreenerClient() {
 
           <FilterGroup label="Direction">
             <Segmented
-              options={[["all", "All"], ["BUY", "Buy"], ["SELL", "Sell"]] as const}
+              options={[["all", "All"], ["BUY", "Buy"], ["SELL", "Sell"], ["YES", "Yes"], ["NO", "No"]] as const}
               value={filters.direction}
               onChange={(v) => set("direction", v as DirectionFilter)}
             />
@@ -174,19 +182,7 @@ export default function ScreenerClient() {
           </FilterGroup>
         </div>
 
-        {/* Insider toggle */}
-        <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={filters.insiderBuy}
-            onChange={(e) => set("insiderBuy", e.target.checked)}
-            className="accent-emerald-500 w-4 h-4"
-          />
-          <span className="text-sm text-zinc-300">
-            Only tickers with recent insider buying
-          </span>
-          <span className="text-[11px] text-zinc-600">({insiderBuyTickers.size} tickers)</span>
-        </label>
+        {/* Insider toggle hidden — stock-only feature (crypto-only pivot) */}
       </div>
 
       {/* Results */}
