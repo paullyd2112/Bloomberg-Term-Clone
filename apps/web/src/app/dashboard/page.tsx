@@ -30,9 +30,13 @@ type PlatformAccuracy = {
 async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
   const supabase = createClient();
 
+  // Crypto-only pivot (July 2026): stock outcomes are excluded so the
+  // headline track record reflects the asset classes we actually signal.
   const { data, error } = await supabase
     .from("signals")
     .select("asset_type, outcome, created_at")
+    .in("asset_type", ["crypto", "prediction"])
+    .eq("is_backtest", false)
     .in("outcome", ["WIN", "LOSS"])
     .gte("created_at", ENGINE_CUTOFF);
 
@@ -103,6 +107,7 @@ async function fetchSignals(): Promise<Signal[]> {
   const { data, error } = await supabase
     .from("signals")
     .select("*")
+    .in("asset_type", ["crypto", "prediction"])
     .eq("is_backtest", false)
     .gte("created_at", ENGINE_CUTOFF)
     .gte("confidence", 70)
@@ -146,25 +151,19 @@ async function fetchSignals(): Promise<Signal[]> {
 async function fetchTopMovers() {
   const supabase = createClient();
 
-  const [stockRes, cryptoRes] = await Promise.all([
-    supabase
-      .from("raw_prices")
-      .select("identifier, asset_type, price, change_24h")
-      .eq("asset_type", "stock")
-      .not("change_24h", "is", null)
-      .neq("identifier", "MARKET_SENTIMENT")
-      .order("captured_at", { ascending: false })
-      .limit(50),
-    supabase
-      .from("raw_prices")
-      .select("identifier, asset_type, price, change_24h")
-      .eq("asset_type", "crypto")
-      .not("change_24h", "is", null)
-      .order("captured_at", { ascending: false })
-      .limit(50),
-  ]);
+  // Crypto-only pivot (July 2026): movers are crypto-only so cards never
+  // link to asset pages for a disabled class. Restore the stock query
+  // alongside this one when stocks return.
+  const cryptoRes = await supabase
+    .from("raw_prices")
+    .select("identifier, asset_type, price, change_24h")
+    .eq("asset_type", "crypto")
+    .not("change_24h", "is", null)
+    .neq("identifier", "MARKET_SENTIMENT")
+    .order("captured_at", { ascending: false })
+    .limit(50);
 
-  const allData = [...(stockRes.data ?? []), ...(cryptoRes.data ?? [])];
+  const allData = cryptoRes.data ?? [];
 
   const seen = new Map<string, typeof allData[0]>();
   for (const row of allData) {
@@ -354,7 +353,9 @@ export default async function DashboardPage() {
         <SignalFeed signals={signals} />
       </section>
 
-      {/* Sector heatmap (supporting context, below the feed) */}
+      {/* Crypto-only pivot (July 2026): SectorHeatmap aggregates stock
+          signals by sector and renders empty with stock scoring off.
+          Component kept intact; restore this block when stocks return.
       <Suspense
         fallback={
           <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-6 h-40 animate-pulse" />
@@ -362,6 +363,7 @@ export default async function DashboardPage() {
       >
         <SectorHeatmap />
       </Suspense>
+      */}
     </div>
   );
 }
