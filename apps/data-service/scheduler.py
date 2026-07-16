@@ -1273,6 +1273,7 @@ def run_rules_backtest_endpoint():
                     "api_cost":      "$0.00",
                 },
                 "signals": agg.get("signals", []),
+                "stock_diagnostics": agg.get("stock_diagnostics"),
             }
         except Exception as e:
             _job_state["rules_backtest"] = {

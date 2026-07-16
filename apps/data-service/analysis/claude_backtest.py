@@ -1720,6 +1720,12 @@ def run_rules_backtest(
     breadth_by_date: dict[str, int] = {}
     signals_by_date: dict[str, int] = {}
 
+    logger.info("[rules_backtest] stock_data loaded: {} tickers — {}", len(stock_data),
+                list(stock_data.keys()))
+    stock_scored = 0
+    stock_appended = 0
+    stock_errors = 0
+
     for ticker, df in stock_data.items():
         for date_str in sample_dates:
             try:
@@ -1803,6 +1809,7 @@ def run_rules_backtest(
                     except (TypeError, ValueError):
                         pass
 
+                stock_scored += 1
                 result = ClaudeSignalResult(
                     ticker=ticker,
                     asset_class="stock",
@@ -1819,9 +1826,15 @@ def run_rules_backtest(
 
                 result = _evaluate_claude_signal(result, df, idx)
                 results.append(result)
+                stock_appended += 1
 
             except Exception as e:
-                logger.warning("[rules_backtest] {}/{} error: {}", ticker, date_str, e)
+                stock_errors += 1
+                logger.warning("[rules_backtest] {}/{} error: {} — {}", ticker, date_str,
+                               type(e).__name__, e)
+
+    logger.info("[rules_backtest] Stock loop done: scored={}, appended={}, errors={}, regime_gated={}",
+                stock_scored, stock_appended, stock_errors, regime_filtered)
 
     # ── Crypto ───────────────────────────────────────────────────────────────
     crypto_data: dict[str, pd.DataFrame] = {}
@@ -1915,6 +1928,13 @@ def run_rules_backtest(
     agg["backtest_type"] = "rules_engine"
     agg["model"] = "none (deterministic)"
     agg["api_cost_estimate"] = "$0.00"
+    agg["stock_diagnostics"] = {
+        "tickers_loaded": len(stock_data),
+        "ticker_list": list(stock_data.keys()),
+        "scored": stock_scored,
+        "appended": stock_appended,
+        "errors": stock_errors,
+    }
     agg["filters"] = {
         "spy_regime_suppressed": regime_filtered,
         "spy_1h_sma20_suppressed": spy_1h_filtered,
