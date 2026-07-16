@@ -1715,6 +1715,10 @@ def run_rules_backtest(
     if spy_df is not None and "close" in spy_df.columns:
         spy_sma5 = spy_df["close"].rolling(5).mean()
 
+    STOCK_RVOL_MINIMUM = 1.5
+    HIGH_BETA_RVOL_MINIMUM = 2.5
+    HIGH_BETA_VOLATILITY_WATCHLIST = frozenset({"AMD", "NVDA", "COIN", "SMCI", "AVGO"})
+    MAX_STOCK_SIGNALS_PER_DAY = 3
     EXTENDED_VS_SMA50_PCT = 8.0
     MAX_EXTENDED_BUYS_PER_RUN = 4
     breadth_by_date: dict[str, int] = {}
