@@ -5,17 +5,17 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 type Experience = "beginner" | "intermediate" | "advanced";
-type AssetPref  = "stocks" | "crypto";
+type AssetPref  = "crypto" | "predictions";
 
 const EXPERIENCE_OPTIONS: { value: Experience; label: string; desc: string }[] = [
   { value: "beginner",     label: "Beginner",     desc: "New to trading, learning the ropes" },
-  { value: "intermediate", label: "Intermediate",  desc: "Comfortable with stocks and charts" },
-  { value: "advanced",     label: "Advanced",      desc: "Options, leverage, active trading" },
+  { value: "intermediate", label: "Intermediate",  desc: "Comfortable with crypto and charts" },
+  { value: "advanced",     label: "Advanced",      desc: "Leverage, DeFi, active trading" },
 ];
 
 const ASSET_OPTIONS: { value: AssetPref; label: string; icon: string; desc: string }[] = [
-  { value: "stocks",      label: "Stocks",             icon: "📈", desc: "Equities, ETFs, options flow" },
-  { value: "crypto",      label: "Crypto",              icon: "₿",  desc: "BTC, ETH, altcoins" },
+  { value: "crypto",       label: "Crypto",              icon: "₿",  desc: "BTC, ETH, altcoins" },
+  { value: "predictions",  label: "Prediction Markets",  icon: "🎯", desc: "Polymarket, macro events, elections" },
 ];
 
 const STEPS = ["profile", "experience", "markets", "done"] as const;
@@ -285,9 +285,9 @@ export default function OnboardingPage() {
                 What you get with your trial
               </p>
               {[
-                "AI signals: stocks & crypto",
+                "AI crypto signals with 89% backtest win rate",
+                "Prediction market analysis",
                 "Unlimited watchlist",
-                "Unusual options flow",
                 "Morning briefing email",
                 "Per-asset AI accuracy tracking",
               ].map((f) => (

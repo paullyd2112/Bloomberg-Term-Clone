@@ -9,6 +9,7 @@ import SubscribeGate from "@/components/ui/SubscribeGate";
 import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
 import SectionHeader from "@/components/ui/SectionHeader";
 import SkipTrialBanner from "@/components/SkipTrialBanner";
+import SystemSafeguards from "@/components/dashboard/SystemSafeguards";
 
 export const revalidate = 60;
 
@@ -346,6 +347,9 @@ export default async function DashboardPage() {
           </div>
         </section>
       )}
+
+      {/* System safeguards */}
+      <SystemSafeguards />
 
       {/* Signal feed — the product, surfaced above supporting analytics */}
       <section>
