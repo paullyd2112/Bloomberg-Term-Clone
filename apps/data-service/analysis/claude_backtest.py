@@ -1725,6 +1725,7 @@ def run_rules_backtest(
     stock_scored = 0
     stock_appended = 0
     stock_errors = 0
+    stock_error_samples: list[str] = []
 
     for ticker, df in stock_data.items():
         for date_str in sample_dates:
@@ -1830,6 +1831,11 @@ def run_rules_backtest(
 
             except Exception as e:
                 stock_errors += 1
+                if len(stock_error_samples) < 5:
+                    import traceback as tb
+                    stock_error_samples.append(
+                        f"{ticker}/{date_str}: {type(e).__name__}: {e}\n{''.join(tb.format_tb(e.__traceback__)[-2:])}"
+                    )
                 logger.warning("[rules_backtest] {}/{} error: {} — {}", ticker, date_str,
                                type(e).__name__, e)
 
@@ -1934,6 +1940,7 @@ def run_rules_backtest(
         "scored": stock_scored,
         "appended": stock_appended,
         "errors": stock_errors,
+        "error_samples": stock_error_samples,
     }
     agg["filters"] = {
         "spy_regime_suppressed": regime_filtered,
