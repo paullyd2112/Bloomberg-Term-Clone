@@ -1099,6 +1099,29 @@ def score_asset(
             + signal.reasoning
         )
 
+    # Crypto concurrent-position + correlation cap — the portfolio-level guard
+    # the stock breadth cap provides, ported to crypto (which needs it MORE:
+    # alts track BTC, so a basket of longs is a single directional bet). Blocks
+    # a new BUY when too many crypto longs are already open. Runs post-scoring,
+    # pre-write (mirrors the stock breadth cap); within a batch run each written
+    # signal is PENDING before the next is scored, so this also counts same-run
+    # BUYs without a separate in-memory tracker.
+    if asset_type == "crypto" and signal.direction == "BUY":
+        majors_open, alts_open = _open_crypto_buy_positions()
+        block_reason = _crypto_correlation_block_reason(identifier, majors_open, alts_open)
+        if block_reason:
+            logger.warning(
+                "{}/{}: crypto correlation cap — {}, downgrading BUY to HOLD",
+                asset_type, identifier, block_reason,
+            )
+            signal.direction  = "HOLD"
+            signal.confidence = min(signal.confidence, 45)
+            signal.reasoning  = (
+                f"[Correlation cap] {block_reason}. Crypto longs are highly correlated to BTC, "
+                f"so stacking more concentrates one directional bet rather than diversifying. "
+                + signal.reasoning
+            )
+
     # Breadth/correlation cap — if several names in the same batch are all
     # deeply extended and getting BUY calls, that's a synchronized-momentum
     # signature, not N independent bets (see: 8 correlated BUYs on 2026-04-17
@@ -1389,6 +1412,86 @@ TIER1_CRYPTO  = {
 }
 CRYPTO_MOVER_THRESHOLD = 5.0  # % change to qualify lower-tier coins
 
+# ─── Crypto portfolio-defense caps (July 2026) ───────────────────────────────
+# Crypto is more correlated than a cross-sector stock basket — alts track BTC,
+# so a fistful of longs is one directional bet, not N independent ones. These
+# port the stock breadth/daily-cap guards to crypto (tighter, because of that
+# correlation) so a bullish run can't stack a basket that all stops out
+# together when BTC rolls over — the exact cluster that blew the stock sims.
+MAX_CRYPTO_SIGNALS_PER_DAY = 3   # hard cap on fresh crypto signals per UTC day
+MAX_CONCURRENT_CRYPTO_BUYS = 2   # max simultaneous open crypto longs
+CRYPTO_MAJORS = {"BTC", "ETH"}   # correlated majors; ≤1 alt alongside an open major
+
+
+def _crypto_signals_today_count() -> int:
+    """Count fresh (non-HOLD) crypto signals written today (UTC)."""
+    try:
+        today_start = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+        result = (
+            supabase.table("signals")
+            .select("id", count="exact")
+            .eq("asset_type", "crypto")
+            .eq("is_backtest", False)
+            .gte("created_at", today_start)
+            .neq("direction", "HOLD")
+            .execute()
+        )
+        return result.count or 0
+    except Exception as e:
+        logger.warning("Daily crypto signal count query failed: {} — defaulting to 0", e)
+        return 0
+
+
+def _open_crypto_buy_positions() -> tuple[int, int]:
+    """Return (majors_open, alts_open): currently-open (PENDING) live crypto
+    BUY signals split into correlated majors (BTC/ETH) and alts. Feeds the
+    concurrent-position cap. Bounded to a 7-day lookback so genuinely stale
+    unresolved rows don't count as live exposure. Fails open (0, 0) on error
+    so a transient DB hiccup never silently blocks all crypto BUYs."""
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        result = (
+            supabase.table("signals")
+            .select("identifier")
+            .eq("asset_type", "crypto")
+            .eq("is_backtest", False)
+            .eq("direction", "BUY")
+            .eq("outcome", "PENDING")
+            .gte("created_at", cutoff)
+            .execute()
+        )
+        rows = result.data or []
+        majors = sum(1 for r in rows if r["identifier"] in CRYPTO_MAJORS)
+        return majors, len(rows) - majors
+    except Exception as e:
+        logger.warning("open crypto position query failed: {} — allowing signal", e)
+        return 0, 0
+
+
+def _crypto_correlation_block_reason(
+    identifier: str, majors_open: int, alts_open: int
+) -> str | None:
+    """Pure decision for the crypto concurrent/correlation cap. Returns a
+    human-readable block reason if a new BUY on `identifier` should be
+    suppressed given the currently-open majors/alts, else None. Factored out
+    so both scoring paths share one source of truth and it's unit-testable
+    without a DB or Claude call.
+
+    Rules:
+      - Never exceed MAX_CONCURRENT_CRYPTO_BUYS total open longs.
+      - With a BTC/ETH (major) long open, allow at most one alt long alongside
+        it — a basket of alts on top of a major is one BTC-correlated bet.
+    """
+    total_open = majors_open + alts_open
+    if total_open >= MAX_CONCURRENT_CRYPTO_BUYS:
+        return (
+            f"{total_open} crypto long{'s' if total_open != 1 else ''} already "
+            f"open (max {MAX_CONCURRENT_CRYPTO_BUYS})"
+        )
+    if identifier not in CRYPTO_MAJORS and majors_open >= 1 and alts_open >= 1:
+        return "a BTC/ETH long plus an alt long are already open (max 1 alt alongside a major)"
+    return None
+
 
 def score_crypto(subscription: str | None = None) -> str:
     from scoring.haiku_prescreen import prescreen_crypto, should_escalate_to_sonnet
@@ -1445,11 +1548,27 @@ def score_crypto(subscription: str | None = None) -> str:
             bearish = False
         btc_regime = {"macd_hist": hist, "prev_macd_hist": prev_hist, "bearish": bearish}
 
+    # Daily crypto signal cap — stop before spending on Claude once the day's
+    # budget is used, mirroring the stock throttle. Layers under the tighter
+    # concurrent-position cap enforced per-BUY inside score_asset.
+    existing_today = _crypto_signals_today_count()
+    if existing_today >= MAX_CRYPTO_SIGNALS_PER_DAY:
+        logger.warning("Daily crypto signal cap reached ({}/{}) — skipping crypto scan",
+                       existing_today, MAX_CRYPTO_SIGNALS_PER_DAY)
+        return f"0 scored — daily crypto cap reached ({existing_today}/{MAX_CRYPTO_SIGNALS_PER_DAY})"
+    remaining = MAX_CRYPTO_SIGNALS_PER_DAY - existing_today
+
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
     tier_skipped = 0
+    signals_written_this_run = 0
 
     for row in rows:
+        if signals_written_this_run >= remaining:
+            logger.info("[crypto] daily cap reached mid-run ({}/{}) — stopping scan",
+                        existing_today + signals_written_this_run, MAX_CRYPTO_SIGNALS_PER_DAY)
+            break
+
         sym = row["identifier"]
         meta = row.get("metadata") or {}
 
@@ -1462,6 +1581,7 @@ def score_crypto(subscription: str | None = None) -> str:
                     skipped += 1
                 else:
                     success += 1
+                    signals_written_this_run += 1
             except Exception as e:
                 logger.error("score_crypto error for {}: {}", sym, e)
                 sentry_sdk.capture_exception(e)
@@ -1491,13 +1611,15 @@ def score_crypto(subscription: str | None = None) -> str:
                 skipped += 1
             else:
                 success += 1
+                signals_written_this_run += 1
         except Exception as e:
             logger.error("score_crypto error for {}: {}", sym, e)
             sentry_sdk.capture_exception(e)
             failed += 1
 
+    cap_note = f", daily cap: {existing_today + signals_written_this_run}/{MAX_CRYPTO_SIGNALS_PER_DAY}"
     return (f"{success} scored, {skipped} skipped, {failed} failed — "
-            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet, {tier_skipped} tier-skipped")
+            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet, {tier_skipped} tier-skipped{cap_note}")
 
 
 PREDICTION_CANDIDATE_POOL  = 150  # raw pool pulled before diversification

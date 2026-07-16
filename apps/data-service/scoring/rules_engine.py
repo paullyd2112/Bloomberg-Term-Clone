@@ -286,6 +286,23 @@ def _apply_gates(
                 + signal["reasoning"]
             )
 
+    # Crypto concurrent-position + correlation cap — mirrors engine.py. Runs
+    # here so a capped BUY is downgraded before it's escalated to Claude,
+    # saving the confirmation spend (the engine re-applies it as a backstop).
+    if asset_type == "crypto" and signal["direction"] == "BUY":
+        from scoring.engine import (
+            _open_crypto_buy_positions, _crypto_correlation_block_reason,
+        )
+        majors_open, alts_open = _open_crypto_buy_positions()
+        block_reason = _crypto_correlation_block_reason(identifier, majors_open, alts_open)
+        if block_reason:
+            signal["direction"] = "HOLD"
+            signal["confidence"] = min(signal["confidence"], 45)
+            signal["reasoning"] = (
+                f"[Correlation cap] {block_reason}. Crypto longs track BTC — stacking "
+                f"more concentrates one directional bet. " + signal["reasoning"]
+            )
+
     EXTENDED_VS_SMA50_PCT = 8.0
     MAX_EXTENDED_BUYS = 4
     if asset_type == "stock" and signal["direction"] == "BUY" and breadth_tracker is not None:
@@ -476,7 +493,8 @@ def score_crypto_rules(subscription: str | None = None) -> str:
     """Score crypto using rules engine — drop-in replacement for engine.score_crypto()."""
     from scoring.engine import (
         _get_market_benchmark, CORE_CRYPTO, TIER1_CRYPTO,
-        CRYPTO_MOVER_THRESHOLD,
+        CRYPTO_MOVER_THRESHOLD, MAX_CRYPTO_SIGNALS_PER_DAY,
+        _crypto_signals_today_count,
     )
 
     benchmarks = _get_market_benchmark()
@@ -520,11 +538,21 @@ def score_crypto_rules(subscription: str | None = None) -> str:
             seen.add(sym)
             unique_rows.append(row)
 
+    # Daily crypto signal cap — mirrors engine.score_crypto so both scoring
+    # paths honor the same per-UTC-day ceiling.
+    existing_today = _crypto_signals_today_count()
+    if existing_today >= MAX_CRYPTO_SIGNALS_PER_DAY:
+        return f"[rules_engine] daily crypto cap reached ({existing_today}/{MAX_CRYPTO_SIGNALS_PER_DAY})"
+    remaining = MAX_CRYPTO_SIGNALS_PER_DAY - existing_today
+
     scored = 0
     signals_written = 0
     skipped = 0
 
     for row in unique_rows:
+        if signals_written >= remaining:
+            break
+
         sym = row["identifier"]
 
         if sym not in CORE_CRYPTO and sym not in TIER1_CRYPTO:
@@ -545,7 +573,8 @@ def score_crypto_rules(subscription: str | None = None) -> str:
 
     return (
         f"[rules_engine] scored {scored} crypto, "
-        f"{signals_written} actionable, {skipped} tier-skipped"
+        f"{signals_written} actionable, {skipped} tier-skipped "
+        f"(daily cap {existing_today + signals_written}/{MAX_CRYPTO_SIGNALS_PER_DAY})"
     )
 
 

@@ -349,6 +349,11 @@ def _compute_crypto_indicators(df: pd.DataFrame) -> dict:
     # MACD (12, 26, 9)
     df.ta.macd(fast=12, slow=26, signal=9, append=True)
 
+    # ATR 14 — volatility-adaptive stop input. Stocks have carried this since
+    # day one; crypto never did, so crypto stops fell back to a flat default.
+    # Computed on the same (1h) candles the rest of these indicators use.
+    df.ta.atr(length=14, append=True)
+
     # Volume anomaly — ratio vs 7-day (168h) average
     volume_avg = df["volume"].mean()
     latest_vol = float(df["volume"].iloc[-1])
@@ -379,6 +384,7 @@ def _compute_crypto_indicators(df: pd.DataFrame) -> dict:
         # have carried this since day one, crypto never did, which made the
         # BTC regime gate unable to ever fire.
         "prev_macd_hist": _prev_col("macdh_"),
+        "atr_14":       _col("atr"),       # feeds the risk engine's 1.5x-ATR stop
         "volume_ratio": volume_ratio,      # >1.5 = above-average, >3 = anomaly
         "close":        float(latest["close"]),
         "volume_24h":   float(df["volume"].tail(24).sum()),  # last 24 1h bars

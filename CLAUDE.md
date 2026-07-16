@@ -78,9 +78,13 @@ they override the model regardless of what the prompt says.
 5. **RVOL gate** (stocks only): relative volume < 2.5x → HOLD (3.5x for high-beta watchlist)
 6. **High-beta sector alignment** (AMD/NVDA/COIN/SMCI/AVGO): QQQ must be green for BUYs
 7. **BTC regime gate** (crypto, non-BTC): BTC MACD bearish+deepening → no alt-coin BUYs
-8. **Breadth cap** (stocks only): max 4 extended BUYs (>8% above SMA-50) per scoring run
-9. **Evidence gate** (stocks only): checked against `validated_factors.py` — if indicators match
-   a validated pattern favoring the OPPOSITE direction, signal is downgraded to HOLD
+8. **Crypto correlation cap** (crypto BUYs): max 2 concurrent open crypto longs, and ≤1 alt
+   alongside an open BTC/ETH major. Ports the stock breadth cap to crypto — which needs it more,
+   since alts track BTC so a basket of longs is one directional bet. Pure decision in
+   `_crypto_correlation_block_reason()`, open positions from `_open_crypto_buy_positions()`.
+9. **Breadth cap** (stocks only): max 4 extended BUYs (>8% above SMA-50) per scoring run
+10. **Evidence gate** (stocks only): checked against `validated_factors.py` — if indicators match
+    a validated pattern favoring the OPPOSITE direction, signal is downgraded to HOLD
 
 After gates, the signal hits the **risk engine** (`scoring/risk_engine.py`) which computes
 stop/target/position sizing across 4 prop-firm-modeled profiles. Signals where position resolves
@@ -133,8 +137,23 @@ Multi-profile prop-firm-modeled position sizing:
 - `ENGINE_CUTOFF = "2026-07-04T11:00:00Z"` — signals before this are unreliable (data bugs)
 - `SIGNAL_COOLDOWN_H = 4` — skip if signal generated within 4 hours
 - `MAX_STOCK_SIGNALS_PER_DAY = 3` — hard cap on stock signals per calendar day
+- `MAX_CRYPTO_SIGNALS_PER_DAY = 3` — hard cap on fresh crypto signals per UTC day
+- `MAX_CONCURRENT_CRYPTO_BUYS = 2` — max simultaneous open crypto longs
+- `CRYPTO_MAJORS = {BTC, ETH}` — correlated majors; ≤1 alt allowed alongside an open major
 - `STOCK_RVOL_MINIMUM = 2.5` / `HIGH_BETA_RVOL_MINIMUM = 3.5`
 - `HIGH_BETA_VOLATILITY_WATCHLIST = {AMD, NVDA, COIN, SMCI, AVGO}`
+
+## Crypto portfolio defense (July 2026)
+Ported the stock-only guardrails to crypto so the correlated-drawdown cluster that blew the stock
+sims can't recur on a more-correlated asset class:
+- **ATR stops**: `ingestion/crypto.py` now computes `atr_14` (1h candles); risk engine uses 1.5×ATR
+  (clamped 1–5%) as the stop instead of a flat 3%. Model `invalidation_price` still takes precedence
+  when provided; ATR is the volatility-adaptive fallback.
+- **Correlation cap**: gate #8 above (max 2 concurrent longs, ≤1 alt with a major).
+- **Daily cap**: `MAX_CRYPTO_SIGNALS_PER_DAY = 3`, enforced in both `score_crypto()` and
+  `score_crypto_rules()` before Claude spend.
+- Verified deterministically (no API spend): cap truth table passes; worst-case correlated single-day
+  drawdown cluster drops 67% (6→2 concurrent longs). A paid Claude backtest was NOT rerun.
 
 ## Files map
 - `scoring/engine.py` — main AI scoring, all gates, batch scoring functions
