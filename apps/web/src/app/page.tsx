@@ -111,8 +111,8 @@ function Hero() {
             </h1>
 
             <p className="mt-6 text-lg text-secondary-foreground max-w-md leading-relaxed text-pretty">
-              AI-scored BUY/SELL signals on BTC, ETH, and 50+ coins, rescored around
-              the clock — with confidence, reasoning, and a win rate you can check.
+              AI-scored BUY/SELL signals on BTC, ETH, and 50+ coins, updated around
+              the clock with confidence, reasoning, and a win rate you can check.
               Plus Polymarket edge and a morning briefing in your inbox.
             </p>
 
@@ -225,7 +225,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: "24/7 AI crypto signals",
-    desc: "BUY/SELL calls on BTC, ETH, SOL, and 50+ coins, rescored every two hours around the clock — each with a confidence score and the reasoning behind it.",
+    desc: "BUY/SELL calls on BTC, ETH, SOL, and 50+ coins, rescored every two hours around the clock. Each comes with a confidence score and the reasoning behind it.",
     span: "lg:col-span-3",
   },
   {
@@ -322,6 +322,33 @@ function Features() {
   );
 }
 
+// ─── Newsletter band ──────────────────────────────────────────────────────────
+
+function NewsletterBand() {
+  return (
+    <section className="px-5 sm:px-8 pb-8">
+      <Reveal className="relative max-w-6xl mx-auto rounded-2xl border border-white/[0.06] bg-white/[0.02] ring-hairline overflow-hidden">
+        <div className="pointer-events-none absolute -top-20 right-10 h-[220px] w-[420px] rounded-full bg-emerald-500/[0.07] blur-[100px]" />
+        <div className="relative grid md:grid-cols-2 gap-6 md:gap-10 items-center px-6 sm:px-10 py-10">
+          <div>
+            <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-emerald-400 mb-3">
+              Free newsletter
+            </div>
+            <h3 className="text-xl sm:text-2xl font-semibold text-white tracking-tightest text-balance">
+              The daily brief, before the market wakes up
+            </h3>
+            <p className="text-muted-foreground text-sm mt-2 leading-relaxed">
+              Crypto and prediction markets in plain English, every weekday at 7am ET.
+              Written by the same AI that scores the signals. Unsubscribe anytime.
+            </p>
+          </div>
+          <NewsletterSignup />
+        </div>
+      </Reveal>
+    </section>
+  );
+}
+
 // ─── Pricing ──────────────────────────────────────────────────────────────────
 
 const PLANS = [
@@ -357,7 +384,7 @@ const PLANS = [
       "AI finds mispriced contracts",
       "Pleby, your AI trading analyst, on call",
       "Personalised morning briefing",
-      "On-demand AI analysis — score any coin",
+      "On-demand AI analysis: score any coin",
     ],
   },
 ];
@@ -442,7 +469,7 @@ function Pricing() {
 const FAQS = [
   {
     q: "What exactly is Plebs?",
-    a: "Plebs is an AI-powered crypto signal terminal for retail traders. We run AI models over live technicals, news, and market structure to generate BUY/SELL signals on 50+ coins — around the clock, each with a confidence score and full reasoning. Think Bloomberg Terminal meets AI analyst, priced for normal people.",
+    a: "Plebs is an AI-powered crypto signal terminal for retail traders. We run AI models over live technicals, news, and market structure to generate BUY/SELL signals on 50+ coins around the clock, each with a confidence score and full reasoning. Think Bloomberg Terminal meets AI analyst, priced for normal people.",
   },
   {
     q: "Is this financial advice?",
@@ -454,7 +481,7 @@ const FAQS = [
   },
   {
     q: "What markets do you cover?",
-    a: "Crypto first: BTC, ETH, SOL, and 50+ coins, rescored around the clock. Elite adds Polymarket prediction markets — AI-scored YES/NO calls on real-world events. Congressional trade disclosures and a daily morning briefing round it out.",
+    a: "Crypto first: BTC, ETH, SOL, and 50+ coins, rescored around the clock. Elite adds AI-scored YES/NO calls on Polymarket prediction markets. Congressional trade disclosures and a daily morning briefing round it out.",
   },
   {
     q: "How accurate are the signals?",
@@ -640,6 +667,7 @@ export default function LandingPage() {
         <Showcase />
         <Stats />
         <Features />
+        <NewsletterBand />
         <Pricing />
         <Faq />
         <CTAStrip />

@@ -41,7 +41,7 @@ export default function LiveWinRate() {
             {stats!.win_rate}% crypto win rate
           </span>
           <span className="text-[11px] text-zinc-500">
-            {stats!.wins}W–{stats!.losses}L, last {stats!.total} resolved ·
+            {stats!.wins}W-{stats!.losses}L, last {stats!.total} resolved ·
             tracked live, misses included
           </span>
         </>

@@ -251,7 +251,7 @@ export default function AssetShot() {
       <div className="mt-3 flex items-center justify-between gap-2">
         <span className="font-mono text-[10px] text-zinc-600">
           {error
-            ? "Live data unavailable — try again"
+            ? "Live data unavailable, try again"
             : live
             ? `Live quote · updated ${updatedAt}`
             : "Sample data"}

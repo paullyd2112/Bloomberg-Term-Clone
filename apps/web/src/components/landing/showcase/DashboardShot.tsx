@@ -1,8 +1,13 @@
+"use client";
+
 /**
- * Pixel-accurate static mockup of the Plebs dashboard interior.
- * Presentational only — mirrors the real signal feed styling.
+ * Pixel-accurate mockup of the Plebs dashboard interior. The signal cards
+ * are representative, but the stat tiles pull live numbers from
+ * /api/landing-stats (falling back to the static values below) so the
+ * showcase never contradicts the real dashboard.
  */
 
+import { useEffect, useState } from "react";
 import { Zap, Dices, Landmark, Search, Sunrise, type LucideIcon } from "lucide-react";
 
 const NAV: { label: string; icon: LucideIcon; active: boolean }[] = [
@@ -13,12 +18,41 @@ const NAV: { label: string; icon: LucideIcon; active: boolean }[] = [
   { label: "Briefing", icon: Sunrise, active: false },
 ];
 
-const STATS = [
-  { label: "Win rate", value: "74%", tone: "up" as const },
+type LiveStats = {
+  win_rate: number | null;
+  total: number;
+  signals_today: number | null;
+  avg_confidence: number | null;
+  coins_tracked: number | null;
+};
+
+type StatTile = { label: string; value: string; tone?: "up" };
+
+// Static fallbacks, shown until live numbers arrive (or if the fetch fails).
+const FALLBACK_STATS: StatTile[] = [
+  { label: "Win rate", value: "74%", tone: "up" },
   { label: "Signals today", value: "18" },
   { label: "Avg confidence", value: "78%" },
   { label: "Coins tracked", value: "53" },
 ];
+
+function buildStats(live: LiveStats | null): StatTile[] {
+  if (!live) return FALLBACK_STATS;
+  return [
+    live.win_rate !== null && live.total >= 3
+      ? { label: "Win rate", value: `${Math.round(live.win_rate)}%`, tone: "up" as const, }
+      : FALLBACK_STATS[0],
+    live.signals_today !== null && live.signals_today > 0
+      ? { label: "Signals today", value: String(live.signals_today) }
+      : FALLBACK_STATS[1],
+    live.avg_confidence !== null
+      ? { label: "Avg confidence", value: `${live.avg_confidence}%` }
+      : FALLBACK_STATS[2],
+    live.coins_tracked !== null
+      ? { label: "Coins tracked", value: String(live.coins_tracked) }
+      : FALLBACK_STATS[3],
+  ];
+}
 
 const SIGNALS = [
   {
@@ -28,7 +62,7 @@ const SIGNALS = [
     asset: "Crypto",
     confidence: 86,
     reasoning:
-      "RSI 63 with an expanding MACD histogram — validated momentum continuation as BTC leads a broad crypto bid.",
+      "RSI 63 with an expanding MACD histogram. Validated momentum continuation as BTC leads a broad crypto bid.",
     horizon: "Swing",
     price: "$117,842",
     time: "2m ago",
@@ -77,6 +111,17 @@ function DirBadge({ dir, tone }: { dir: string; tone: "up" | "down" }) {
 }
 
 export default function DashboardShot() {
+  const [live, setLive] = useState<LiveStats | null>(null);
+
+  useEffect(() => {
+    fetch("/api/landing-stats")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: LiveStats | null) => d && setLive(d))
+      .catch(() => {});
+  }, []);
+
+  const stats = buildStats(live);
+
   return (
     <div className="flex bg-background font-sans text-left">
       {/* Sidebar rail */}
@@ -128,7 +173,7 @@ export default function DashboardShot() {
 
         {/* Stat tiles */}
         <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {STATS.map((s) => (
+          {stats.map((s) => (
             <div
               key={s.label}
               className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
