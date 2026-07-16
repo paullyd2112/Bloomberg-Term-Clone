@@ -39,7 +39,7 @@ const FALLBACK_STATS: StatTile[] = [
 function buildStats(live: LiveStats | null): StatTile[] {
   if (!live) return FALLBACK_STATS;
   return [
-    live.win_rate !== null && live.total >= 3
+    live.win_rate !== null && live.total >= 10
       ? { label: "Win rate", value: `${Math.round(live.win_rate)}%`, tone: "up" as const, }
       : FALLBACK_STATS[0],
     live.signals_today !== null && live.signals_today > 0

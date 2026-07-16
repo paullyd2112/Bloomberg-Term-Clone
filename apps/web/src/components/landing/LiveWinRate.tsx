@@ -26,8 +26,14 @@ export default function LiveWinRate() {
       .catch(() => {});
   }, []);
 
+  // Only brag once the sample is large enough to stand behind. Below this,
+  // fall back to the transparency line so a headline win rate never rests
+  // on a handful of resolved signals (a 100% off n=4 flips the moment two
+  // losses land). Raise, don't lower, this floor.
+  const MIN_SAMPLE = 10;
+
   const showLive =
-    stats !== null && stats.total >= 3 && (stats.win_rate ?? 0) >= 55;
+    stats !== null && stats.total >= MIN_SAMPLE && (stats.win_rate ?? 0) >= 55;
 
   return (
     <div className="mt-6 inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-3.5 py-2">
