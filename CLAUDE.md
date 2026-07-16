@@ -61,6 +61,95 @@
       `generate_newsletter()`, plus a real regeneration retry (`job_send_newsletter_retry()`) instead of
       the old 7:45am job just re-sending nothing.
 
+# SCORING ENGINE ARCHITECTURE (current state, July 2026)
+
+The scoring engine has been extensively tuned across multiple sessions. This section documents the
+complete architecture so future sessions can pick up without re-deriving it.
+
+## Deterministic gate stack (`scoring/engine.py`, lines ~934-1153)
+Every signal Claude produces passes through these gates **in order**, any of which can downgrade
+a BUY/SELL to HOLD (saving the signal write + preventing bad calls). Gates are code-enforced —
+they override the model regardless of what the prompt says.
+
+1. **Confidence gate** (`risk_engine.CONFIDENCE_MINIMUM = 75`): BUY/SELL below 75% → HOLD
+2. **Circuit breaker** (±8% change_24h): no SELLs after >8% gap up, no BUYs after >8% gap down
+3. **SPY regime gate** (stocks only): SPY below SMA-50 → no BUYs; SPY >5% above SMA-50 → no SELLs
+4. **SPY 1h SMA-20 gate** (stocks only): SPY below 20-period SMA on 1h candles → no BUYs
+5. **RVOL gate** (stocks only): relative volume < 2.5x → HOLD (3.5x for high-beta watchlist)
+6. **High-beta sector alignment** (AMD/NVDA/COIN/SMCI/AVGO): QQQ must be green for BUYs
+7. **BTC regime gate** (crypto, non-BTC): BTC MACD bearish+deepening → no alt-coin BUYs
+8. **Breadth cap** (stocks only): max 4 extended BUYs (>8% above SMA-50) per scoring run
+9. **Evidence gate** (stocks only): checked against `validated_factors.py` — if indicators match
+   a validated pattern favoring the OPPOSITE direction, signal is downgraded to HOLD
+
+After gates, the signal hits the **risk engine** (`scoring/risk_engine.py`) which computes
+stop/target/position sizing across 4 prop-firm-modeled profiles. Signals where position resolves
+to zero units or R:R is below minimum are suppressed.
+
+## Accuracy penalty (`_apply_accuracy_penalty`, engine.py ~487-514)
+Assets with 3+ resolved signals since `ENGINE_CUTOFF` and <15% win rate get capped at 55%
+confidence; <30% win rate capped at 60%. Prevents the engine from repeatedly signaling losers.
+
+## Hybrid rules engine (`scoring/rules_engine.py`)
+Parallel scoring path — SELLs handled entirely by deterministic pattern-matching ($0 cost), BUYs
+escalated to Claude for confirmation. Uses the same gate stack as engine.py. Drop-in replacement
+for `score_stocks()` / `score_crypto()`.
+
+## Validated factors (`scoring/validated_factors.py`)
+Empirically derived from `analysis/factor_discovery.py` — 10-month study, 62 stocks, ~9,800
+observations, train/test split at 2026-03-15. Only patterns with test n>=100 are enforced.
+
+**Empirically validated (n>=100 out-of-sample):**
+- BUY: deep uptrend + MACD expanding, RSI>70 + MACD expanding, deep uptrend pullback,
+  RSI>70 + MACD contracting, healthy RSI + MACD recovering
+- SELL: fading momentum below SMA-50, fading momentum in flat trend, weak RSI + MACD
+  contracting, neutral RSI + MACD contracting, weak RSI + MACD expanding,
+  shallow recovery in flat trend
+
+**Theoretical (expanded BUY coverage, July 2026):** 6 additional moderate-condition BUY patterns
+(MACD crossovers, moderate uptrend continuation, oversold bounce). Not yet at n>=100 — marked
+"theoretical" and escalated to Claude for confirmation via hybrid engine.
+
+## Risk engine (`scoring/risk_engine.py`)
+Multi-profile prop-firm-modeled position sizing:
+- 4 profiles: retail_standard ($10k), 25k_prop_conservative, 50k_prop_moderate (default),
+  150k_prop_boss ($150k)
+- 10% slippage friction buffer on all sizing
+- Per-profile daily kill switches
+- Asset-class-specific R:R configs (stocks 2:1-3:1, crypto 2:1-3:1, options 2.5:1-3:1,
+  predictions 2:1-5:1)
+- ETF-to-futures translation (SPY→ES/MES, QQQ→NQ/MNQ)
+- Subscription tier gating (Pro: stocks+crypto, Elite: all)
+- 3:30 PM EST market cutoff for stock signals
+
+## Two-stage cost optimization (Haiku prescreen)
+- `scoring/haiku_prescreen.py` uses `claude-haiku-4-5-20251001` (~$0.001/call)
+- CORE_CRYPTO (BTC, ETH, SOL, XRP, ADA): scored directly with Sonnet (always high-signal)
+- TIER1_CRYPTO (48 coins): Haiku prescreen filters ~70-80%, only 65+ confidence escalates
+- Lower-tier coins: only scored if >5% daily move (`CRYPTO_MOVER_THRESHOLD = 5.0`)
+- Stock prescreen: core 9 tickers always Sonnet, rest Haiku-first
+
+## Key constants
+- `ENGINE_CUTOFF = "2026-07-04T11:00:00Z"` — signals before this are unreliable (data bugs)
+- `SIGNAL_COOLDOWN_H = 4` — skip if signal generated within 4 hours
+- `MAX_STOCK_SIGNALS_PER_DAY = 3` — hard cap on stock signals per calendar day
+- `STOCK_RVOL_MINIMUM = 2.5` / `HIGH_BETA_RVOL_MINIMUM = 3.5`
+- `HIGH_BETA_VOLATILITY_WATCHLIST = {AMD, NVDA, COIN, SMCI, AVGO}`
+
+## Files map
+- `scoring/engine.py` — main AI scoring, all gates, batch scoring functions
+- `scoring/rules_engine.py` — hybrid deterministic + AI escalation engine
+- `scoring/validated_factors.py` — empirical pattern table + evidence gate logic
+- `scoring/risk_engine.py` — position sizing, stop/target, prop profiles, kill switches
+- `scoring/haiku_prescreen.py` — cheap Haiku first-pass filter
+- `scoring/scanner.py` — stock/crypto screening (which tickers to score)
+- `scoring/price_data.py` — indicator-merging helper (fixes thin live-stream row problem)
+- `scoring/accuracy.py` — win rate tracking + `/accuracy` endpoint
+- `scoring/resolver.py` — signal outcome resolution (WIN/LOSS/EXPIRED)
+- `scoring/alert_evaluator.py` — price alert evaluation
+- `analysis/factor_discovery.py` — the empirical study that produced validated_factors
+- `analysis/claude_backtest.py` — backtesting engine (on Sonnet 4.6, not actively used)
+
 # CRYPTO-ONLY PIVOT (July 2026)
 Platform pivoted from stocks+crypto to **crypto-only** to focus on what's working and reduce costs.
 Stock features are **disabled and hidden, NOT deleted** — code stays intact for potential future re-enable.
