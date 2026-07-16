@@ -10,6 +10,10 @@ type TickerItem = {
   asset_type: string;
 };
 
+// Crypto-only pivot (July 2026): stock rows are hidden from the ticker unless
+// this flag is set. Code path kept intact for a future re-enable.
+const STOCKS_ENABLED = process.env.ENABLE_STOCK_TICKERS === "true";
+
 const TOP_STOCKS = [
   "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","JPM","V","UNH",
   "JNJ","WMT","MA","PG","HD","XOM","COST","AVGO","BAC","LLY",
@@ -60,7 +64,10 @@ async function fromRawPrices(marketOpen: boolean): Promise<TickerItem[]> {
     cryptoQuery.gte("captured_at", since);
   }
 
-  const [{ data: stocks }, { data: crypto }] = await Promise.all([stockQuery, cryptoQuery]);
+  const [{ data: stocks }, { data: crypto }] = await Promise.all([
+    STOCKS_ENABLED ? stockQuery : Promise.resolve({ data: [] as TickerItem[] }),
+    cryptoQuery,
+  ]);
 
   const dedup = (rows: TickerItem[] | null) => {
     const seen = new Set<string>();
@@ -275,7 +282,9 @@ export async function GET() {
 
   const [rawItems, liveStockItems, liveCryptoItems] = await Promise.all([
     fromRawPrices(marketOpen).catch(() => [] as TickerItem[]),
-    marketOpen ? liveStocks().catch(() => [] as TickerItem[]) : Promise.resolve([]),
+    STOCKS_ENABLED && marketOpen
+      ? liveStocks().catch(() => [] as TickerItem[])
+      : Promise.resolve([]),
     liveCrypto().catch(() => [] as TickerItem[]),
   ]);
 

@@ -2,8 +2,8 @@
 
 /**
  * Interactive asset-detail card for the landing bento.
- * Starts as a static NVDA snapshot; on "Connect live" it fetches the real
- * NVDA quote from /api/ticker and redraws the chart anchored to the
+ * Starts as a static BTC snapshot; on "Connect live" it fetches the real
+ * BTC quote from /api/landing-quote and redraws the chart anchored to the
  * real previous-close → current price.
  */
 
@@ -14,9 +14,14 @@ const RANGES = ["1D", "1W", "1M", "3M", "1Y"];
 
 // Static fallback snapshot (shown before the user connects live data).
 const SNAPSHOT = {
-  price: 138.42,
-  change: 2.34,
+  price: 117842,
+  change: 1.62,
 };
+
+function formatPrice(n: number) {
+  if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 // Decorative starting path (matches the previous static design).
 const SNAPSHOT_VALUES = [
@@ -80,7 +85,7 @@ export default function AssetShot() {
     setLoading(true);
     setError(false);
     try {
-      const res = await fetch("/api/landing-quote?symbol=NVDA");
+      const res = await fetch("/api/landing-quote?symbol=BTC");
       if (!res.ok) throw new Error("bad response");
       const data = (await res.json()) as {
         price: number;
@@ -131,7 +136,7 @@ export default function AssetShot() {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-mono text-base font-semibold text-white">
-              NVDA
+              BTC
             </span>
             <span className="rounded border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
               BUY
@@ -147,12 +152,12 @@ export default function AssetShot() {
             )}
           </div>
           <div className="mt-0.5 text-[11px] text-zinc-500">
-            NVIDIA Corporation
+            Bitcoin
           </div>
         </div>
         <div className="text-right">
           <div className="font-mono text-base font-semibold tabular-nums text-white">
-            ${quote.price.toFixed(2)}
+            ${formatPrice(quote.price)}
           </div>
           <div
             className={`font-mono text-[11px] tabular-nums ${
@@ -236,7 +241,7 @@ export default function AssetShot() {
         </div>
         <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
           <div className="font-mono text-sm font-semibold tabular-nums text-white">
-            71%
+            74%
           </div>
           <div className="text-[9px] text-zinc-500">Win rate</div>
         </div>

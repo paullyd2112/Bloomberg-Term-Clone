@@ -10,11 +10,11 @@ type TickerItem = {
 };
 
 const DISPLAY = [
-  { symbol: "NVDA", asset: "Equity", dir: "BUY" },
-  { symbol: "BTC", asset: "Crypto", dir: "BUY" },
-  { symbol: "TSLA", asset: "Equity", dir: "SELL" },
-  { symbol: "ETH", asset: "Crypto", dir: "BUY" },
-  { symbol: "SOL", asset: "Crypto", dir: "BUY" },
+  { symbol: "BTC", asset: "Bitcoin", dir: "BUY" },
+  { symbol: "ETH", asset: "Ethereum", dir: "BUY" },
+  { symbol: "SOL", asset: "Solana", dir: "BUY" },
+  { symbol: "XRP", asset: "XRP", dir: "SELL" },
+  { symbol: "ADA", asset: "Cardano", dir: "BUY" },
 ] as const;
 
 function formatPrice(n: number) {

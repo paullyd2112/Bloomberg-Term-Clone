@@ -3,10 +3,10 @@ import type { Metadata } from "next";
 import {
   Zap,
   Landmark,
-  Waves,
   Sunrise,
-  Wallet,
   Target,
+  Dices,
+  BellRing,
   ArrowUpRight,
   CircleCheck,
   ShieldCheck,
@@ -21,9 +21,9 @@ import DashboardShot from "@/components/landing/showcase/DashboardShot";
 import AssetShot from "@/components/landing/showcase/AssetShot";
 
 export const metadata: Metadata = {
-  title: "Plebs · Hedge fund tools. Retail prices.",
+  title: "Plebs · 24/7 AI crypto signals, tracked to outcome.",
   description:
-    "Real-time AI signals for stocks, crypto, and prediction markets. Congressional trade tracker, options flow, morning briefing. Wall Street's toolkit, finally for everyone.",
+    "AI signals for BTC, ETH, and 50+ coins, rescored around the clock. Polymarket prediction-market edge, congressional trades, and a morning briefing. Every call tracked to outcome.",
 };
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ function SectionLabel({ index, children }: { index: string; children: React.Reac
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
-const COVERAGE = ["Stocks", "Crypto", "Options Flow", "Polymarket", "Congress"];
+const COVERAGE = ["Crypto", "Polymarket", "Congress"];
 
 function Hero() {
   return (
@@ -100,18 +100,19 @@ function Hero() {
               <span className="font-mono uppercase tracking-[0.18em] text-[10px] text-emerald-400">
                 Live
               </span>
-              <span className="text-muted-foreground">Markets open · signals updating</span>
+              <span className="text-muted-foreground">Crypto 24/7 · signals updating</span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-semibold text-white leading-[1.03] tracking-tightest text-balance">
-              Hedge fund tools.
+              Crypto never sleeps.
               <br />
-              <span className="text-gradient-emerald">Retail prices.</span>
+              <span className="text-gradient-emerald">Neither does your analyst.</span>
             </h1>
 
             <p className="mt-6 text-lg text-secondary-foreground max-w-md leading-relaxed text-pretty">
-              Real-time AI signals across stocks, crypto, and prediction markets,
-              plus options flow, congressional trades, and a morning briefing. One terminal.
+              AI-scored BUY/SELL signals on BTC, ETH, and 50+ coins, rescored around
+              the clock — with confidence, reasoning, and a win rate you can check.
+              Plus Polymarket edge and a morning briefing in your inbox.
             </p>
 
             <div className="mt-9 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -168,11 +169,11 @@ function Showcase() {
         <Reveal className="max-w-2xl mb-10">
           <SectionLabel index="01">The terminal</SectionLabel>
           <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
-            The whole desk, on one screen
+            The whole crypto desk, on one screen
           </h2>
           <p className="text-secondary-foreground mt-4 leading-relaxed">
-            Signals, confidence, and reasoning in a single view. This is the
-            live terminal you get the moment you sign in.
+            Signals, confidence, reasoning, and live win rates in a single view.
+            This is the terminal you get the moment you sign in.
           </p>
         </Reveal>
 
@@ -192,9 +193,9 @@ function Showcase() {
 
 function Stats() {
   const items = [
-    { value: "3",     label: "Markets covered" },
+    { value: "50+",   label: "Coins scored" },
+    { value: "12×",   label: "Scoring runs per day" },
     { value: "7a",    label: "Daily briefing, ET" },
-    { value: "60+",   label: "Assets tracked" },
     { value: "14d",   label: "Trial period" },
   ];
 
@@ -219,20 +220,14 @@ function Stats() {
 const FEATURES = [
   {
     icon: Zap,
-    title: "Real-time AI signals",
-    desc: "Model-driven analysis across stocks, crypto, and Polymarket contracts. BUY, SELL, YES, NO, each with a confidence score and the reasoning behind it.",
+    title: "24/7 AI crypto signals",
+    desc: "BUY/SELL calls on BTC, ETH, SOL, and 50+ coins, rescored every two hours around the clock — each with a confidence score and the reasoning behind it.",
     span: "lg:col-span-3",
   },
   {
-    icon: Landmark,
-    title: "Congressional trades",
-    desc: "STOCK Act disclosures for every House and Senate member, surfaced before the headlines.",
-    span: "lg:col-span-3",
-  },
-  {
-    icon: Waves,
-    title: "Options & dark pool flow",
-    desc: "Unusual sweeps and block trades flagged in real time. Follow the smart money early.",
+    icon: Dices,
+    title: "Prediction-market edge",
+    desc: "AI scans live Polymarket contracts for mispriced odds. YES/NO calls with the edge spelled out, not just a probability.",
     span: "lg:col-span-3",
   },
   {
@@ -242,15 +237,21 @@ const FEATURES = [
     span: "lg:col-span-3",
   },
   {
-    icon: Wallet,
-    title: "Portfolio tracker",
-    desc: "Log entries, track P&L, and measure your positions against the signals that called them.",
+    icon: Target,
+    title: "Accuracy, tracked",
+    desc: "Every signal is tracked to outcome, so you see real win rates per coin, not vibes. Misses included.",
     span: "lg:col-span-3",
   },
   {
-    icon: Target,
-    title: "Accuracy per asset",
-    desc: "Every signal is tracked to outcome, so you see real win rates per ticker, not vibes.",
+    icon: Landmark,
+    title: "Congressional trades",
+    desc: "STOCK Act disclosures for every House and Senate member, surfaced before the headlines.",
+    span: "lg:col-span-3",
+  },
+  {
+    icon: BellRing,
+    title: "Price & signal alerts",
+    desc: "Push notifications the moment a high-confidence signal fires or a price level you set gets hit.",
     span: "lg:col-span-3",
   },
 ];
@@ -262,11 +263,11 @@ function Features() {
         <Reveal className="max-w-2xl mb-12">
           <SectionLabel index="02">What you get</SectionLabel>
           <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
-            The institutional stack, in one tab
+            A full crypto desk, in one tab
           </h2>
           <p className="text-secondary-foreground mt-4 leading-relaxed">
-            Stop juggling six subscriptions. Signals, flow, filings, and briefings:
-            the full toolkit, priced for retail.
+            Stop juggling six subscriptions. Signals, prediction markets, filings,
+            and briefings: the full toolkit, priced for retail.
           </p>
         </Reveal>
 
@@ -277,7 +278,7 @@ function Features() {
               <div className="border-b border-white/[0.06] px-6 pt-6 pb-2">
                 <h3 className="text-white font-medium">Asset intelligence</h3>
                 <p className="text-muted-foreground text-sm mt-1 leading-relaxed">
-                  Price action, AI score, and flow for every ticker.
+                  Price action, AI score, and tracked accuracy for every coin.
                 </p>
               </div>
               <div className="px-4 pb-4 pt-2">
@@ -324,17 +325,17 @@ const PLANS = [
     name:      "Pro",
     price:     "$40",
     period:    "/mo",
-    blurb:     "Everything you need to trade stocks & crypto with an edge.",
+    blurb:     "Everything you need to trade crypto with an edge.",
     highlight: false,
     cta:       "Start 14-day trial",
     href:      "/signup",
     features: [
-      "Real-time AI signals for stocks & crypto",
+      "24/7 AI signals for BTC, ETH & 50+ coins",
+      "Confidence scores + full reasoning",
+      "Win rates tracked per coin",
       "Unlimited watchlist",
-      "Unusual options flow",
-      "Congressional trade tracker",
       "Morning briefing email",
-      "Portfolio tracker + P&L",
+      "Congressional trade tracker",
       "Price & signal alerts",
     ],
   },
@@ -352,7 +353,7 @@ const PLANS = [
       "AI finds mispriced contracts",
       "Pleby, your AI trading analyst, on call",
       "Personalised morning briefing",
-      "On-demand AI analysis — score any ticker",
+      "On-demand AI analysis — score any coin",
     ],
   },
 ];
@@ -437,7 +438,7 @@ function Pricing() {
 const FAQS = [
   {
     q: "What exactly is Plebs?",
-    a: "Plebs is an AI-powered trading terminal for retail investors. We run models across stocks, crypto, and options flow to generate real-time BUY/SELL signals with confidence scores and full reasoning. Think Bloomberg Terminal meets AI analyst, priced for normal people.",
+    a: "Plebs is an AI-powered crypto signal terminal for retail traders. We run AI models over live technicals, news, and market structure to generate BUY/SELL signals on 50+ coins — around the clock, each with a confidence score and full reasoning. Think Bloomberg Terminal meets AI analyst, priced for normal people.",
   },
   {
     q: "Is this financial advice?",
@@ -449,11 +450,11 @@ const FAQS = [
   },
   {
     q: "What markets do you cover?",
-    a: "Stocks, crypto, and unusual options flow. We track 60+ assets and expanding. Congressional trades, insider filings, and a daily morning briefing round it out.",
+    a: "Crypto first: BTC, ETH, SOL, and 50+ coins, rescored around the clock. Elite adds Polymarket prediction markets — AI-scored YES/NO calls on real-world events. Congressional trade disclosures and a daily morning briefing round it out.",
   },
   {
     q: "How accurate are the signals?",
-    a: "Every signal is tracked to outcome. You can see real win rates per ticker on the dashboard. No cherry-picking, no hiding misses. Full transparency is the whole point.",
+    a: "Every signal is tracked to outcome. You can see real win rates per coin on the dashboard. No cherry-picking, no hiding misses. Full transparency is the whole point.",
   },
 ];
 
@@ -500,9 +501,9 @@ function CTAStrip() {
 
         <div className="relative px-6 sm:px-12 py-16 text-center">
           <h2 className="text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
-            Trade with an edge tomorrow morning.
+            The market never closes. Your edge shouldn&apos;t either.
           </h2>
-          <p className="text-secondary-foreground mt-4">14-day trial. Real-time signals from day one.</p>
+          <p className="text-secondary-foreground mt-4">14-day trial. Signals around the clock from day one.</p>
 
           <Link
             href="/signup"
@@ -514,8 +515,8 @@ function CTAStrip() {
 
           <div className="mt-12 pt-10 border-t border-white/[0.06] max-w-md mx-auto">
             <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
-              Not ready? Get the free daily newsletter. Markets in plain English,
-              every weekday morning.
+              Not ready? Get the free daily newsletter. Crypto and prediction
+              markets in plain English, every weekday morning.
             </p>
             <NewsletterSignup />
           </div>
@@ -571,7 +572,7 @@ function Footer() {
               plebs<span className="text-emerald-400">.finance</span>
             </div>
             <p className="mt-3 text-sm text-muted-foreground leading-relaxed max-w-xs">
-              Hedge fund tools. Retail prices.
+              24/7 AI crypto signals, tracked to outcome.
             </p>
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
               <span className="relative flex h-1.5 w-1.5">

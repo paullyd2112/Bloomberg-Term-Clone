@@ -3,58 +3,58 @@
  * Presentational only — mirrors the real signal feed styling.
  */
 
-import { Zap, Landmark, Waves, Search, Sunrise, type LucideIcon } from "lucide-react";
+import { Zap, Dices, Landmark, Search, Sunrise, type LucideIcon } from "lucide-react";
 
 const NAV: { label: string; icon: LucideIcon; active: boolean }[] = [
   { label: "Signals", icon: Zap, active: true },
+  { label: "Predictions", icon: Dices, active: false },
   { label: "Congress", icon: Landmark, active: false },
-  { label: "Options", icon: Waves, active: false },
   { label: "Screener", icon: Search, active: false },
   { label: "Briefing", icon: Sunrise, active: false },
 ];
 
 const STATS = [
-  { label: "Win rate", value: "68%", tone: "up" as const },
-  { label: "Signals today", value: "24" },
-  { label: "Avg confidence", value: "74%" },
-  { label: "Open positions", value: "12" },
+  { label: "Win rate", value: "74%", tone: "up" as const },
+  { label: "Signals today", value: "18" },
+  { label: "Avg confidence", value: "78%" },
+  { label: "Coins tracked", value: "53" },
 ];
 
 const SIGNALS = [
   {
     dir: "BUY",
     tone: "up" as const,
-    symbol: "NVDA",
-    asset: "Equity",
+    symbol: "BTC",
+    asset: "Crypto",
     confidence: 86,
     reasoning:
-      "Accelerating datacenter demand and options flow skewed heavily to calls into earnings.",
+      "RSI 63 with an expanding MACD histogram — validated momentum continuation as BTC leads a broad crypto bid.",
     horizon: "Swing",
-    price: "$138.42",
+    price: "$117,842",
     time: "2m ago",
     outcome: "WIN",
   },
   {
     dir: "SELL",
     tone: "down" as const,
-    symbol: "TSLA",
-    asset: "Equity",
-    confidence: 71,
+    symbol: "ETH",
+    asset: "Crypto",
+    confidence: 76,
     reasoning:
-      "Deliveries miss and deteriorating margins; momentum rolling over below the 50-day.",
+      "MACD histogram contracting from overbought RSI; alt strength fading while BTC dominance climbs.",
     horizon: "Intraday",
-    price: "$246.10",
+    price: "$3,412",
     time: "8m ago",
     outcome: "PENDING",
   },
   {
     dir: "YES",
     tone: "up" as const,
-    symbol: "FED-CUT-MAR",
+    symbol: "FED-CUT-SEP",
     asset: "Prediction",
-    confidence: 63,
+    confidence: 78,
     reasoning:
-      "Softening CPI print and dovish commentary repricing March odds higher.",
+      "Softening CPI print and dovish commentary repricing September cut odds above the market's 41¢.",
     horizon: "Long-term",
     price: "41.0%",
     time: "15m ago",

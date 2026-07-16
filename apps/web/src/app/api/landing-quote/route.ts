@@ -18,10 +18,16 @@ type QuoteResult = {
 
 // ─── Primary: Yahoo Finance chart API (keyless, includes intraday series) ──────
 
+// Crypto symbols we surface — Yahoo wants "BTC-USD", FMP wants "BTCUSD".
+const CRYPTO_SYMBOLS = new Set([
+  "BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "AVAX", "LINK", "DOT", "LTC",
+]);
+
 async function fromYahoo(symbol: string): Promise<QuoteResult | null> {
+  const yahooSymbol = CRYPTO_SYMBOLS.has(symbol) ? `${symbol}-USD` : symbol;
   try {
     const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1d&interval=15m`,
+      `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?range=1d&interval=15m`,
       {
         headers: {
           "User-Agent":
@@ -65,9 +71,10 @@ async function fromYahoo(symbol: string): Promise<QuoteResult | null> {
 async function fromFmp(symbol: string): Promise<QuoteResult | null> {
   const key = process.env.FMP_API_KEY;
   if (!key) return null;
+  const fmpSymbol = CRYPTO_SYMBOLS.has(symbol) ? `${symbol}USD` : symbol;
   try {
     const res = await fetch(
-      `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${key}`,
+      `https://financialmodelingprep.com/api/v3/quote/${fmpSymbol}?apikey=${key}`,
       { signal: AbortSignal.timeout(8000) },
     );
     if (!res.ok) return null;
@@ -113,9 +120,9 @@ async function fromFinnhub(symbol: string): Promise<QuoteResult | null> {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const raw = (searchParams.get("symbol") ?? "NVDA").toUpperCase();
+  const raw = (searchParams.get("symbol") ?? "BTC").toUpperCase();
   // Guard against abuse: only allow simple ticker symbols.
-  const symbol = /^[A-Z.]{1,6}$/.test(raw) ? raw : "NVDA";
+  const symbol = /^[A-Z.]{1,6}$/.test(raw) ? raw : "BTC";
 
   const quote =
     (await fromYahoo(symbol)) ??
