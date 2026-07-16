@@ -34,11 +34,11 @@ export default function UpgradeButtons({ planTier }: { planTier: "pro" | "elite"
       if (data.url) {
         window.location.href = data.url;
       } else {
-        setError(data.error || "Checkout failed — please try again.");
+        setError(data.error || "Checkout failed. Please try again.");
         setLoading(false);
       }
     } catch (err) {
-      setError("Network error — please try again.");
+      setError("Network error. Please try again.");
       setLoading(false);
     }
   }

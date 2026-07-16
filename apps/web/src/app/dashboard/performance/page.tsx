@@ -167,7 +167,7 @@ export default async function PerformancePage() {
 
       <p className="text-zinc-600 text-xs">
         Based on positions you&apos;ve logged and closed. Returns are calculated
-        against capital deployed per trade — not a portfolio-weighted return.
+        against capital deployed per trade, not a portfolio-weighted return.
       </p>
     </div>
   );

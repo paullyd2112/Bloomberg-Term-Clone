@@ -97,7 +97,7 @@ export default function LoginForm() {
         <h2 className="text-white font-semibold">Check your email for a sign-in link</h2>
         <p className="text-secondary-foreground text-sm leading-relaxed">
           We sent a magic link to <span className="text-white">{email}</span>.
-          Click it to sign in — no password needed.
+          Click it to sign in. No password needed.
         </p>
         <button
           onClick={() => setMagicLinkSent(false)}
@@ -218,7 +218,7 @@ export default function LoginForm() {
           </button>
 
           <p className="text-xs text-muted-foreground leading-relaxed">
-            We&apos;ll email you a link that signs you in instantly — no password required.
+            We&apos;ll email you a link that signs you in instantly. No password required.
           </p>
         </form>
       )}

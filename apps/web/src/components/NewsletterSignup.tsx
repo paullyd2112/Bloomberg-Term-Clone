@@ -39,7 +39,7 @@ export default function NewsletterSignup() {
   if (status === "already_subscribed") {
     return (
       <p className="text-zinc-400 font-medium text-sm">
-        You&apos;re already subscribed — check your inbox tomorrow before market open.
+        You&apos;re already subscribed. Check your inbox tomorrow morning.
       </p>
     );
   }

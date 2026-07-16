@@ -191,7 +191,7 @@ function PlanCard({
           <span className="text-sm font-normal text-zinc-500">/mo</span>
         </div>
         <div className="text-xs text-zinc-500 mt-1">
-          ${price.quarterly}/quarter — save ${savingsPerQuarter}
+          ${price.quarterly}/quarter · save ${savingsPerQuarter}
         </div>
       </div>
 

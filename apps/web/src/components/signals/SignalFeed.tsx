@@ -8,7 +8,9 @@ import { type Signal } from "./SignalCard";
 
 const TABS = [
   { id: "all",        label: "All" },
-  { id: "stock",      label: "Stocks" },
+  // Crypto-only pivot (July 2026): stock scoring is off, tab hidden so the
+  // filter bar doesn't advertise an empty feed. Restore when stocks return.
+  // { id: "stock",   label: "Stocks" },
   { id: "crypto",     label: "Crypto" },
   { id: "prediction", label: "Predictions" },
 ] as const;

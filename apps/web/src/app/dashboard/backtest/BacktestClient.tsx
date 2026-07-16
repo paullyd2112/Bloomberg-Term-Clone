@@ -194,7 +194,7 @@ export default function BacktestClient() {
         {/* Confidence slider */}
         <div className="space-y-1">
           <label className="text-xs text-zinc-400">
-            Min confidence — <span className="text-white font-semibold">{params.min_confidence}%</span>
+            Min confidence: <span className="text-white font-semibold">{params.min_confidence}%</span>
           </label>
           <input
             type="range"

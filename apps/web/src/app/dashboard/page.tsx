@@ -203,7 +203,7 @@ export default async function DashboardPage() {
           <h1 className="text-xl font-semibold tracking-tight text-white">Signals</h1>
         </div>
         <p className="text-sm text-zinc-500">
-          Live AI signals across stocks, crypto, and prediction markets — updating in real time.
+          Live AI signals across crypto and prediction markets, updating around the clock.
         </p>
       </header>
 
@@ -221,7 +221,7 @@ export default async function DashboardPage() {
             </span>
             <div>
               <p className="text-sm font-medium text-white">Signals are being analyzed</p>
-              <p className="text-xs text-zinc-500 mt-0.5">{pending} signal{pending === 1 ? "" : "s"} pending resolution — win rate will appear once signals resolve</p>
+              <p className="text-xs text-zinc-500 mt-0.5">{pending} signal{pending === 1 ? "" : "s"} pending resolution. Win rate will appear once signals resolve</p>
               <p className="text-xs text-zinc-600 mt-0.5">Signals typically resolve within 6–24 hours depending on the time horizon.</p>
             </div>
           </div>

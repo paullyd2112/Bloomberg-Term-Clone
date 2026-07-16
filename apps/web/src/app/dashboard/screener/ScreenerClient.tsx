@@ -132,8 +132,10 @@ export default function ScreenerClient() {
 
         <div className="flex flex-wrap gap-x-6 gap-y-3">
           <FilterGroup label="Asset">
+            {/* Crypto-only pivot (July 2026): "Stocks" option hidden while
+                stock scoring is off. AssetFilter type kept for re-enable. */}
             <Segmented
-              options={[["all", "All"], ["stock", "Stocks"], ["crypto", "Crypto"]] as const}
+              options={[["all", "All"], ["crypto", "Crypto"]] as const}
               value={filters.asset}
               onChange={(v) => set("asset", v as AssetFilter)}
             />

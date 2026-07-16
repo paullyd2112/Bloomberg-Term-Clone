@@ -130,7 +130,7 @@ export default function SignupForm() {
         </div>
 
         <button type="submit" disabled={loading} className={PRIMARY_BTN}>
-          {loading ? "Creating account…" : "Create account — 14-day trial"}
+          {loading ? "Creating account…" : "Create account, 14-day trial"}
         </button>
       </form>
 

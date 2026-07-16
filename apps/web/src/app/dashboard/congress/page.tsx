@@ -86,7 +86,7 @@ export default function CongressPage() {
           <h1 className="text-xl font-semibold tracking-tight text-white">Congress Tracker</h1>
         </div>
         <p className="text-zinc-500 text-sm">
-          STOCK Act disclosures — House &amp; Senate trades.
+          STOCK Act disclosures. House &amp; Senate trades.
         </p>
       </div>
 

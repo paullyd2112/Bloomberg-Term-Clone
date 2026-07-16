@@ -243,7 +243,7 @@ export default async function HistoryPage({
             <h1 className="text-xl font-semibold tracking-tight text-white">Pleby Trade History</h1>
           </div>
           <p className="text-sm text-zinc-500">
-            Full signal track record — live trades and backtests since engine v2 launch.
+            Full signal track record. Live trades and backtests since engine v2 launch.
           </p>
         </div>
         <Link
@@ -498,7 +498,7 @@ export default async function HistoryPage({
       </section>
 
       <p className="text-zinc-700 text-xs">
-        AI analysis only — not financial advice. Past signal outcomes do not
+        AI analysis only, not financial advice. Past signal outcomes do not
         guarantee future results. Backtest results reflect simulated trades on historical data.
       </p>
     </div>

@@ -68,7 +68,7 @@ export default async function BriefingPage() {
           </span>
           <h2 className="text-white font-semibold text-lg tracking-tight">Morning Briefing</h2>
           <p className="text-zinc-400 text-sm leading-relaxed max-w-md">
-            A daily AI-generated market brief lands in your inbox every weekday morning — covering top signals, macro context, and trade ideas. Pro and Elite only.
+            A daily AI-generated market brief lands in your inbox every weekday morning, covering top signals, macro context, and trade ideas. Pro and Elite only.
           </p>
           <Link
             href="/dashboard/upgrade"
@@ -85,7 +85,7 @@ export default async function BriefingPage() {
   if (briefings.length === 0) {
     return (
       <div className="p-6 text-zinc-500 text-sm">
-        No briefings yet — the first one generates on the next weekday at 8:30am ET.
+        No briefings yet. The first one generates on the next weekday at 8:30am ET.
       </div>
     );
   }

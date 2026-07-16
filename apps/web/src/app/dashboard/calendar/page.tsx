@@ -147,7 +147,7 @@ export default function CalendarPage() {
       {/* Header */}
       <div className="mb-6 flex flex-col gap-1">
         <h1 className="text-xl font-semibold tracking-tight text-white">Economic Calendar</h1>
-        <p className="text-zinc-500 text-sm">Next 30 days — macro events and earnings.</p>
+        <p className="text-zinc-500 text-sm">Next 30 days: macro events and earnings.</p>
       </div>
 
       {/* Filter tabs */}

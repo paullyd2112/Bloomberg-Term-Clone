@@ -85,7 +85,7 @@ export default function InsidersPage() {
           <h1 className="text-xl font-semibold tracking-tight text-white">Insider Trades</h1>
         </div>
         <p className="text-zinc-500 text-sm">
-          SEC Form 4 — officer &amp; director buys and sells (filed within 2 days).
+          SEC Form 4: officer &amp; director buys and sells (filed within 2 days).
         </p>
       </div>
 

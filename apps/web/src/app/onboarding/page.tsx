@@ -196,7 +196,7 @@ export default function OnboardingPage() {
           <div className="space-y-6">
             <div>
               <h1 className="text-2xl font-bold text-white">What markets do you trade?</h1>
-              <p className="text-zinc-500 text-sm mt-1">Select all that apply — pick at least one.</p>
+              <p className="text-zinc-500 text-sm mt-1">Select all that apply, pick at least one.</p>
             </div>
 
             <div className="space-y-3">
@@ -241,7 +241,7 @@ export default function OnboardingPage() {
               <div>
                 <div className="font-semibold text-white text-sm">Daily morning briefing</div>
                 <div className="text-xs text-zinc-400 mt-0.5">
-                  Market recap, AI signals, and trade ideas — delivered before market open on weekdays
+                  Market recap, AI signals, and trade ideas, delivered every weekday morning
                 </div>
               </div>
             </label>
@@ -276,7 +276,7 @@ export default function OnboardingPage() {
               <h1 className="text-2xl font-bold text-white">You&apos;re all set!</h1>
               <p className="text-zinc-400 text-sm mt-2">
                 One more step: choose a plan to get started. Credit card required
-                — cancel anytime during your 14-day trial and you won&apos;t be charged.
+                and you can cancel anytime during your 14-day trial without being charged.
               </p>
             </div>
 
