@@ -22,7 +22,7 @@ from prompts import options_flow as options_prompt
 
 load_dotenv()
 
-MODEL              = "claude-sonnet-4-6"
+MODEL              = "claude-sonnet-5"
 SIGNAL_COOLDOWN_H  = 4      # skip if signal generated within this many hours
 MAX_TOKENS         = 1024
 ENGINE_CUTOFF      = "2026-07-04T11:00:00Z"  # signals before this date are unreliable

@@ -61,6 +61,50 @@
       `generate_newsletter()`, plus a real regeneration retry (`job_send_newsletter_retry()`) instead of
       the old 7:45am job just re-sending nothing.
 
+# CRYPTO-ONLY PIVOT (July 2026)
+Platform pivoted from stocks+crypto to **crypto-only** to focus on what's working and reduce costs.
+Stock features are **disabled and hidden, NOT deleted** — code stays intact for potential future re-enable.
+
+**What changed:**
+- Stock scoring scheduler jobs: wrap in `ENABLE_STOCK_SCORING=true` env var check (default off)
+- Sidebar nav: hide Congress and Insiders links (stock-only features)
+- SignalFeed TABS: remove "Stocks" tab from the filter bar
+- Screener: hide stock-specific filters
+- Stock code (ingestion, scoring, prompts) stays intact — just not scheduled or visible
+
+**What stays active:**
+- Crypto scoring: every 2h (12x/day) — CORE_CRYPTO (BTC, ETH, SOL, XRP, ADA) scored directly,
+  TIER1_CRYPTO (48 coins) prescreened with Haiku first, lower-tier coins only if >5% daily move
+- Prediction markets: 2x/day via Polymarket
+- News ingestion: continues (serves crypto + predictions)
+- Congressional trades: stays active (still useful context, low cost)
+- Newsletter/briefings: continue, content shifts to crypto+predictions focus
+
+**Rationale:** Crypto signals were consistently strong in backtests (88-94% win rate, small n). Stock
+signals had fundamental data pipeline bugs (see ALGO section) and BUY-side edge was unproven (31-37%).
+$30 API budget constraint makes crypto-only the right call — revisit stocks when revenue supports it.
+
+# MODEL: SONNET 5 (switched July 2026)
+All Claude API calls (scoring, briefings, newsletter, elite briefing) switched from `claude-sonnet-4-6`
+to `claude-sonnet-5`. Haiku prescreen stays on `claude-haiku-4-5-20251001` (unchanged).
+
+**Files changed:** `scoring/engine.py`, `briefing/generator.py`, `briefing/newsletter.py`,
+`briefing/elite_briefing.py`. Backtest engine (`analysis/claude_backtest.py`) left on Sonnet 4.6
+deliberately — not actively used, update separately if rerunning backtests.
+
+**Cost impact (crypto-only, Sonnet 5 introductory pricing through Aug 31 2026):**
+- Introductory: $2/M input, $10/M output (vs Sonnet 4.6 standard $3/$15)
+- Sonnet 5 tokenizer produces ~1.0-1.35x more tokens for same content
+- Net effect: roughly break-even to slightly cheaper than Sonnet 4.6 during intro period
+- Estimated daily cost: ~$0.15-0.30/day (~$6-12/month) for crypto+predictions+briefings+newsletter
+- After intro period (post Aug 31): $3/$15 (same as Sonnet 4.6 was), so no cost increase
+
+**Two-stage scoring pipeline (cost optimization):**
+- CORE_CRYPTO (BTC, ETH, SOL, XRP, ADA): scored directly with Sonnet 5 (always high-signal)
+- TIER1_CRYPTO (48 coins): Haiku prescreen (~$0.001/call) filters ~70-80%, only 65+ confidence
+  escalates to Sonnet 5 for full scoring
+- Lower-tier coins: only scored if >5% daily move (CRYPTO_MOVER_THRESHOLD = 5.0)
+
 # POST-LAUNCH UPGRADE CHECKLIST (trigger: 10 paying users, not free signups)
 Everything below is currently on a free/cheapest tier to keep costs at zero pre-revenue. Once there are
 10 real paying subscribers, revisit each of these — the free-tier constraints (rate limits, delayed data,

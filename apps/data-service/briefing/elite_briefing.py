@@ -134,7 +134,7 @@ def _generate_summary(watchlist: list[dict], signals: list[dict], news: list[dic
 
     try:
         response = _anthropic.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5",
             max_tokens=800,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": "\n".join(parts)}],
