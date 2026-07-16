@@ -16,6 +16,7 @@ import NewsletterSignup from "@/components/NewsletterSignup";
 import TickerBar from "@/components/TickerBar";
 import LiveSignalFeed from "@/components/LiveSignalFeed";
 import Reveal from "@/components/landing/Reveal";
+import LiveWinRate from "@/components/landing/LiveWinRate";
 import BrowserFrame from "@/components/landing/showcase/BrowserFrame";
 import DashboardShot from "@/components/landing/showcase/DashboardShot";
 import AssetShot from "@/components/landing/showcase/AssetShot";
@@ -131,8 +132,11 @@ function Hero() {
               </Link>
             </div>
 
+            {/* Live accuracy proof */}
+            <LiveWinRate />
+
             {/* Coverage bar */}
-            <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-2">
               <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">
                 Covering
               </span>
