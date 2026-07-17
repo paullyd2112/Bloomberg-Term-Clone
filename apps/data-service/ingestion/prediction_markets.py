@@ -1,5 +1,5 @@
 """
-Prediction markets ingestion — Polymarket (Kalshi temporarily disabled).
+Prediction markets ingestion — Polymarket only.
 Runs every 30 minutes via scheduler.
 """
 
@@ -25,11 +25,6 @@ NEWS_API_KEY       = os.environ.get("NEWS_API_KEY", "")
 KALSHI_API_KEY     = os.environ.get("KALSHI_API_KEY", "")
 KALSHI_PRIVATE_KEY = os.environ.get("KALSHI_PRIVATE_KEY", "")
 
-# Kalshi's RSA-PSS signing handshake fails in production with credentials
-# confirmed present -- root cause unresolved without server-side log access.
-# Disabled (not removed) so this is a one-line flip once debugged, rather than
-# a rebuild. Polymarket has no auth at all, so it's a far smaller failure
-# surface and is carrying prediction markets alone for now.
 KALSHI_ENABLED = False
 
 KALSHI_BASE        = "https://api.elections.kalshi.com/trade-api/v2"

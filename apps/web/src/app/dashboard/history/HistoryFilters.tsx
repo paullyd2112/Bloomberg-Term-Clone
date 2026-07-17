@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { clsx } from "clsx";
 
-const ASSET_TYPES = ["all", "stock", "crypto"] as const;
+const ASSET_TYPES = ["all", "crypto", "prediction"] as const;
 const OUTCOMES    = ["all", "WIN", "LOSS", "NEUTRAL"] as const;
 const HORIZONS    = ["all", "intraday", "swing", "longterm"] as const;
 

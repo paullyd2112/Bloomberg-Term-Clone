@@ -21,6 +21,7 @@ from ingestion.geopolitics_news import ingest_geopolitics_news
 from ingestion.crypto_momentum import ingest_momentum_coins
 from scoring.engine import score_prediction_markets
 from scoring.rules_engine import score_crypto_rules
+from scoring.whale_sentinel import ingest_whale_alerts, get_recent_whale_alerts
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
 from briefing.newsletter import generate_newsletter
@@ -77,6 +78,9 @@ def job_ingest_crypto():
 
 def job_score_crypto():
     return score_crypto_rules()
+
+def job_ingest_whale_alerts():
+    return ingest_whale_alerts()
 
 def job_seed_macro_events():
     return seed_macro_events()
@@ -284,6 +288,10 @@ scheduler.add_job(lambda: _run_job("ingest_crypto", job_ingest_crypto),
                   CronTrigger(minute=0, hour="*/2"), id="ingest_crypto")
 scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
                   CronTrigger(minute=20, hour="*/2"), id="score_crypto")
+
+# Whale Sentinel — poll Polymarket CLOB for large trades every 5 min
+scheduler.add_job(lambda: _run_job("ingest_whale_alerts", job_ingest_whale_alerts),
+                  IntervalTrigger(minutes=5), id="ingest_whale_alerts")
 
 # Crypto momentum screener — every 2 hours, catches pumps/breakouts outside watchlist
 scheduler.add_job(lambda: _run_job("crypto_momentum", job_crypto_momentum),
@@ -580,6 +588,7 @@ def run_job_manual(job_name: str):
         "generate_newsletter": job_generate_newsletter,
         "send_newsletter": job_send_newsletter,
         "send_elite_briefings": job_send_elite_briefings,
+        "ingest_whale_alerts": job_ingest_whale_alerts,
     }
 
     fn = job_map.get(job_name)
@@ -612,6 +621,16 @@ def run_job_manual(job_name: str):
 def run_job_status(job_name: str):
     state = _job_state.get(f"manual_{job_name}", {"status": "never_run"})
     return jsonify(state)
+
+
+@app.route("/whale-alerts")
+def whale_alerts_endpoint():
+    """Serve recent whale alerts for the frontend."""
+    from flask import request as flask_request
+    limit = flask_request.args.get("limit", 20, type=int)
+    limit = min(limit, 100)
+    alerts = get_recent_whale_alerts(limit)
+    return jsonify({"alerts": alerts, "count": len(alerts)})
 
 
 @app.route("/api/v1/scanners/prediction-markets/trigger", methods=["POST"])

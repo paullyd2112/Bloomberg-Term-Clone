@@ -6,13 +6,13 @@ export const PLEBY_TOOLS: Anthropic.Tool[] = [
   {
     name: "get_asset_overview",
     description:
-      "Get the latest price, 24h change, and volume for an asset. Use this as your first call when the user asks about any specific stock or crypto.",
+      "Get the latest price, 24h change, and volume for a crypto asset. Use this as your first call when the user asks about any specific crypto.",
     input_schema: {
       type: "object",
       properties: {
         identifier: {
           type: "string",
-          description: "Ticker symbol or contract identifier (e.g. 'NVDA', 'BTC', 'BTC>100k')",
+          description: "Ticker symbol or contract identifier (e.g. 'BTC', 'ETH', 'SOL', 'BTC>100k')",
         },
         asset_type: {
           type: "string",
@@ -62,30 +62,6 @@ export const PLEBY_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: "get_options_flow",
-    description:
-      "Get unusual options flow for a stock ticker — call/put sweeps with volume/OI ratios and premium.",
-    input_schema: {
-      type: "object",
-      properties: {
-        ticker: { type: "string" },
-        limit: { type: "integer", description: "Max contracts (default 10)" },
-      },
-      required: ["ticker"],
-    },
-  },
-  {
-    name: "get_upcoming_earnings",
-    description: "Get the next upcoming earnings event for a stock ticker.",
-    input_schema: {
-      type: "object",
-      properties: {
-        ticker: { type: "string" },
-      },
-      required: ["ticker"],
-    },
-  },
-  {
     name: "get_portfolio_allocation",
     description: "Get the user's current portfolio allocation suggestion. Use this when the user asks about their portfolio, allocation, or how to invest their money.",
     input_schema: {
@@ -97,13 +73,13 @@ export const PLEBY_TOOLS: Anthropic.Tool[] = [
   {
     name: "get_congressional_trades",
     description:
-      "Get recent congressional stock trades (STOCK Act disclosures). Use when the user asks about congress members trading, politicians buying/selling stocks, or insider activity from senators or representatives.",
+      "Get recent congressional trades (STOCK Act disclosures). Use when the user asks about congress members trading, politicians buying/selling, or insider activity from senators or representatives.",
     input_schema: {
       type: "object",
       properties: {
         ticker: {
           type: "string",
-          description: "Optional: filter by stock ticker (e.g. 'NVDA')",
+          description: "Optional: filter by ticker (e.g. 'NVDA')",
         },
         limit: { type: "integer", description: "Max trades to return (default 20)" },
       },

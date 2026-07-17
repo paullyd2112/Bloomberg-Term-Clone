@@ -62,8 +62,8 @@ export default function AddAlertForm({ onClose }: { onClose: () => void }) {
             onChange={(e) => setAssetType(e.target.value as AssetType)}
             className="w-full bg-white/[0.04] border border-white/[0.1] text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500/50"
           >
-            <option value="stock">Stock</option>
             <option value="crypto">Crypto</option>
+            <option value="prediction">Prediction</option>
           </select>
         </div>
 
@@ -73,7 +73,7 @@ export default function AddAlertForm({ onClose }: { onClose: () => void }) {
             required
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value.toUpperCase())}
-            placeholder="e.g. AAPL"
+            placeholder="e.g. BTC"
             maxLength={60}
             className="w-full bg-white/[0.04] border border-white/[0.1] text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500/50 placeholder-zinc-500"
           />

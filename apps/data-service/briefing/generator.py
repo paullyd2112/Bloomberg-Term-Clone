@@ -86,7 +86,7 @@ def _fetch_top_signal_ids(limit: int = 5) -> list[int]:
 
 
 def _fetch_market_snapshot() -> dict:
-    tickers = ["SPY", "QQQ", "BTC", "ETH"]
+    tickers = ["BTC", "ETH", "SOL", "XRP", "ADA"]
     snapshot = {}
     try:
         result = (
@@ -173,14 +173,14 @@ def _fetch_recent_news(limit: int = 6) -> list[str]:
 
 # ─── Prompt builder ───────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are the head analyst at Plebs.io, a trading intelligence platform for retail traders. Every weekday morning you write a concise, high-signal morning briefing.
+SYSTEM_PROMPT = """You are the head analyst at Plebs.finance, a crypto and prediction market intelligence platform for retail traders. Every weekday morning you write a concise, high-signal morning briefing.
 
-Tone: sharp, direct, WSB-adjacent but not cringe. Like a smart friend who actually trades — not a compliance bot. Use plain English. No asterisks, no bullet headers in prose sections.
+Tone: sharp, direct, crypto-native but not cringe. Like a smart friend who actually trades crypto, not a compliance bot. Use plain English. No asterisks, no bullet headers in prose sections.
 
 Rules:
 - headline: 1 punchy sentence that captures the day's thesis
 - day_tone: pick the one that best fits (cautious / opportunistic / volatile / quiet)
-- market_overview: 2-3 sentences on SPY/QQQ/BTC/ETH moves + Fear & Greed context
+- market_overview: 2-3 sentences on BTC/ETH/SOL moves + Fear & Greed context
 - top_trades: the 3-5 highest-conviction signals from overnight. one_liner must be ≤120 chars and punchy
 - macro_context: 2-3 sentences on what's driving the macro backdrop today
 - prediction_market_edge: 1-2 sentences on any Polymarket signal with edge — skip if none

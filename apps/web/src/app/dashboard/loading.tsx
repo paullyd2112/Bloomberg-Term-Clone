@@ -29,7 +29,7 @@ export default function DashboardLoading() {
       {/* Signal feed: tabs + cards */}
       <div className="space-y-4">
         <div className="flex gap-1 border-b border-white/[0.08] pb-0">
-          {["All", "Stocks", "Crypto"].map((t) => (
+          {["All", "Crypto", "Predictions"].map((t) => (
             <Skeleton key={t} className="h-9 w-20" />
           ))}
         </div>
