@@ -559,7 +559,8 @@ def score_crypto_rules(subscription: str | None = None) -> str:
     from scoring.engine import (
         _get_market_benchmark, CORE_CRYPTO, TIER1_CRYPTO,
         MAX_CRYPTO_SIGNALS_PER_DAY, _crypto_signals_today_count,
-        _crypto_volatility_qualifies, score_crypto as score_crypto_ai,
+        _crypto_volatility_qualifies, _is_dry_spell_easing_active,
+        score_crypto as score_crypto_ai,
     )
 
     existing_today = _crypto_signals_today_count()
@@ -607,6 +608,8 @@ def score_crypto_rules(subscription: str | None = None) -> str:
             seen.add(sym)
             unique_rows.append(row)
 
+    dry_spell = _is_dry_spell_easing_active()
+
     # Phase 1: rules pre-screen — rank every coin by activity signals
     candidates = []
     tier_skipped = 0
@@ -616,7 +619,7 @@ def score_crypto_rules(subscription: str | None = None) -> str:
         sym = row["identifier"]
 
         if sym not in CORE_CRYPTO and sym not in TIER1_CRYPTO:
-            if not _crypto_volatility_qualifies(row):
+            if not _crypto_volatility_qualifies(row, ease=dry_spell):
                 tier_skipped += 1
                 continue
 
@@ -643,10 +646,11 @@ def score_crypto_rules(subscription: str | None = None) -> str:
 
     ai_result = score_crypto_ai(subscription=subscription)
 
+    ease_note = ", dry-spell easing active" if dry_spell else ""
     return (
         f"[hybrid] pre-screened {len(unique_rows)} coins → "
         f"{len(top)} candidates ({tier_skipped} tier-skipped, "
-        f"{cooldown_skipped} on cooldown) → AI: {ai_result}"
+        f"{cooldown_skipped} on cooldown) → AI: {ai_result}{ease_note}"
     )
 
 
