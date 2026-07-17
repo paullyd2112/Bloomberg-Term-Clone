@@ -18,7 +18,7 @@ from supabase_client import supabase
 
 load_dotenv()
 
-APEWISDOM_URL = "https://apewisdom.io/api/v1.1/filter/all-crypto/"
+APEWISDOM_URL = "https://apewisdom.io/api/v1.0/filter/all-crypto/"
 REQUEST_TIMEOUT = 15.0
 MAX_TICKERS = 50
 
@@ -45,7 +45,10 @@ def ingest_apewisdom() -> str:
     rows = []
 
     for item in results:
-        ticker = (item.get("ticker") or item.get("name") or "").upper().strip()
+        raw_ticker = (item.get("ticker") or item.get("name") or "").upper().strip()
+        if not raw_ticker:
+            continue
+        ticker = raw_ticker.removesuffix(".X")
         if not ticker:
             continue
 
