@@ -74,14 +74,11 @@ def ingest_apewisdom() -> str:
     skipped = 0
     for row in rows:
         try:
-            supabase.table("social_sentiment").upsert(
-                row,
-                on_conflict="ticker,source,date_trunc('hour', captured_at AT TIME ZONE 'UTC')",
-            ).execute()
+            supabase.table("social_sentiment").insert(row).execute()
             inserted += 1
         except Exception as e:
             err_str = str(e)
-            if "duplicate" in err_str.lower() or "unique" in err_str.lower():
+            if "duplicate" in err_str.lower() or "unique" in err_str.lower() or "23505" in err_str:
                 skipped += 1
             else:
                 logger.warning("apewisdom: failed to insert {}: {}", row["ticker"], e)
