@@ -23,7 +23,8 @@ from prompts import options_flow as options_prompt
 load_dotenv()
 
 MODEL              = "claude-sonnet-5"
-SIGNAL_COOLDOWN_H  = 4      # skip if signal generated within this many hours
+SIGNAL_COOLDOWN_H        = 4   # default cooldown (stocks, predictions)
+CRYPTO_SIGNAL_COOLDOWN_H = 2   # shorter cooldown for 24/7 crypto markets
 MAX_TOKENS         = 1024
 ENGINE_CUTOFF      = "2026-07-04T11:00:00Z"  # signals before this date are unreliable
 
@@ -145,7 +146,8 @@ def _get_recent_news_with_urls(asset_type: str, identifier: str, limit: int = 3)
 
 
 def _signal_exists_recently(asset_type: str, identifier: str) -> bool:
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=SIGNAL_COOLDOWN_H)).isoformat()
+    cooldown = CRYPTO_SIGNAL_COOLDOWN_H if asset_type == "crypto" else SIGNAL_COOLDOWN_H
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=cooldown)).isoformat()
     try:
         result = (
             supabase.table("signals")
@@ -1410,7 +1412,8 @@ TIER1_CRYPTO  = {
     "AXS", "CRV", "SNX", "COMP", "BAL", "SUSHI", "IMX", "GRT",
     "STX", "RUNE", "JASMY", "FLOW", "GALA", "ENS", "LDO", "RPL",
 }
-CRYPTO_MOVER_THRESHOLD = 5.0  # % change to qualify lower-tier coins
+CRYPTO_MOVER_THRESHOLD = 5.0          # legacy fallback (% change) if no ATR
+CRYPTO_ATR_EXPANSION_RATIO = 1.2      # qualify if current range > 1.2x ATR (volatility expanding)
 
 # ─── Crypto portfolio-defense caps (July 2026) ───────────────────────────────
 # Crypto is more correlated than a cross-sector stock basket — alts track BTC,
@@ -1491,6 +1494,34 @@ def _crypto_correlation_block_reason(
     if identifier not in CRYPTO_MAJORS and majors_open >= 1 and alts_open >= 1:
         return "a BTC/ETH long plus an alt long are already open (max 1 alt alongside a major)"
     return None
+
+
+def _crypto_volatility_qualifies(row: dict) -> bool:
+    """Check if a lower-tier coin qualifies for scoring via ATR expansion or
+    large daily move. Replaces the legacy flat 5% threshold — ATR captures
+    coins compressing before a breakout, not just ones already moving."""
+    meta = row.get("metadata") or {}
+    atr = meta.get("atr_14")
+    price = row.get("price")
+    if atr is not None and price is not None:
+        try:
+            atr_f, price_f = float(atr), float(price)
+            if price_f > 0:
+                atr_pct = (atr_f / price_f) * 100
+                change = row.get("change_24h")
+                change_f = abs(float(change)) if change is not None else 0.0
+                if change_f >= atr_pct * CRYPTO_ATR_EXPANSION_RATIO:
+                    return True
+        except (TypeError, ValueError):
+            pass
+    change = row.get("change_24h")
+    if change is not None:
+        try:
+            if abs(float(change)) >= CRYPTO_MOVER_THRESHOLD:
+                return True
+        except (TypeError, ValueError):
+            pass
+    return False
 
 
 def score_crypto(subscription: str | None = None) -> str:
@@ -1589,8 +1620,7 @@ def score_crypto(subscription: str | None = None) -> str:
             continue
 
         if sym not in TIER1_CRYPTO:
-            change = row.get("change_24h")
-            if change is None or abs(float(change)) < CRYPTO_MOVER_THRESHOLD:
+            if not _crypto_volatility_qualifies(row):
                 tier_skipped += 1
                 continue
 

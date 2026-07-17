@@ -30,7 +30,8 @@ from scoring.validated_factors import (
     _bucket_sma50,
 )
 
-SIGNAL_COOLDOWN_H = 4
+SIGNAL_COOLDOWN_H        = 4   # default cooldown (stocks)
+CRYPTO_SIGNAL_COOLDOWN_H = 2   # shorter cooldown for 24/7 crypto markets
 ENGINE_CUTOFF = "2026-07-04T11:00:00Z"
 
 STOCK_RVOL_MINIMUM = 1.5
@@ -48,7 +49,8 @@ RULES_CONFIDENCE_MINIMUM = 55
 
 def _signal_exists_recently(asset_type: str, identifier: str) -> bool:
     try:
-        cutoff = (datetime.now(timezone.utc) - timedelta(hours=SIGNAL_COOLDOWN_H)).isoformat()
+        cooldown = CRYPTO_SIGNAL_COOLDOWN_H if asset_type == "crypto" else SIGNAL_COOLDOWN_H
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=cooldown)).isoformat()
         result = (
             supabase.table("signals")
             .select("id", count="exact")
@@ -489,13 +491,80 @@ def score_stocks_rules(subscription: str | None = None) -> str:
     )
 
 
+PRESCREEN_TOP_N = 5  # max candidates to escalate to full AI engine
+
+
+def _rank_crypto_candidate(row: dict) -> float:
+    """Score a coin for pre-screen ranking. Higher = more interesting.
+    Factors: volume ratio, ATR expansion, absolute daily move, RSI extremes."""
+    meta = row.get("metadata") or {}
+    score = 0.0
+
+    vol_ratio = meta.get("volume_ratio")
+    if vol_ratio is not None:
+        try:
+            vr = float(vol_ratio)
+            if vr > 2.0:
+                score += min(vr, 10.0) * 5
+        except (TypeError, ValueError):
+            pass
+
+    atr = meta.get("atr_14")
+    price = row.get("price")
+    change = row.get("change_24h")
+    if atr is not None and price is not None:
+        try:
+            atr_pct = (float(atr) / float(price)) * 100 if float(price) > 0 else 0
+            change_f = abs(float(change)) if change is not None else 0.0
+            if atr_pct > 0 and change_f >= atr_pct * 1.2:
+                score += 20
+            elif atr_pct > 0 and change_f >= atr_pct * 0.8:
+                score += 10
+        except (TypeError, ValueError):
+            pass
+
+    if change is not None:
+        try:
+            score += min(abs(float(change)), 15.0) * 2
+        except (TypeError, ValueError):
+            pass
+
+    rsi = meta.get("rsi_14")
+    if rsi is not None:
+        try:
+            rsi_f = float(rsi)
+            if rsi_f > 70 or rsi_f < 30:
+                score += 15
+            elif rsi_f > 65 or rsi_f < 35:
+                score += 8
+        except (TypeError, ValueError):
+            pass
+
+    macd_hist = meta.get("macd_hist")
+    prev_macd = meta.get("prev_macd_hist")
+    if macd_hist is not None and prev_macd is not None:
+        try:
+            diff = abs(float(macd_hist)) - abs(float(prev_macd))
+            if diff > 0:
+                score += 10
+        except (TypeError, ValueError):
+            pass
+
+    return score
+
+
 def score_crypto_rules(subscription: str | None = None) -> str:
-    """Score crypto using rules engine — drop-in replacement for engine.score_crypto()."""
+    """Hybrid sentinel: rules engine pre-screens all crypto, routes top
+    candidates to the full AI engine (Claude) for high-conviction signals."""
     from scoring.engine import (
         _get_market_benchmark, CORE_CRYPTO, TIER1_CRYPTO,
-        CRYPTO_MOVER_THRESHOLD, MAX_CRYPTO_SIGNALS_PER_DAY,
-        _crypto_signals_today_count,
+        MAX_CRYPTO_SIGNALS_PER_DAY, _crypto_signals_today_count,
+        _crypto_volatility_qualifies, score_crypto as score_crypto_ai,
     )
+
+    existing_today = _crypto_signals_today_count()
+    if existing_today >= MAX_CRYPTO_SIGNALS_PER_DAY:
+        return f"[hybrid] daily crypto cap reached ({existing_today}/{MAX_CRYPTO_SIGNALS_PER_DAY})"
 
     benchmarks = _get_market_benchmark()
 
@@ -527,8 +596,8 @@ def score_crypto_rules(subscription: str | None = None) -> str:
         )
         rows = result.data or []
     except Exception as e:
-        logger.error("[rules_engine] crypto price fetch failed: {}", e)
-        return "[rules_engine] crypto price fetch failed"
+        logger.error("[hybrid] crypto price fetch failed: {}", e)
+        return "[hybrid] crypto price fetch failed"
 
     seen: set[str] = set()
     unique_rows = []
@@ -538,43 +607,46 @@ def score_crypto_rules(subscription: str | None = None) -> str:
             seen.add(sym)
             unique_rows.append(row)
 
-    # Daily crypto signal cap — mirrors engine.score_crypto so both scoring
-    # paths honor the same per-UTC-day ceiling.
-    existing_today = _crypto_signals_today_count()
-    if existing_today >= MAX_CRYPTO_SIGNALS_PER_DAY:
-        return f"[rules_engine] daily crypto cap reached ({existing_today}/{MAX_CRYPTO_SIGNALS_PER_DAY})"
-    remaining = MAX_CRYPTO_SIGNALS_PER_DAY - existing_today
-
-    scored = 0
-    signals_written = 0
-    skipped = 0
+    # Phase 1: rules pre-screen — rank every coin by activity signals
+    candidates = []
+    tier_skipped = 0
+    cooldown_skipped = 0
 
     for row in unique_rows:
-        if signals_written >= remaining:
-            break
-
         sym = row["identifier"]
 
         if sym not in CORE_CRYPTO and sym not in TIER1_CRYPTO:
-            change = row.get("change_24h")
-            if change is None or abs(float(change)) < CRYPTO_MOVER_THRESHOLD:
-                skipped += 1
+            if not _crypto_volatility_qualifies(row):
+                tier_skipped += 1
                 continue
 
-        result = score_asset_rules(
-            "crypto", sym,
-            benchmarks=benchmarks,
-            btc_regime=btc_regime,
-            subscription=subscription,
+        if _signal_exists_recently("crypto", sym):
+            cooldown_skipped += 1
+            continue
+
+        rank_score = _rank_crypto_candidate(row)
+        candidates.append((sym, rank_score, row))
+
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    top = candidates[:PRESCREEN_TOP_N]
+
+    if not top:
+        return (
+            f"[hybrid] pre-screened {len(unique_rows)} coins, 0 candidates "
+            f"({tier_skipped} tier-skipped, {cooldown_skipped} on cooldown)"
         )
-        scored += 1
-        if result and result.get("direction") != "HOLD":
-            signals_written += 1
+
+    # Phase 2: route top candidates to full AI engine
+    logger.info("[hybrid] pre-screened {} coins → {} candidates for AI scoring: {}",
+                len(unique_rows), len(top),
+                ", ".join(f"{sym}({score:.0f})" for sym, score, _ in top))
+
+    ai_result = score_crypto_ai(subscription=subscription)
 
     return (
-        f"[rules_engine] scored {scored} crypto, "
-        f"{signals_written} actionable, {skipped} tier-skipped "
-        f"(daily cap {existing_today + signals_written}/{MAX_CRYPTO_SIGNALS_PER_DAY})"
+        f"[hybrid] pre-screened {len(unique_rows)} coins → "
+        f"{len(top)} candidates ({tier_skipped} tier-skipped, "
+        f"{cooldown_skipped} on cooldown) → AI: {ai_result}"
     )
 
 
