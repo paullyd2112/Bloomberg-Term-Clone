@@ -891,6 +891,20 @@ def score_asset(
             )
 
         elif asset_type == "prediction":
+            from scoring.prediction_filters import run_prediction_guardrails
+            yes_price = meta.get("yes_price")
+            no_price = meta.get("no_price")
+            pred_ok, pred_reason = run_prediction_guardrails(
+                identifier=identifier,
+                yes_price=yes_price,
+                no_price=no_price,
+                volume_24h=price_row.get("volume"),
+                metadata=meta,
+            )
+            if not pred_ok:
+                logger.info("prediction/{}: guardrail rejected — {}", identifier, pred_reason)
+                return None
+
             context = {
                 "identifier":    identifier,
                 "current_price": current_price,
@@ -1421,9 +1435,70 @@ CRYPTO_ATR_EXPANSION_RATIO = 1.2      # qualify if current range > 1.2x ATR (vol
 # port the stock breadth/daily-cap guards to crypto (tighter, because of that
 # correlation) so a bullish run can't stack a basket that all stops out
 # together when BTC rolls over — the exact cluster that blew the stock sims.
-MAX_CRYPTO_SIGNALS_PER_DAY = 3   # hard cap on fresh crypto signals per UTC day
+MAX_CRYPTO_SIGNALS_PER_DAY = 6   # upper bound on fresh crypto signals per UTC day
+MIN_CRYPTO_SIGNALS_PER_DAY = 3   # target floor — ease thresholds if 0 signals by 4 PM EST
 MAX_CONCURRENT_CRYPTO_BUYS = 2   # max simultaneous open crypto longs
 CRYPTO_MAJORS = {"BTC", "ETH"}   # correlated majors; ≤1 alt alongside an open major
+
+ADAPTIVE_HAIKU_BASE_THRESHOLD = 89
+ADAPTIVE_HAIKU_TIGHT_THRESHOLD = 94
+ADAPTIVE_TIGHT_TRIGGER = 6
+ADAPTIVE_EASE_HOUR_EST = 16
+ADAPTIVE_EASE_RSI_REDUCTION_PCT = 5
+ADAPTIVE_EASE_RVOL_REDUCTION_PCT = 5
+
+
+def _crypto_signals_last_24h_count() -> int:
+    """Count crypto signals in the last 24-hour rolling window."""
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        result = (
+            supabase.table("signals")
+            .select("id", count="exact")
+            .eq("asset_type", "crypto")
+            .eq("is_backtest", False)
+            .gte("created_at", cutoff)
+            .neq("direction", "HOLD")
+            .execute()
+        )
+        return result.count or 0
+    except Exception as e:
+        logger.warning("24h crypto signal count query failed: {} — defaulting to 0", e)
+        return 0
+
+
+def _get_adaptive_haiku_threshold() -> int:
+    """Dynamic Haiku prescreen threshold based on 24h rolling signal count.
+
+    >= 6 signals in last 24h → tighten to 94 (choke marginal setups)
+    < 6 signals → use base 89
+    """
+    count_24h = _crypto_signals_last_24h_count()
+    if count_24h >= ADAPTIVE_TIGHT_TRIGGER:
+        logger.info("[adaptive] 24h crypto signals={} >= {} — tightening Haiku threshold to {}",
+                    count_24h, ADAPTIVE_TIGHT_TRIGGER, ADAPTIVE_HAIKU_TIGHT_THRESHOLD)
+        return ADAPTIVE_HAIKU_TIGHT_THRESHOLD
+    return ADAPTIVE_HAIKU_BASE_THRESHOLD
+
+
+def _is_dry_spell_easing_active() -> bool:
+    """Check if we're past 4 PM EST with 0 crypto signals today.
+
+    When true, the caller should ease RSI/volume thresholds by 5% to
+    surface the single best available setup rather than closing the day
+    with zero output.
+    """
+    now_utc = datetime.now(timezone.utc)
+    est_hour = (now_utc.hour - 5) % 24
+    if est_hour < ADAPTIVE_EASE_HOUR_EST:
+        return False
+
+    today_count = _crypto_signals_today_count()
+    if today_count == 0:
+        logger.info("[adaptive] 0 crypto signals by {} EST — enabling dry-spell easing",
+                    f"{est_hour}:00")
+        return True
+    return False
 
 
 def _crypto_signals_today_count() -> int:
@@ -1496,10 +1571,18 @@ def _crypto_correlation_block_reason(
     return None
 
 
-def _crypto_volatility_qualifies(row: dict) -> bool:
+def _crypto_volatility_qualifies(row: dict, ease: bool = False) -> bool:
     """Check if a lower-tier coin qualifies for scoring via ATR expansion or
     large daily move. Replaces the legacy flat 5% threshold — ATR captures
-    coins compressing before a breakout, not just ones already moving."""
+    coins compressing before a breakout, not just ones already moving.
+
+    When `ease=True` (dry-spell mode), both the ATR expansion ratio and the
+    flat mover threshold are relaxed by ADAPTIVE_EASE_RVOL_REDUCTION_PCT to
+    surface the single best available setup on quiet days."""
+    ease_factor = (1 - ADAPTIVE_EASE_RVOL_REDUCTION_PCT / 100) if ease else 1.0
+    effective_atr_ratio = CRYPTO_ATR_EXPANSION_RATIO * ease_factor
+    effective_mover = CRYPTO_MOVER_THRESHOLD * ease_factor
+
     meta = row.get("metadata") or {}
     atr = meta.get("atr_14")
     price = row.get("price")
@@ -1510,14 +1593,14 @@ def _crypto_volatility_qualifies(row: dict) -> bool:
                 atr_pct = (atr_f / price_f) * 100
                 change = row.get("change_24h")
                 change_f = abs(float(change)) if change is not None else 0.0
-                if change_f >= atr_pct * CRYPTO_ATR_EXPANSION_RATIO:
+                if change_f >= atr_pct * effective_atr_ratio:
                     return True
         except (TypeError, ValueError):
             pass
     change = row.get("change_24h")
     if change is not None:
         try:
-            if abs(float(change)) >= CRYPTO_MOVER_THRESHOLD:
+            if abs(float(change)) >= effective_mover:
                 return True
         except (TypeError, ValueError):
             pass
@@ -1594,6 +1677,16 @@ def score_crypto(subscription: str | None = None) -> str:
     tier_skipped = 0
     signals_written_this_run = 0
 
+    adaptive_threshold = _get_adaptive_haiku_threshold()
+    dry_spell = _is_dry_spell_easing_active()
+    if dry_spell:
+        logger.info("[crypto] dry-spell easing active — relaxing mover threshold by {}%",
+                    ADAPTIVE_EASE_RVOL_REDUCTION_PCT)
+    effective_mover_threshold = (
+        CRYPTO_MOVER_THRESHOLD * (1 - ADAPTIVE_EASE_RVOL_REDUCTION_PCT / 100)
+        if dry_spell else CRYPTO_MOVER_THRESHOLD
+    )
+
     for row in rows:
         if signals_written_this_run >= remaining:
             logger.info("[crypto] daily cap reached mid-run ({}/{}) — stopping scan",
@@ -1620,7 +1713,7 @@ def score_crypto(subscription: str | None = None) -> str:
             continue
 
         if sym not in TIER1_CRYPTO:
-            if not _crypto_volatility_qualifies(row):
+            if not _crypto_volatility_qualifies(row, ease=dry_spell):
                 tier_skipped += 1
                 continue
 
@@ -1629,7 +1722,15 @@ def score_crypto(subscription: str | None = None) -> str:
                                  fear_greed=fg.get("value"))
         haiku_calls += 1
 
-        if not should_escalate_to_sonnet(quick):
+        if quick is None:
+            skipped += 1
+            continue
+        if quick.confidence < adaptive_threshold:
+            logger.debug("[crypto] {} Haiku confidence {} < adaptive threshold {} — skipping",
+                         sym, quick.confidence, adaptive_threshold)
+            skipped += 1
+            continue
+        if quick.direction == "HOLD":
             skipped += 1
             continue
 
@@ -1647,30 +1748,51 @@ def score_crypto(subscription: str | None = None) -> str:
             sentry_sdk.capture_exception(e)
             failed += 1
 
+    ease_note = ", dry-spell easing active" if dry_spell else ""
+    threshold_note = f", adaptive Haiku threshold: {adaptive_threshold}"
     cap_note = f", daily cap: {existing_today + signals_written_this_run}/{MAX_CRYPTO_SIGNALS_PER_DAY}"
     return (f"{success} scored, {skipped} skipped, {failed} failed — "
-            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet, {tier_skipped} tier-skipped{cap_note}")
+            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet, {tier_skipped} tier-skipped"
+            f"{cap_note}{threshold_note}{ease_note}")
 
 
 PREDICTION_CANDIDATE_POOL  = 150  # raw pool pulled before diversification
 PREDICTION_CANDIDATE_LIMIT = 20   # diversified candidates actually prescreened
 PREDICTION_MAX_PER_EVENT   = 2    # cap per real-world event/topic
+MAX_PREDICTION_SIGNALS_PER_DAY = 3
+
+
+def _prediction_signals_today_count() -> int:
+    """Count fresh (non-HOLD) prediction signals written today (UTC)."""
+    try:
+        today_start = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+        result = (
+            supabase.table("signals")
+            .select("id", count="exact")
+            .eq("asset_type", "prediction")
+            .eq("is_backtest", False)
+            .gte("created_at", today_start)
+            .neq("direction", "HOLD")
+            .execute()
+        )
+        return result.count or 0
+    except Exception as e:
+        logger.warning("Daily prediction signal count query failed: {} — defaulting to 0", e)
+        return 0
 
 
 def score_prediction_markets(subscription: str | None = None) -> str:
     from scoring.haiku_prescreen import prescreen_prediction, should_escalate_to_sonnet
+    from scoring.prediction_filters import run_prediction_guardrails
 
-    # raw_prices is a time-series table -- every market gets a new row each
-    # ~30min ingest cycle, so it holds many historical snapshots per identifier.
-    # Sorting the whole table by volume and taking the top N (as this used to
-    # do) returns raw snapshot rows, not distinct markets: a handful of
-    # extremely high-volume markets (e.g. one sports event's country-to-win
-    # sub-markets running $100M+ each) fill every slot with their own repeated
-    # history, crowding out literally every other market on the platform
-    # before the event-diversity cap below ever gets a chance to run. Fetch a
-    # recent window ordered by recency first and dedupe to one (latest) row
-    # per identifier -- that gives a true cross-section of currently-tracked
-    # markets -- then sort that by volume before diversifying by event.
+    existing_today = _prediction_signals_today_count()
+    if existing_today >= MAX_PREDICTION_SIGNALS_PER_DAY:
+        logger.warning("Daily prediction signal cap reached ({}/{}) — skipping prediction scan",
+                       existing_today, MAX_PREDICTION_SIGNALS_PER_DAY)
+        return (f"0 scored — daily prediction cap reached "
+                f"({existing_today}/{MAX_PREDICTION_SIGNALS_PER_DAY})")
+    remaining = MAX_PREDICTION_SIGNALS_PER_DAY - existing_today
+
     try:
         result = (
             supabase.table("raw_prices")
@@ -1692,16 +1814,27 @@ def score_prediction_markets(subscription: str | None = None) -> str:
         logger.error("score_prediction_markets: failed to fetch identifiers — {}", e)
         return "failed to fetch identifiers"
 
-    # Diversify across events -- Polymarket volume concentrates hard around
-    # whatever the single biggest live event is (e.g. a marquee sports final
-    # can run $100M+ in volume while everything else is a fraction of that),
-    # so a naive volume-sorted top-N is effectively "the same event's markets,
-    # over and over" rather than a cross-section of what's actually happening
-    # on the platform. Cap how many candidates can come from the same event.
     event_counts: dict[str, int] = {}
     rows = []
+    guardrail_filtered = 0
     for r in pool:
-        event_key = (r.get("metadata") or {}).get("event_slug") or r["identifier"]
+        meta = r.get("metadata") or {}
+        yes_price = meta.get("yes_price")
+        no_price = meta.get("no_price")
+
+        passed, reason = run_prediction_guardrails(
+            identifier=r["identifier"],
+            yes_price=yes_price,
+            no_price=no_price,
+            volume_24h=r.get("volume"),
+            metadata=meta,
+        )
+        if not passed:
+            logger.debug("[prediction] {} filtered: {}", r["identifier"], reason)
+            guardrail_filtered += 1
+            continue
+
+        event_key = meta.get("event_slug") or r["identifier"]
         count = event_counts.get(event_key, 0)
         if count >= PREDICTION_MAX_PER_EVENT:
             continue
@@ -1712,8 +1845,14 @@ def score_prediction_markets(subscription: str | None = None) -> str:
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
+    signals_written = 0
 
     for row in rows:
+        if signals_written >= remaining:
+            logger.info("[prediction] daily cap reached mid-run ({}/{})",
+                        existing_today + signals_written, MAX_PREDICTION_SIGNALS_PER_DAY)
+            break
+
         ident = row["identifier"]
 
         quick = prescreen_prediction(ident, price=row.get("price"),
@@ -1732,13 +1871,16 @@ def score_prediction_markets(subscription: str | None = None) -> str:
                 skipped += 1
             else:
                 success += 1
+                signals_written += 1
         except Exception as e:
             logger.error("score_prediction_markets error for {}: {}", ident, e)
             sentry_sdk.capture_exception(e)
             failed += 1
 
+    cap_note = f", daily cap: {existing_today + signals_written}/{MAX_PREDICTION_SIGNALS_PER_DAY}"
     return (f"{success} scored, {skipped} skipped, {failed} failed — "
-            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet")
+            f"{haiku_calls} Haiku, {sonnet_calls} Sonnet, "
+            f"{guardrail_filtered} guardrail-filtered{cap_note}")
 
 
 # ─── Options flow scoring ───────────────────────────────────────────────────
