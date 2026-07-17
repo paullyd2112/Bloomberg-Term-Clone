@@ -19,6 +19,7 @@ from ingestion.news import ingest_news
 from ingestion.tech_news import ingest_tech_news
 from ingestion.geopolitics_news import ingest_geopolitics_news
 from ingestion.crypto_momentum import ingest_momentum_coins
+from ingestion.apewisdom import ingest_apewisdom
 from scoring.engine import score_prediction_markets
 from scoring.rules_engine import score_crypto_rules
 from scoring.resolver import resolve_outcomes, evaluate_alerts
@@ -98,6 +99,9 @@ def job_ingest_geopolitics_news():
 
 def job_crypto_momentum():
     return ingest_momentum_coins()
+
+def job_ingest_apewisdom():
+    return ingest_apewisdom()
 
 def job_generate_newsletter():
     return generate_newsletter()
@@ -288,6 +292,10 @@ scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
 # Crypto momentum screener — every 2 hours, catches pumps/breakouts outside watchlist
 scheduler.add_job(lambda: _run_job("crypto_momentum", job_crypto_momentum),
                   CronTrigger(minute=45, hour="*/2"), id="crypto_momentum")
+
+# ApeWisdom Reddit sentiment — hourly (matches their 30-min scan cadence)
+scheduler.add_job(lambda: _run_job("ingest_apewisdom", job_ingest_apewisdom),
+                  CronTrigger(minute=30, hour="*/1"), id="ingest_apewisdom")
 
 
 # Enrichment — macro data for predictions/briefings
@@ -577,6 +585,7 @@ def run_job_manual(job_name: str):
         "score_prediction_markets": job_score_prediction_markets,
         "score_crypto_rules": job_score_crypto,
         "crypto_momentum": job_crypto_momentum,
+        "ingest_apewisdom": job_ingest_apewisdom,
         "generate_newsletter": job_generate_newsletter,
         "send_newsletter": job_send_newsletter,
         "send_elite_briefings": job_send_elite_briefings,
@@ -658,6 +667,15 @@ def trigger_prediction_scan():
 def trigger_prediction_status():
     state = _job_state.get("prediction_trigger", {"status": "never_run"})
     return jsonify(state)
+
+
+@app.route("/api/v1/reddit-trending")
+def reddit_trending():
+    """Reddit trending tickers from ApeWisdom. Used by the dashboard widget."""
+    from flask import request as flask_request
+    from ingestion.apewisdom import get_trending_tickers
+    limit = min(int(flask_request.args.get("limit", 20)), 50)
+    return jsonify({"trending": get_trending_tickers(limit=limit)})
 
 
 @app.route("/score-now/debug")

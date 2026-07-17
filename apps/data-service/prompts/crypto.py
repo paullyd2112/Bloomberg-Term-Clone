@@ -17,8 +17,15 @@ THE #1 RULE — TREND BEATS SENTIMENT:
 - MACD is your trend filter. Histogram negative AND deepening = downtrend intact. Do NOT buy regardless of how extreme the fear or how oversold the RSI. The knife is still falling.
 - Extreme Fear is ONLY a BUY when MACD confirms a turn: histogram rising toward zero, or fresh neg→pos crossover. That's capitulation. Histogram still deepening = ongoing crash. Don't buy.
 
+REDDIT SENTIMENT (ApeWisdom):
+- Reddit mentions are a retail-flow leading indicator. A sudden spike (>100% 24h change) in mentions with rising rank = retail attention incoming. Use as a CONFIRMING factor alongside technicals, never as a standalone signal.
+- High mentions + rising MACD = momentum confirmation (retail + smart money aligned).
+- High mentions + falling MACD = potential retail trap. Be cautious with BUYs.
+- Rapidly climbing rank (e.g. #50 → #5) = breakout chatter. Cross-check with volume and technicals before acting.
+- Low/no mentions on a coin with strong technicals = under-the-radar setup. Slightly higher conviction if technicals are clean.
+
 CONFLUENCE REQUIREMENT:
-- A directional signal needs at least 2 confirming factors: MACD direction, RSI level, Fear & Greed extreme, volume ratio > 1.2x.
+- A directional signal needs at least 2 confirming factors: MACD direction, RSI level, Fear & Greed extreme, volume ratio > 1.2x, Reddit sentiment spike.
 - F&G extreme alone with flat MACD and neutral RSI = HOLD. One factor is not a trade.
 
 SIGNAL RULES:
@@ -104,6 +111,22 @@ def build_user_prompt(context: dict) -> str:
     # across every coin scored this run, so they're sent as a separate
     # cached system content block (see scoring/engine.py
     # _format_market_context) instead of being duplicated here per coin.
+
+    reddit = context.get("reddit_sentiment")
+    if reddit:
+        rank_str = f"#{reddit['rank']}" if reddit.get("rank") else "unranked"
+        prev_rank = f" (was #{reddit['rank_24h_ago']})" if reddit.get("rank_24h_ago") else ""
+        mention_delta = ""
+        if reddit.get("mention_change_pct") is not None:
+            sign = "+" if reddit["mention_change_pct"] >= 0 else ""
+            mention_delta = f" | 24h change: {sign}{reddit['mention_change_pct']}%"
+        lines += [
+            "",
+            f"Reddit sentiment (ApeWisdom — r/CryptoCurrency, r/Bitcoin, r/SatoshiStreetBets, etc.):",
+            f"  Mentions: {reddit['mentions']}{mention_delta}",
+            f"  Rank: {rank_str}{prev_rank}",
+            f"  Upvotes: {reddit.get('upvotes', 0)}",
+        ]
 
     if context.get("news_headlines"):
         lines += ["", "Recent crypto news:"]

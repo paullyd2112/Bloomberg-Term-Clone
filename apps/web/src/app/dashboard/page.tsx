@@ -10,6 +10,7 @@ import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
 import SectionHeader from "@/components/ui/SectionHeader";
 import SkipTrialBanner from "@/components/SkipTrialBanner";
 import SystemSafeguards from "@/components/dashboard/SystemSafeguards";
+import RedditTrending from "@/components/dashboard/RedditTrending";
 
 export const revalidate = 60;
 
@@ -347,6 +348,18 @@ export default async function DashboardPage() {
           </div>
         </section>
       )}
+
+      {/* Reddit trending */}
+      <section>
+        <SectionHeader divider className="mb-4">Reddit trending</SectionHeader>
+        <Suspense
+          fallback={
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-6 h-40 animate-pulse" />
+          }
+        >
+          <RedditTrending />
+        </Suspense>
+      </section>
 
       {/* System safeguards */}
       <SystemSafeguards />
