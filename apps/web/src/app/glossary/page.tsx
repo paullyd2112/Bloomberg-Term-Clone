@@ -8,7 +8,7 @@ const TERMS = [
   {
     term: "Asset Type",
     definition:
-      "Whether an instrument is a stock or cryptocurrency.",
+      "Whether an instrument is a cryptocurrency or a prediction market contract.",
   },
   {
     term: "Confidence Score",
@@ -18,7 +18,7 @@ const TERMS = [
   {
     term: "Congressional Trades",
     definition:
-      "Stock transactions disclosed by U.S. lawmakers under the STOCK Act. Shown with a delay based on official filing dates.",
+      "Securities transactions disclosed by U.S. lawmakers under the STOCK Act. Shown with a delay based on official filing dates.",
   },
   {
     term: "Direction",
@@ -36,9 +36,9 @@ const TERMS = [
       "Recent headlines related to the asset at the time the signal was generated, providing qualitative context for the analysis.",
   },
   {
-    term: "Options Flow",
+    term: "Whale Alerts",
     definition:
-      "Unusual options activity detected for a stock, including large volume trades, high volume-to-open-interest ratios, and significant premium. Helps identify institutional positioning.",
+      "Unusually large trades detected on prediction market platforms like Polymarket. Helps identify smart-money positioning in event-driven markets.",
   },
   {
     term: "Outcome",

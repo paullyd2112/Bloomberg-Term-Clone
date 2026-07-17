@@ -7,6 +7,7 @@ import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
 import SubscribeGate from "@/components/ui/SubscribeGate";
 import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
+import WhaleSentinel from "@/components/WhaleSentinel";
 import SectionHeader from "@/components/ui/SectionHeader";
 import SkipTrialBanner from "@/components/SkipTrialBanner";
 import SystemSafeguards from "@/components/dashboard/SystemSafeguards";
@@ -348,6 +349,9 @@ export default async function DashboardPage() {
           </div>
         </section>
       )}
+
+      {/* Whale Sentinel — live large Polymarket trades */}
+      <WhaleSentinel />
 
       {/* Reddit trending */}
       <section>

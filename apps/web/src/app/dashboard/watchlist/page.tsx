@@ -112,7 +112,7 @@ export default async function WatchlistPage() {
           </span>
           <p className="text-zinc-300 text-sm font-medium">Your watchlist is empty</p>
           <p className="text-zinc-500 text-xs max-w-xs leading-relaxed">
-            Add stocks or crypto to track signals for them.
+            Add crypto assets to track signals for them.
           </p>
         </div>
       ) : (

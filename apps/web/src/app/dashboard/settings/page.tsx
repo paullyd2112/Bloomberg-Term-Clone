@@ -10,7 +10,7 @@ import SignOutButton from "./SignOutButton";
 export const dynamic = "force-dynamic";
 
 type Experience = "beginner" | "intermediate" | "advanced";
-type AssetPref  = "stocks" | "crypto";
+type AssetPref  = "stocks" | "crypto" | "predictions";
 
 export default async function SettingsPage() {
   const user = await getUser();

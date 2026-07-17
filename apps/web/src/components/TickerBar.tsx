@@ -37,7 +37,7 @@ const STATUS_CONFIG: Record<MarketStatus, { dot: string; ping: string; label: st
   closed: {
     dot: "bg-amber-400",
     ping: "bg-amber-400",
-    label: "Stocks Closed · Crypto 24/7",
+    label: "Crypto 24/7",
     bg: "bg-amber-500/10",
     border: "border-amber-500/20",
     text: "text-amber-400",
