@@ -12,12 +12,12 @@ import {
   Receipt,
   Bell,
   Landmark,
-  Eye,
   Lock,
   Gift,
   PieChart,
   Bot,
   ArrowUpRight,
+  Calculator,
   type LucideIcon,
 } from "lucide-react";
 import type { Tier } from "@/lib/tier";
@@ -38,6 +38,7 @@ const NAV: {
   { href: "/dashboard/congress",      label: "Congress",          icon: Landmark },
   { href: "/dashboard/stocks-beta",  label: "Stocks & Options",  icon: Lock },
   { href: "/dashboard/referrals",    label: "Referrals",         icon: Gift },
+  { href: "/dashboard/prop-calculator", label: "Prop Sizing",   icon: Calculator, tier: "elite" },
   { href: "/dashboard/allocator",   label: "Allocator",     icon: PieChart,   tier: "elite" },
   { href: "/dashboard/pleby",       label: "Pleby AI",      icon: Bot,        tier: "elite" },
 ];
