@@ -13,6 +13,7 @@ import {
   Bell,
   Landmark,
   Eye,
+  Lock,
   Gift,
   PieChart,
   Bot,
@@ -34,11 +35,9 @@ const NAV: {
   { href: "/dashboard/performance", label: "Performance",   icon: TrendingUp, tier: "pro" },
   { href: "/dashboard/history",     label: "Pleby Trades", icon: Receipt,    tier: "pro" },
   { href: "/dashboard/alerts",      label: "Alerts",        icon: Bell,       tier: "pro" },
-  { href: "/dashboard/congress",    label: "Congress",      icon: Landmark },
-  // Crypto-only pivot (July 2026): Insiders is a stock-only feature, hidden
-  // while stock ingestion is off. Route and page kept intact for re-enable.
-  // { href: "/dashboard/insiders", label: "Insiders",      icon: Eye },
-  { href: "/dashboard/referrals",   label: "Referrals",     icon: Gift },
+  { href: "/dashboard/congress",      label: "Congress",          icon: Landmark },
+  { href: "/dashboard/stocks-beta",  label: "Stocks & Options",  icon: Lock },
+  { href: "/dashboard/referrals",    label: "Referrals",         icon: Gift },
   { href: "/dashboard/allocator",   label: "Allocator",     icon: PieChart,   tier: "elite" },
   { href: "/dashboard/pleby",       label: "Pleby AI",      icon: Bot,        tier: "elite" },
 ];

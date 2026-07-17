@@ -4,8 +4,6 @@ Strategy orchestrator — runs all strategy modules and logs validated signals.
 
 from .base import BaseStrategy, Signal, compute_position_sizes
 from .prediction_market_decoupling import PredictionMarketDecoupling
-from .institutional_consolidation_breakout import InstitutionalConsolidationBreakout
-from .unusual_options_activity import UnusualOptionsActivity
 from .signal_logger import SignalLogger
 
 
@@ -13,8 +11,6 @@ class StrategyOrchestrator:
     def __init__(self):
         self.strategies: list[BaseStrategy] = [
             PredictionMarketDecoupling(),
-            InstitutionalConsolidationBreakout(),
-            UnusualOptionsActivity(),
         ]
         self.logger = SignalLogger()
 

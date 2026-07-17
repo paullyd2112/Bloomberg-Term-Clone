@@ -11,22 +11,16 @@ from dotenv import load_dotenv
 
 from sentry_setup import init_sentry
 from ingestion.prediction_markets import ingest_prediction_markets
-from ingestion.stocks import ingest_stocks
 from ingestion.crypto import ingest_crypto
 from ingestion.congressional import ingest_congressional
-from ingestion.sec_form4 import ingest_insider_trades
-from ingestion.options_flow import ingest_options_flow
-from ingestion.short_interest import ingest_short_interest
-from ingestion.earnings import ingest_earnings
-from ingestion.corporate_actions import ingest_corporate_actions
 from ingestion.macro_events import seed_macro_events
 from ingestion.fred import enrich_macro_events
 from ingestion.news import ingest_news
 from ingestion.tech_news import ingest_tech_news
 from ingestion.geopolitics_news import ingest_geopolitics_news
 from ingestion.crypto_momentum import ingest_momentum_coins
-from scoring.engine import score_stocks_event_only, score_prediction_markets, score_options_flow
-from scoring.rules_engine import score_stocks_rules, score_crypto_rules
+from scoring.engine import score_prediction_markets
+from scoring.rules_engine import score_crypto_rules
 from scoring.resolver import resolve_outcomes, evaluate_alerts
 from scoring.accuracy import refresh_asset_accuracy
 from briefing.newsletter import generate_newsletter
@@ -78,32 +72,11 @@ def job_ingest_prediction_markets():
 def job_score_prediction_markets():
     return score_prediction_markets()
 
-def job_ingest_stocks():
-    return ingest_stocks()
-
-def job_score_stocks():
-    return score_stocks_rules()
-
-def job_score_stocks_event_only():
-    return score_stocks_event_only()
-
 def job_ingest_crypto():
     return ingest_crypto()
 
 def job_score_crypto():
     return score_crypto_rules()
-
-def job_ingest_options_flow():
-    return ingest_options_flow()
-
-def job_ingest_short_interest():
-    return ingest_short_interest()
-
-def job_ingest_earnings():
-    return ingest_earnings()
-
-def job_ingest_corporate_actions():
-    return ingest_corporate_actions()
 
 def job_seed_macro_events():
     return seed_macro_events()
@@ -113,12 +86,6 @@ def job_enrich_fred():
 
 def job_ingest_congressional():
     return ingest_congressional()
-
-def job_ingest_insider_trades():
-    return ingest_insider_trades()
-
-def job_score_options_flow():
-    return score_options_flow()
 
 def job_ingest_news():
     return ingest_news()
@@ -312,39 +279,7 @@ scheduler.add_job(lambda: _run_job("score_prediction_markets_pm", job_score_pred
                   CronTrigger(hour=18, minute=0, timezone="America/New_York"),
                   id="score_prediction_markets_pm")
 
-# ─── Stocks / Options / Futures: market-window scoring ───────────────
-# Morning Rush (9:45–11:30 AM ET): every 15 min — 70% of intraday breakout momentum
-scheduler.add_job(lambda: _run_stock_job("score_stocks", job_score_stocks),
-                  CronTrigger(minute="0,15,30,45", hour="10,11", day_of_week="mon-fri",
-                              timezone="America/New_York"), id="score_stocks_morning")
-scheduler.add_job(lambda: _run_stock_job("score_stocks_event", job_score_stocks_event_only),
-                  CronTrigger(minute="45", hour="9", day_of_week="mon-fri",
-                              timezone="America/New_York"), id="score_stocks_open")
-scheduler.add_job(lambda: _run_stock_job("score_options_flow", job_score_options_flow),
-                  CronTrigger(minute="0,30", hour="10,11", day_of_week="mon-fri",
-                              timezone="America/New_York"), id="score_options_morning")
-
-# Midday Lull (11:30 AM–2:00 PM ET): hourly — save tokens in chop zone
-scheduler.add_job(lambda: _run_stock_job("score_stocks_midday", job_score_stocks),
-                  CronTrigger(minute=30, hour="12,13", day_of_week="mon-fri",
-                              timezone="America/New_York"), id="score_stocks_midday")
-
-# Power Hour (2:00–3:30 PM ET): every 15 min — institutional block sweeps
-scheduler.add_job(lambda: _run_stock_job("score_stocks_power", job_score_stocks),
-                  CronTrigger(minute="0,15,30,45", hour="14,15", day_of_week="mon-fri",
-                              timezone="America/New_York"), id="score_stocks_power")
-scheduler.add_job(lambda: _run_stock_job("score_options_power", job_score_options_flow),
-                  CronTrigger(minute="0,30", hour="14,15", day_of_week="mon-fri",
-                              timezone="America/New_York"), id="score_options_power")
-# Hard cutoff at 3:30 PM ET — no stock/options scoring after this.
-# CronTrigger hour caps enforce this: hour="14,15" with _is_market_open() guard.
-
-# Stocks ingestion — align with scoring windows
-scheduler.add_job(lambda: _run_stock_job("ingest_stocks", job_ingest_stocks),
-                  CronTrigger(minute=30, hour="9,11,13,15", day_of_week="mon-fri",
-                              timezone="America/New_York"), id="ingest_stocks")
-
-# ─── Crypto: flat 2-hour loop (24/7, decoupled from equity sessions) ────
+# ─── Crypto: flat 2-hour loop (24/7) ────
 scheduler.add_job(lambda: _run_job("ingest_crypto", job_ingest_crypto),
                   CronTrigger(minute=0, hour="*/2"), id="ingest_crypto")
 scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
@@ -355,26 +290,15 @@ scheduler.add_job(lambda: _run_job("crypto_momentum", job_crypto_momentum),
                   CronTrigger(minute=45, hour="*/2"), id="crypto_momentum")
 
 
-# Enrichment — weekdays, skip holidays
-scheduler.add_job(lambda: _run_stock_job("ingest_options_flow", job_ingest_options_flow),
-                  CronTrigger(minute=0, hour="9,12,15", day_of_week="mon-fri"), id="ingest_options_flow")
-scheduler.add_job(lambda: _run_stock_job("ingest_short_interest", job_ingest_short_interest),
-                  CronTrigger(hour=7, minute=0, day_of_week="mon-fri"), id="ingest_short_interest")
-scheduler.add_job(lambda: _run_stock_job("ingest_earnings", job_ingest_earnings),
-                  CronTrigger(hour=6, minute=0, day_of_week="mon-fri"), id="ingest_earnings")
-scheduler.add_job(lambda: _run_stock_job("ingest_corporate_actions", job_ingest_corporate_actions),
-                  CronTrigger(hour=6, minute=15, day_of_week="mon-fri"), id="ingest_corporate_actions")
-scheduler.add_job(lambda: _run_stock_job("seed_macro_events", job_seed_macro_events),
+# Enrichment — macro data for predictions/briefings
+scheduler.add_job(lambda: _run_job("seed_macro_events", job_seed_macro_events),
                   CronTrigger(hour=6, minute=30, day_of_week="mon-fri"), id="seed_macro_events")
-scheduler.add_job(lambda: _run_stock_job("enrich_fred", job_enrich_fred),
+scheduler.add_job(lambda: _run_job("enrich_fred", job_enrich_fred),
                   CronTrigger(hour=6, minute=45, day_of_week="mon-fri"), id="enrich_fred")
 
-# Congressional — daily at 8am ET (Senate Stock Watcher → Finnhub → FMP)
+# Congressional — daily at 8am ET (Senate EFD scraper)
 scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressional),
                   CronTrigger(hour=8, minute=0), id="ingest_congressional")
-# Insider trades (SEC Form 4) — daily at 8:15am ET (EDGAR → Finnhub → FMP)
-scheduler.add_job(lambda: _run_job("ingest_insider_trades", job_ingest_insider_trades),
-                  CronTrigger(hour=8, minute=15), id="ingest_insider_trades")
 
 # Market news — ingest at 6:45am ET weekdays, before newsletter generation
 scheduler.add_job(lambda: _run_job("ingest_news", job_ingest_news),
@@ -436,11 +360,10 @@ def add_cors(response):
 @app.route("/validate-ticker", methods=["POST"])
 def validate_ticker_endpoint():
     """
-    Quick validation: checks if a ticker symbol is real via yfinance/CoinGecko.
+    Quick validation: checks if a ticker symbol is real via CoinGecko.
     Returns basic info without ingesting. Used by search to show untracked tickers.
     """
     from flask import request as flask_request
-    import yfinance as yf
 
     body = flask_request.get_json(silent=True) or {}
     query = body.get("query", "").upper().strip()
@@ -450,42 +373,24 @@ def validate_ticker_endpoint():
 
     results = []
 
-    # Try as stock ticker via yfinance
     try:
-        ticker = yf.Ticker(query)
-        info = ticker.info or {}
-        market_price = info.get("regularMarketPrice") or info.get("currentPrice")
-        short_name = info.get("shortName") or info.get("longName")
-        if market_price and short_name:
-            results.append({
-                "identifier": query,
-                "asset_type": "stock",
-                "name": short_name,
-                "price": float(market_price),
-            })
+        import httpx
+        cg_resp = httpx.get(
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={"ids": query.lower(), "vs_currencies": "usd"},
+            timeout=5.0,
+        )
+        if cg_resp.status_code == 200:
+            data = cg_resp.json()
+            if query.lower() in data:
+                results.append({
+                    "identifier": query,
+                    "asset_type": "crypto",
+                    "name": query,
+                    "price": data[query.lower()].get("usd"),
+                })
     except Exception:
         pass
-
-    # Try as crypto via CoinGecko simple price
-    if not results:
-        try:
-            import httpx
-            cg_resp = httpx.get(
-                "https://api.coingecko.com/api/v3/simple/price",
-                params={"ids": query.lower(), "vs_currencies": "usd"},
-                timeout=5.0,
-            )
-            if cg_resp.status_code == 200:
-                data = cg_resp.json()
-                if query.lower() in data:
-                    results.append({
-                        "identifier": query,
-                        "asset_type": "crypto",
-                        "name": query,
-                        "price": data[query.lower()].get("usd"),
-                    })
-        except Exception:
-            pass
 
     return jsonify({"results": results})
 
@@ -502,18 +407,14 @@ def ingest_asset_endpoint():
     asset_type = body.get("asset_type")
     identifier = body.get("identifier", "").upper()
 
-    if asset_type not in ("stock", "crypto"):
-        return jsonify({"error": "Invalid asset_type"}), 400
+    if asset_type != "crypto":
+        return jsonify({"error": "Only crypto ingestion is supported"}), 400
     if not identifier:
         return jsonify({"error": "Missing identifier"}), 400
 
     try:
-        if asset_type == "stock":
-            from ingestion.stocks import _ingest_ticker
-            ok = _ingest_ticker(identifier)
-        else:
-            from ingestion.crypto import _ingest_coin_ohlcv_only
-            ok = _ingest_coin_ohlcv_only(identifier)
+        from ingestion.crypto import _ingest_coin_ohlcv_only
+        ok = _ingest_coin_ohlcv_only(identifier)
 
         if ok:
             return jsonify({"status": "ok", "identifier": identifier})
@@ -551,15 +452,11 @@ def score_asset_endpoint():
         .limit(1) \
         .execute()
 
-    if not price_check.data and asset_type in ("stock", "crypto"):
+    if not price_check.data and asset_type == "crypto":
         logger.info("No price data for {}/{}, auto-ingesting first", asset_type, identifier)
         try:
-            if asset_type == "stock":
-                from ingestion.stocks import _ingest_ticker
-                _ingest_ticker(identifier)
-            else:
-                from ingestion.crypto import _ingest_coin_ohlcv_only
-                _ingest_coin_ohlcv_only(identifier)
+            from ingestion.crypto import _ingest_coin_ohlcv_only
+            _ingest_coin_ohlcv_only(identifier)
         except Exception as e:
             logger.warning("Auto-ingest failed for {}/{}: {}", asset_type, identifier, e)
 
@@ -599,17 +496,14 @@ def score_now():
                 "status": "running",
             }
 
-            from ingestion.stocks import ingest_stocks
             from ingestion.crypto import ingest_crypto
             from ingestion.prediction_markets import ingest_prediction_markets
-            from scoring.rules_engine import score_stocks_rules, score_crypto_rules
+            from scoring.rules_engine import score_crypto_rules
             from scoring.engine import score_prediction_markets
 
             results = {}
-            results["ingest_stocks"] = ingest_stocks()
             results["ingest_crypto"] = ingest_crypto()
             results["ingest_predictions"] = ingest_prediction_markets()
-            results["score_stocks"] = score_stocks_rules()
             results["score_crypto"] = score_crypto_rules()
             results["score_predictions"] = score_prediction_markets()
 
@@ -644,10 +538,7 @@ def score_now_status():
     return jsonify(state)
 
 
-STOCK_MARKET_HOURS_JOBS = {
-    "ingest_stocks", "score_stocks", "score_options_flow",
-    "ingest_options_flow", "ingest_corporate_actions",
-}
+STOCK_MARKET_HOURS_JOBS: set[str] = set()
 
 
 @app.route("/run-job/<job_name>", methods=["POST"])
@@ -675,26 +566,19 @@ def run_job_manual(job_name: str):
 
     job_map = {
         "ingest_congressional": job_ingest_congressional,
-        "ingest_insider_trades": job_ingest_insider_trades,
         "resolve_outcomes": job_resolve_outcomes,
         "refresh_asset_accuracy": job_refresh_asset_accuracy,
         "ingest_news": job_ingest_news,
         "ingest_tech_news": job_ingest_tech_news,
         "ingest_geopolitics_news": job_ingest_geopolitics_news,
-        "ingest_stocks": job_ingest_stocks,
         "ingest_crypto": job_ingest_crypto,
         "ingest_prediction_markets": job_ingest_prediction_markets,
-        "ingest_options_flow": job_ingest_options_flow,
-        "score_stocks": job_score_stocks,
         "score_crypto": job_score_crypto,
         "score_prediction_markets": job_score_prediction_markets,
-        "score_options_flow": job_score_options_flow,
-        "score_stocks_rules": job_score_stocks,
         "score_crypto_rules": job_score_crypto,
         "crypto_momentum": job_crypto_momentum,
         "generate_newsletter": job_generate_newsletter,
         "send_newsletter": job_send_newsletter,
-        "ingest_corporate_actions": job_ingest_corporate_actions,
         "send_elite_briefings": job_send_elite_briefings,
     }
 
@@ -1302,107 +1186,56 @@ def rules_backtest_status():
 
 @app.route("/backfill-alpaca", methods=["GET", "POST"])
 def backfill_alpaca():
-    """
-    Backfill 60 days of daily bars from Alpaca for all watchlist tickers.
-    Writes to raw_prices. Idempotent (duplicates are fine, latest row wins).
-    """
+    """Backfill crypto bars from Alpaca. Writes to raw_prices."""
     from flask import request as flask_request
     import threading
 
     body = flask_request.get_json(silent=True) or {}
     days = int(body.get("days", 60))
-    asset_type = body.get("asset_type", "both")
 
     def _run():
         from supabase_client import supabase
-        from ingestion.alpaca_client import fetch_stock_bars, fetch_crypto_bars, _is_configured
-        from ingestion.stocks import get_default_watchlist, _compute_indicators
+        from ingestion.alpaca_client import fetch_crypto_bars, _is_configured
         from ingestion.crypto import PRIORITY_SYMBOLS, _compute_crypto_indicators
 
         if not _is_configured():
-            _job_state["backfill_alpaca"] = {
-                "status": "error",
-                "error": "ALPACA_API_KEY or ALPACA_API_SECRET not set",
-            }
+            _job_state["backfill_alpaca"] = {"status": "error", "error": "ALPACA_API_KEY or ALPACA_API_SECRET not set"}
             return
 
-        _job_state["backfill_alpaca"] = {
-            "status": "running",
-            "started": datetime.now(timezone.utc).isoformat(),
-        }
+        _job_state["backfill_alpaca"] = {"status": "running", "started": datetime.now(timezone.utc).isoformat()}
+        results = {"crypto": {"success": 0, "failed": 0, "errors": []}}
 
-        results = {"stocks": {"success": 0, "failed": 0, "errors": []}, "crypto": {"success": 0, "failed": 0, "errors": []}}
-
-        if asset_type in ("both", "stocks"):
-            tickers = get_default_watchlist()
-            for ticker in tickers:
-                try:
-                    df = fetch_stock_bars(ticker, days=days)
-                    if df is None or df.empty:
-                        results["stocks"]["failed"] += 1
-                        results["stocks"]["errors"].append(f"{ticker}: no data returned")
-                        continue
-                    indicators = _compute_indicators(df)
-                    supabase.table("raw_prices").insert({
-                        "asset_type": "stock",
-                        "identifier": ticker,
-                        "price": indicators["close"],
-                        "volume": indicators["volume"],
-                        "change_24h": indicators.get("change_1d_pct"),
-                        "metadata": {**indicators, "source": "alpaca_backfill"},
-                    }).execute()
-                    results["stocks"]["success"] += 1
-                except Exception as e:
-                    logger.warning("Backfill failed for {}: {}", ticker, e)
-                    results["stocks"]["failed"] += 1
-                    results["stocks"]["errors"].append(f"{ticker}: {e}")
-                import time
-                time.sleep(0.3)
-
-        if asset_type in ("both", "crypto"):
-            for symbol in PRIORITY_SYMBOLS:
-                try:
-                    df = fetch_crypto_bars(symbol, days=days)
-                    if df is None or df.empty:
-                        results["crypto"]["failed"] += 1
-                        results["crypto"]["errors"].append(f"{symbol}: no data returned")
-                        continue
-                    indicators = _compute_crypto_indicators(df)
-                    supabase.table("raw_prices").insert({
-                        "asset_type": "crypto",
-                        "identifier": symbol,
-                        "price": indicators["close"],
-                        "volume": indicators.get("volume_24h"),
-                        "change_24h": None,
-                        "metadata": {**indicators, "source": "alpaca_backfill"},
-                    }).execute()
-                    results["crypto"]["success"] += 1
-                except Exception as e:
-                    logger.warning("Backfill failed for {}: {}", symbol, e)
+        for symbol in PRIORITY_SYMBOLS:
+            try:
+                df = fetch_crypto_bars(symbol, days=days)
+                if df is None or df.empty:
                     results["crypto"]["failed"] += 1
-                    results["crypto"]["errors"].append(f"{symbol}: {e}")
-                import time
-                time.sleep(0.3)
+                    results["crypto"]["errors"].append(f"{symbol}: no data returned")
+                    continue
+                indicators = _compute_crypto_indicators(df)
+                supabase.table("raw_prices").insert({
+                    "asset_type": "crypto",
+                    "identifier": symbol,
+                    "price": indicators["close"],
+                    "volume": indicators.get("volume_24h"),
+                    "change_24h": None,
+                    "metadata": {**indicators, "source": "alpaca_backfill"},
+                }).execute()
+                results["crypto"]["success"] += 1
+            except Exception as e:
+                logger.warning("Backfill failed for {}: {}", symbol, e)
+                results["crypto"]["failed"] += 1
+                results["crypto"]["errors"].append(f"{symbol}: {e}")
+            import time
+            time.sleep(0.3)
 
-        # Keep only first 5 errors per category to avoid huge status responses
-        for cat in ("stocks", "crypto"):
-            results[cat]["errors"] = results[cat]["errors"][:5]
-
-        _job_state["backfill_alpaca"] = {
-            "status": "ok",
-            "finished": datetime.now(timezone.utc).isoformat(),
-            "results": results,
-        }
+        results["crypto"]["errors"] = results["crypto"]["errors"][:5]
+        _job_state["backfill_alpaca"] = {"status": "ok", "finished": datetime.now(timezone.utc).isoformat(), "results": results}
         logger.info("Alpaca backfill complete: {}", results)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
-    return jsonify({
-        "status": "started",
-        "days": days,
-        "asset_type": asset_type,
-        "check": "/backfill-alpaca/status",
-    })
+    return jsonify({"status": "started", "days": days, "check": "/backfill-alpaca/status"})
 
 
 @app.route("/backfill-alpaca/status")
@@ -1413,7 +1246,7 @@ def backfill_alpaca_status():
 
 @app.route("/alpaca-test")
 def alpaca_test():
-    """Quick diagnostic: test Alpaca API with a single stock + crypto call."""
+    """Quick diagnostic: test Alpaca crypto API."""
     import httpx
     key = os.environ.get("ALPACA_API_KEY", "")
     secret = os.environ.get("ALPACA_API_SECRET", "")
@@ -1423,19 +1256,6 @@ def alpaca_test():
         "key_prefix": key[:8] + "..." if len(key) > 8 else "(short)",
     }
     headers = {"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret}
-    try:
-        resp = httpx.get(
-            "https://data.alpaca.markets/v2/stocks/AAPL/bars",
-            params={"timeframe": "1Day", "limit": 1, "feed": "iex"},
-            headers=headers,
-            timeout=10,
-        )
-        results["stock_test"] = {
-            "status": resp.status_code,
-            "body": resp.text[:300] if resp.status_code != 200 else f"{len(resp.json().get('bars', []))} bars",
-        }
-    except Exception as e:
-        results["stock_test"] = {"error": str(e)}
     try:
         resp = httpx.get(
             "https://data.alpaca.markets/v1beta3/crypto/us/bars",
@@ -1454,28 +1274,8 @@ def alpaca_test():
 
 @app.route("/scanner")
 def scanner_endpoint():
-    """
-    Run market scanner — shows which stocks have active technical setups.
-    Scans watchlist + market movers (gainers/losers/most active).
-    Zero Claude cost. Use ?watchlist_only=true to skip movers.
-    """
-    from flask import request as flask_request
-    from scoring.scanner import scan_stocks
-
-    watchlist_only = flask_request.args.get("watchlist_only", "false").lower() == "true"
-
-    try:
-        results = scan_stocks(use_movers=not watchlist_only)
-        return jsonify({
-            "status": "ok",
-            "qualified": len(results),
-            "mode": "watchlist_only" if watchlist_only else "full_market",
-            "stocks": results,
-        })
-    except Exception as e:
-        import traceback
-        return jsonify({"status": "error", "error": str(e),
-                        "traceback": traceback.format_exc()}), 500
+    """Stock scanner disabled (crypto-only pivot)."""
+    return jsonify({"status": "disabled", "reason": "Stock scanner removed in crypto-only pivot"})
 
 
 @app.route("/backtest/diag")

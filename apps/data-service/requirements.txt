@@ -1,5 +1,4 @@
 # Data ingestion
-yfinance==0.2.40
 ccxt==4.3.24
 httpx==0.27.0
 beautifulsoup4==4.12.0
@@ -11,9 +10,6 @@ beautifulsoup4==4.12.0
 pandas-ta-classic==0.6.20
 pandas==2.2.3
 numpy==2.0.2
-
-# Backtesting
-backtrader==1.9.78.123
 
 # AI & structured output
 anthropic>=0.40.0
@@ -44,9 +40,6 @@ twilio==9.4.1
 
 # Economic data
 fredapi==0.5.2
-
-# SEC EDGAR (insider trades via Form 4)
-edgartools>=5.0.0
 
 # WebSocket (Alpaca live streaming)
 websocket-client==1.8.0
