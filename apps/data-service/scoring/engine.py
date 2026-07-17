@@ -307,6 +307,15 @@ def _get_corporate_actions_context(ticker: str) -> list[dict] | None:
         return None
 
 
+def _get_reddit_sentiment(ticker: str) -> dict | None:
+    try:
+        from ingestion.apewisdom import get_reddit_sentiment
+        return get_reddit_sentiment(ticker)
+    except Exception as e:
+        logger.warning("reddit sentiment failed for {}: {}", ticker, e)
+        return None
+
+
 # ─── Macro context ───────────────────────────────────────────────────────────
 
 def _get_market_benchmark() -> dict:
@@ -865,6 +874,7 @@ def score_asset(
                 "market_cap":          meta.get("market_cap"),
                 "news_headlines":      news,
                 "btc_regime":          btc_regime,
+                "reddit_sentiment":    _get_reddit_sentiment(identifier),
             }
 
             macro_ctx = _build_macro_context_dict(benchmarks)
