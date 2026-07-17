@@ -7,6 +7,8 @@ import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
 import SubscribeGate from "@/components/ui/SubscribeGate";
 import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
+import WhaleAlertsFeed from "@/components/dashboard/WhaleAlertsFeed";
+import LegislativeCatalysts from "@/components/dashboard/LegislativeCatalysts";
 import SectionHeader from "@/components/ui/SectionHeader";
 import SkipTrialBanner from "@/components/SkipTrialBanner";
 
@@ -346,6 +348,15 @@ export default async function DashboardPage() {
           </div>
         </section>
       )}
+
+      {/* Intelligence feeds — whale orders + legislative catalysts */}
+      <section>
+        <SectionHeader divider className="mb-4">Intelligence</SectionHeader>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <WhaleAlertsFeed />
+          <LegislativeCatalysts />
+        </div>
+      </section>
 
       {/* Signal feed — the product, surfaced above supporting analytics */}
       <section>

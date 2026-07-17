@@ -33,6 +33,8 @@ from briefing.newsletter import generate_newsletter
 from briefing.newsletter_emailer import send_newsletter
 from briefing.elite_briefing import send_elite_briefings
 from briefing.welcome_emails import send_welcome_sequence
+from scoring.whale_sentinel import scan_whales, get_recent_alerts
+from ingestion.legislative import ingest_legislative_catalysts, get_recent_catalysts
 
 load_dotenv()
 
@@ -169,6 +171,12 @@ def job_refresh_asset_accuracy():
 
 def job_evaluate_alerts():
     return evaluate_alerts()
+
+def job_scan_whales():
+    return scan_whales()
+
+def job_ingest_legislative():
+    return ingest_legislative_catalysts()
 
 
 _uptime_fail_count = 0
@@ -409,6 +417,14 @@ scheduler.add_job(lambda: _run_job("refresh_asset_accuracy", job_refresh_asset_a
 # Alerts — every 30 min
 scheduler.add_job(lambda: _run_job("evaluate_alerts", job_evaluate_alerts),
                   IntervalTrigger(minutes=30), id="evaluate_alerts")
+
+# Whale Sentinel — every 15 min, scans Polymarket CLOB for large orders
+scheduler.add_job(lambda: _run_job("scan_whales", job_scan_whales),
+                  IntervalTrigger(minutes=15), id="scan_whales")
+
+# Legislative Catalysts — every 4 hours, Congress.gov RSS + Haiku classification
+scheduler.add_job(lambda: _run_job("ingest_legislative", job_ingest_legislative),
+                  CronTrigger(hour="2,6,10,14,18,22", minute=30, timezone="UTC"), id="ingest_legislative")
 
 # Uptime monitor — every 5 min, alerts via Resend if web app is down
 scheduler.add_job(lambda: _run_job("uptime_check", job_uptime_check),
@@ -696,6 +712,8 @@ def run_job_manual(job_name: str):
         "send_newsletter": job_send_newsletter,
         "ingest_corporate_actions": job_ingest_corporate_actions,
         "send_elite_briefings": job_send_elite_briefings,
+        "scan_whales": job_scan_whales,
+        "ingest_legislative": job_ingest_legislative,
     }
 
     fn = job_map.get(job_name)
@@ -728,6 +746,24 @@ def run_job_manual(job_name: str):
 def run_job_status(job_name: str):
     state = _job_state.get(f"manual_{job_name}", {"status": "never_run"})
     return jsonify(state)
+
+
+@app.route("/whale-alerts")
+def whale_alerts_endpoint():
+    """Recent whale alerts from Polymarket CLOB order book scanning."""
+    from flask import request as flask_request
+    limit = int(flask_request.args.get("limit", 50))
+    alerts = get_recent_alerts(min(limit, 100))
+    return jsonify(alerts)
+
+
+@app.route("/legislative-catalysts")
+def legislative_catalysts_endpoint():
+    """Recent legislative catalysts — crypto/macro-relevant bills from Congress.gov."""
+    from flask import request as flask_request
+    limit = int(flask_request.args.get("limit", 30))
+    catalysts = get_recent_catalysts(min(limit, 50))
+    return jsonify(catalysts)
 
 
 @app.route("/api/v1/scanners/prediction-markets/trigger", methods=["POST"])
