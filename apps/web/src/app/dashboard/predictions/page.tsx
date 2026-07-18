@@ -6,6 +6,34 @@ import { clsx } from "clsx";
 import { createClient } from "@/lib/supabase/client";
 import PredictionCard, { type PredictionMarket } from "@/components/predictions/PredictionCard";
 
+const SPORTS_KEYWORDS = [
+  "f1", "formula 1", "nfl", "nba", "mlb", "nhl", "mls",
+  "premier league", "champions league", "world cup", "super bowl",
+  "world series", "stanley cup", "wimbledon", "olympics", "olympic",
+  "ufc", "mma", "boxing", "grand prix", "constructors' champion",
+  "drivers' champion", "ballon d'or", "mvp award", "cricket", "ipl",
+  "pga", "masters tournament", "nascar", "tour de france", "esports",
+  "afa president",
+];
+
+function inferCategory(title: string, slug: string): string {
+  const text = `${title} ${slug}`.toLowerCase();
+  for (const kw of SPORTS_KEYWORDS) if (text.includes(kw)) return "sports";
+
+  const checks: [string[], string][] = [
+    [["president", "election", "midterm", "senate", "house", "governor", "congress", "democrat", "republican", "balance of power", "prime minister", "coup", "parliament"], "politics"],
+    [["military clash", "war ", "invasion", "sanctions", "china x", "russia", "ukraine", "taiwan", "israel", "iran", "ceasefire"], "geopolitics"],
+    [["fed ", "fed?", "federal reserve", "interest rate", "inflation", "gdp", "recession", "debt", "tariff", "s&p 500", "treasury", "bond"], "economics"],
+    [["bitcoin", "btc", "ethereum", "crypto", "blockchain", "coinbase", "stablecoin", "defi"], "crypto"],
+    [["ipo", "ai ", "ai?", "artificial intelligence", "openai", "anthropic", "startup"], "technology"],
+    [["earthquake", "hurricane", "pandemic", "vaccine", "nasa", "spacex", "nuclear", "fusion"], "science"],
+  ];
+  for (const [keywords, cat] of checks) {
+    for (const kw of keywords) if (text.includes(kw)) return cat;
+  }
+  return "";
+}
+
 const CATEGORY_TABS = [
   { id: "all",        label: "All" },
   { id: "politics",   label: "Politics" },
@@ -110,13 +138,18 @@ export default function PredictionsPage() {
             sparkline.push(yesPrice);
           }
 
+          const rawCategory = String(meta.category ?? "");
+          const title = String(meta.title ?? "");
+          const eventSlug = String(meta.event_slug ?? "");
+          const category = rawCategory || inferCategory(title, eventSlug);
+
           return {
             condition_id: r.identifier,
-            title: String(meta.title ?? ""),
+            title,
             yes_price: yesPrice,
             no_price: noPrice,
             volume: Number(r.volume ?? 0),
-            category: String(meta.category ?? ""),
+            category,
             end_date: meta.end_date ? String(meta.end_date) : null,
             captured_at: r.captured_at,
             sparkline,
@@ -124,7 +157,7 @@ export default function PredictionsPage() {
           };
         });
 
-      setMarkets(assembled);
+      setMarkets(assembled.filter((m) => m.category !== "sports"));
       setLoading(false);
     }
 

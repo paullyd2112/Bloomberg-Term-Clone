@@ -18,6 +18,7 @@ from loguru import logger
 from dotenv import load_dotenv
 
 from supabase_client import supabase
+from scoring.prediction_filters import infer_category
 
 load_dotenv()
 
@@ -255,11 +256,15 @@ async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
                 event_slug = first_event.get("slug") or ""
                 context_description = (first_event.get("eventMetadata") or {}).get("context_description") or ""
 
+                title = _first(m, "question") or ""
+                raw_category = _first(m, "category") or ""
+                inferred = raw_category or infer_category(title, event_slug)
+
                 static_meta = {
                     "source":              "polymarket",
-                    "title":               _first(m, "question") or "",
+                    "title":               title,
                     "end_date":            _first(m, "endDate", "end_date_iso") or "",
-                    "category":            _first(m, "category") or "",
+                    "category":            inferred,
                     "event_slug":          event_slug,
                     "context_description": context_description,
                     "raw":                 m,
