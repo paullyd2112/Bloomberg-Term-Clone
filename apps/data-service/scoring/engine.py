@@ -1450,8 +1450,8 @@ MIN_CRYPTO_SIGNALS_PER_DAY = 3   # target floor — ease thresholds if 0 signals
 MAX_CONCURRENT_CRYPTO_BUYS = 2   # max simultaneous open crypto longs
 CRYPTO_MAJORS = {"BTC", "ETH"}   # correlated majors; ≤1 alt alongside an open major
 
-ADAPTIVE_HAIKU_BASE_THRESHOLD = 89
-ADAPTIVE_HAIKU_TIGHT_THRESHOLD = 94
+ADAPTIVE_HAIKU_BASE_THRESHOLD = 65
+ADAPTIVE_HAIKU_TIGHT_THRESHOLD = 80
 ADAPTIVE_TIGHT_TRIGGER = 6
 ADAPTIVE_EASE_HOUR_EST = 16
 ADAPTIVE_EASE_RSI_REDUCTION_PCT = 5
@@ -1767,9 +1767,9 @@ def score_crypto(subscription: str | None = None) -> str:
 
 
 PREDICTION_CANDIDATE_POOL  = 150  # raw pool pulled before diversification
-PREDICTION_CANDIDATE_LIMIT = 20   # diversified candidates actually prescreened
+PREDICTION_CANDIDATE_LIMIT = 30   # diversified candidates actually prescreened
 PREDICTION_MAX_PER_EVENT   = 2    # cap per real-world event/topic
-MAX_PREDICTION_SIGNALS_PER_DAY = 3
+MAX_PREDICTION_SIGNALS_PER_DAY = 10
 
 
 def _prediction_signals_today_count() -> int:

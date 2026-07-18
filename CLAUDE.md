@@ -239,14 +239,16 @@ volume caps) stop being acceptable at that point.
       subscriber count actually approaches it, not just at the 10-paying-user mark.
 - [ ] **Railway**: confirm/upgrade to a paid compute tier if still on a hobby-level plan — more reliability
       headroom as scheduled jobs and traffic grow.
-- [ ] **Kalshi (predictive markets)**: disabled, not a tier issue — its RSA-PSS signing handshake fails with
-      credentials confirmed present in Railway. Needs actual debugging (likely requires server-side log
-      access this session didn't have) before re-enabling, not just a plan upgrade. Polymarket (Gamma API)
-      is carrying prediction markets alone in the meantime.
-- [ ] **Dedicated Polymarket-style predictions tab**: the July 5 fix (#68 era) made prediction-market
-      signals render correctly, but it reuses the same dense stock/crypto components — it does not look
-      like Polymarket (big percentage as focal point, probability sparkline, colored Yes/No buy buttons,
-      volume/category chip). Also scope-different from the current signal-only view: this would be a
-      browse/discovery tab across ALL live Polymarket markets we ingest (dozens-hundreds), not just the
-      subset we've generated an AI signal for — same tier of effort as Congress Tracker was. Not a tier
-      upgrade, a real feature build; revisit once past initial launch.
+- [x] **Kalshi (predictive markets)**: staying disabled by policy, not a tier issue and not a debugging
+      backlog item — Kalshi is a CFTC-regulated exchange and not a fit for this platform, so the RSA-PSS
+      signing bug is not being pursued further. Polymarket (Gamma API) carries prediction markets alone
+      going forward; no re-enable planned.
+- [x] **Dedicated Polymarket-style predictions tab**: built (July 2026). Browse/discovery tab at
+      `/dashboard/predictions` showing ALL ingested Polymarket markets (up to 150 active) with big
+      probability numbers, sparklines (from `prediction_price_history` table, 48h rolling window),
+      category chips, volume badges, and AI signal badges overlaid on scored markets. Category filter
+      tabs, search, and sort. Added to sidebar and mobile bottom nav for all tiers.
+- [ ] **Polymarket WebSocket feed (v2)**: Polymarket offers a real-time WebSocket feed (RTDS) for live
+      order book and price updates. Current v1 uses 30-min Gamma API polling which is fine for discovery,
+      but live-updating probabilities would make the predictions tab feel more alive. Not needed at
+      launch; add once user engagement with the tab justifies the connection management complexity.

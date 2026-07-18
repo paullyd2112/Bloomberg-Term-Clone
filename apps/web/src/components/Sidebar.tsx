@@ -18,6 +18,7 @@ import {
   Bot,
   ArrowUpRight,
   Calculator,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react";
 import type { Tier } from "@/lib/tier";
@@ -29,6 +30,7 @@ const NAV: {
   tier?: "pro" | "elite";
 }[] = [
   { href: "/dashboard",             label: "Signals",       icon: Zap },
+  { href: "/dashboard/predictions", label: "Predictions",   icon: BarChart3 },
   { href: "/dashboard/screener",    label: "Screener",      icon: Search,     tier: "pro" },
   { href: "/dashboard/watchlist",   label: "Watchlist",     icon: Star },
   { href: "/dashboard/portfolio",   label: "Portfolio",     icon: Wallet,     tier: "pro" },

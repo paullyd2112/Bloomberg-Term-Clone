@@ -12,6 +12,7 @@ import {
   Search,
   Wallet,
   Bot,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react";
 import type { Tier } from "@/lib/tier";
@@ -19,27 +20,27 @@ import type { Tier } from "@/lib/tier";
 type NavItem = { href: string; label: string; icon: LucideIcon; upgradeOnly?: boolean };
 
 const NAV_FREE: NavItem[] = [
-  { href: "/dashboard",            label: "Signals",  icon: Zap },
-  { href: "/dashboard/watchlist",  label: "Watch",    icon: Star },
-  { href: "/dashboard/congress",   label: "Congress", icon: Landmark },
-  { href: "/dashboard/briefing",   label: "Brief",    icon: Sunrise },
-  { href: "/dashboard/upgrade",    label: "Upgrade",  icon: Sparkles, upgradeOnly: true },
+  { href: "/dashboard",              label: "Signals",     icon: Zap },
+  { href: "/dashboard/predictions",  label: "Markets",     icon: BarChart3 },
+  { href: "/dashboard/watchlist",    label: "Watch",       icon: Star },
+  { href: "/dashboard/briefing",     label: "Brief",       icon: Sunrise },
+  { href: "/dashboard/upgrade",      label: "Upgrade",     icon: Sparkles, upgradeOnly: true },
 ];
 
 const NAV_PRO: NavItem[] = [
-  { href: "/dashboard",            label: "Signals",   icon: Zap },
-  { href: "/dashboard/screener",   label: "Screener",  icon: Search },
-  { href: "/dashboard/watchlist",  label: "Watch",     icon: Star },
-  { href: "/dashboard/portfolio",  label: "Portfolio", icon: Wallet },
-  { href: "/dashboard/briefing",   label: "Brief",     icon: Sunrise },
+  { href: "/dashboard",              label: "Signals",     icon: Zap },
+  { href: "/dashboard/predictions",  label: "Markets",     icon: BarChart3 },
+  { href: "/dashboard/screener",     label: "Screener",    icon: Search },
+  { href: "/dashboard/watchlist",    label: "Watch",       icon: Star },
+  { href: "/dashboard/briefing",     label: "Brief",       icon: Sunrise },
 ];
 
 const NAV_ELITE: NavItem[] = [
-  { href: "/dashboard",            label: "Signals",   icon: Zap },
-  { href: "/dashboard/screener",   label: "Screener",  icon: Search },
-  { href: "/dashboard/watchlist",  label: "Watch",     icon: Star },
-  { href: "/dashboard/portfolio",  label: "Portfolio", icon: Wallet },
-  { href: "/dashboard/pleby",      label: "Pleby",     icon: Bot },
+  { href: "/dashboard",              label: "Signals",     icon: Zap },
+  { href: "/dashboard/predictions",  label: "Markets",     icon: BarChart3 },
+  { href: "/dashboard/screener",     label: "Screener",    icon: Search },
+  { href: "/dashboard/watchlist",    label: "Watch",       icon: Star },
+  { href: "/dashboard/pleby",        label: "Pleby",       icon: Bot },
 ];
 
 export default function BottomNav({ tier }: { tier: Tier }) {

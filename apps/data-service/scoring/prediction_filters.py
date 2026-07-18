@@ -7,6 +7,8 @@ represents a liquid, tradeable opportunity with real edge.
 
 from __future__ import annotations
 
+import re
+
 import httpx
 from loguru import logger
 
@@ -36,17 +38,137 @@ BOOK_DEPTH_PCT = 0.03
 SPORTS_ARB_THRESHOLD_PCT = 7.0
 GROUND_TRUTH_MISMATCH_PCT = 7.0
 
+# ─── Title-based category inference ─────────────────────────────────────────
+# Polymarket's Gamma API returns empty category strings on every market.
+# We infer category from title + event_slug keywords so the category gate
+# actually works.
+
+_SPORTS_TITLE_KEYWORDS = [
+    "f1", "formula 1", "formula one",
+    "nfl", "nba", "mlb", "nhl", "mls",
+    "premier league", "la liga", "serie a", "bundesliga", "ligue 1",
+    "champions league", "europa league",
+    "world cup", "euro 2026", "copa america",
+    "super bowl", "world series", "stanley cup",
+    "wimbledon", "us open tennis", "french open", "australian open tennis",
+    "olympics", "olympic",
+    "ufc", "mma", "boxing",
+    "grand prix", "constructors' champion", "drivers' champion",
+    "ballon d'or", "mvp award", "heisman",
+    "cricket", "ipl", "ashes",
+    "pga", "masters tournament", "ryder cup",
+    "tour de france", "daytona", "nascar", "indycar",
+    "esports", "league of legends worlds",
+    "afa president",
+]
+
+_POLITICS_TITLE_KEYWORDS = [
+    "president", "election", "midterm", "senate", "house",
+    "governor", "congress", "democrat", "republican",
+    "balance of power", "blue wave", "red wave",
+    "impeach", "prime minister", "parliament",
+    "coup", "leader of", "nato",
+]
+
+_CRYPTO_TITLE_KEYWORDS = [
+    "bitcoin", "ethereum", "solana",
+    "crypto", "blockchain", "coinbase", "binance",
+    "stablecoin", "defi",
+]
+_CRYPTO_WORD_BOUNDARY = ["btc", "eth", "sol", "nft"]
+
+_TECH_TITLE_KEYWORDS = [
+    "artificial intelligence",
+    "openai", "anthropic",
+    "startup", "tech company", "software",
+]
+_TECH_WORD_BOUNDARY = ["ipo", "ai"]
+
+_ECONOMICS_TITLE_KEYWORDS = [
+    "federal reserve", "interest rate",
+    "inflation", "recession", "tariff",
+    "s&p 500", "s&p500", "nasdaq", "dow jones",
+    "treasury", "yield curve",
+]
+_ECONOMICS_WORD_BOUNDARY = ["fed", "gdp", "debt", "bond"]
+
+_SCIENCE_TITLE_KEYWORDS = [
+    "earthquake", "hurricane", "volcano", "climate",
+    "pandemic", "vaccine", "disease",
+    "nasa", "spacex", "moon landing",
+    "nuclear", "fusion",
+]
+_SCIENCE_WORD_BOUNDARY = ["mars", "who"]
+
+_GEOPOLITICS_TITLE_KEYWORDS = [
+    "military clash", "invasion", "sanctions",
+    "china x", "russia", "ukraine", "taiwan",
+    "israel", "iran", "north korea",
+    "withdraws from", "ceasefire", "peace deal",
+]
+_GEOPOLITICS_WORD_BOUNDARY = ["war"]
+
+
+def _word_match(text: str, word: str) -> bool:
+    return bool(re.search(r'\b' + re.escape(word) + r'\b', text))
+
+
+def _any_match(text: str, substrings: list[str], words: list[str] | None = None) -> bool:
+    for kw in substrings:
+        if kw in text:
+            return True
+    for w in (words or []):
+        if _word_match(text, w):
+            return True
+    return False
+
+
+def infer_category(title: str, event_slug: str = "") -> str:
+    """Infer a market's category from its title and event slug.
+
+    Returns a category string matching ALLOWED_CATEGORIES / SPORTS_CATEGORIES,
+    or empty string if no match. Short keywords (btc, eth, ai, war, etc.) use
+    word-boundary matching to avoid substring false positives.
+    """
+    text = f"{title} {event_slug}".lower()
+
+    for kw in _SPORTS_TITLE_KEYWORDS:
+        if kw in text:
+            return "sports"
+
+    checks: list[tuple[str, list[str], list[str]]] = [
+        ("politics",    _POLITICS_TITLE_KEYWORDS,    []),
+        ("geopolitics", _GEOPOLITICS_TITLE_KEYWORDS,  _GEOPOLITICS_WORD_BOUNDARY),
+        ("economics",   _ECONOMICS_TITLE_KEYWORDS,    _ECONOMICS_WORD_BOUNDARY),
+        ("crypto",      _CRYPTO_TITLE_KEYWORDS,       _CRYPTO_WORD_BOUNDARY),
+        ("technology",  _TECH_TITLE_KEYWORDS,          _TECH_WORD_BOUNDARY),
+        ("science",     _SCIENCE_TITLE_KEYWORDS,       _SCIENCE_WORD_BOUNDARY),
+    ]
+    for cat, substrings, words in checks:
+        if _any_match(text, substrings, words):
+            return cat
+
+    return ""
+
 
 def is_allowed_category(category: str, metadata: dict | None = None) -> tuple[bool, str]:
     """Check if a market's category passes the focus filter.
 
     Returns (allowed, reason). Sports markets are rejected unless metadata
     contains a verified cross-exchange arbitrage gap >= 7%.
+
+    When the upstream API returns no category (Polymarket Gamma API always
+    returns empty), infers one from the market title and event slug.
     """
     cat_lower = (category or "").strip().lower()
 
     if not cat_lower:
-        return True, "no category — allowing"
+        meta = metadata or {}
+        title = meta.get("title", "")
+        event_slug = meta.get("event_slug", "")
+        cat_lower = infer_category(title, event_slug)
+        if not cat_lower:
+            return True, "no category inferred — allowing"
 
     for allowed in ALLOWED_CATEGORIES:
         if allowed in cat_lower:
@@ -66,7 +188,7 @@ def is_allowed_category(category: str, metadata: dict | None = None) -> tuple[bo
                 except (TypeError, ValueError):
                     pass
             return False, (
-                f"[Category gate] '{cat_lower}' is sports — filtered out "
+                f"[Category gate] '{cat_lower}' is sports (inferred from title) — filtered out "
                 f"(no verified cross-exchange arb >= {SPORTS_ARB_THRESHOLD_PCT}%)"
             )
 
@@ -275,25 +397,9 @@ def run_prediction_guardrails(
     if not gt_ok:
         return False, gt_reason
 
-    raw = meta.get("raw") or {}
-    clob_token_ids = []
-    for key in ("clobTokenIds", "clob_token_ids"):
-        val = raw.get(key)
-        if val:
-            if isinstance(val, str):
-                import json
-                try:
-                    val = json.loads(val)
-                except (ValueError, TypeError):
-                    val = []
-            if isinstance(val, list) and val:
-                clob_token_ids = val
-                break
-
-    if clob_token_ids:
-        token_id = clob_token_ids[0]
-        liq_ok, liq_reason = check_clob_liquidity(token_id)
-        if not liq_ok:
-            return False, liq_reason
+    # CLOB liquidity check disabled — Polymarket's CLOB API returns $0.001–$0.999
+    # spreads on every token regardless of actual liquidity, making the spread/depth
+    # check useless (blocks 100% of markets). Volume gate above serves as the
+    # liquidity proxy until a smarter depth check is built.
 
     return True, "All prediction guardrails passed"
