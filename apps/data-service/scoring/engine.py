@@ -1767,9 +1767,9 @@ def score_crypto(subscription: str | None = None) -> str:
 
 
 PREDICTION_CANDIDATE_POOL  = 150  # raw pool pulled before diversification
-PREDICTION_CANDIDATE_LIMIT = 20   # diversified candidates actually prescreened
+PREDICTION_CANDIDATE_LIMIT = 30   # diversified candidates actually prescreened
 PREDICTION_MAX_PER_EVENT   = 2    # cap per real-world event/topic
-MAX_PREDICTION_SIGNALS_PER_DAY = 3
+MAX_PREDICTION_SIGNALS_PER_DAY = 10
 
 
 def _prediction_signals_today_count() -> int:
