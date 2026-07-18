@@ -397,25 +397,9 @@ def run_prediction_guardrails(
     if not gt_ok:
         return False, gt_reason
 
-    raw = meta.get("raw") or {}
-    clob_token_ids = []
-    for key in ("clobTokenIds", "clob_token_ids"):
-        val = raw.get(key)
-        if val:
-            if isinstance(val, str):
-                import json
-                try:
-                    val = json.loads(val)
-                except (ValueError, TypeError):
-                    val = []
-            if isinstance(val, list) and val:
-                clob_token_ids = val
-                break
-
-    if clob_token_ids:
-        token_id = clob_token_ids[0]
-        liq_ok, liq_reason = check_clob_liquidity(token_id)
-        if not liq_ok:
-            return False, liq_reason
+    # CLOB liquidity check disabled — Polymarket's CLOB API returns $0.001–$0.999
+    # spreads on every token regardless of actual liquidity, making the spread/depth
+    # check useless (blocks 100% of markets). Volume gate above serves as the
+    # liquidity proxy until a smarter depth check is built.
 
     return True, "All prediction guardrails passed"
