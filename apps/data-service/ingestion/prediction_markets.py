@@ -428,11 +428,34 @@ def ingest_prediction_markets() -> str:
             logger.error("raw_prices insert error (batch {}): {}", i // batch_size, e)
             sentry_sdk.capture_exception(e)
 
+    # Append price snapshots for sparklines on the predictions browse tab.
+    history_rows = []
+    for r in all_records:
+        meta = r.get("metadata") or {}
+        yes_p = meta.get("yes_price") if meta.get("yes_price") is not None else r.get("price")
+        if yes_p is None:
+            continue
+        history_rows.append({
+            "condition_id": r["identifier"],
+            "yes_price":    yes_p,
+            "no_price":     meta.get("no_price"),
+            "volume":       r.get("volume"),
+        })
+    history_written = 0
+    for i in range(0, len(history_rows), batch_size):
+        batch = history_rows[i : i + batch_size]
+        try:
+            supabase.table("prediction_price_history").insert(batch).execute()
+            history_written += len(batch)
+        except Exception as e:
+            logger.warning("prediction_price_history insert error (batch {}): {}", i // batch_size, e)
+
     news_count = asyncio.run(_fetch_news_batch(all_records))
 
     summary = (
         f"{written} raw_prices written "
         f"(Kalshi: {kalshi_label}, {len(polymarket_records)} Polymarket), "
+        f"{history_written} price snapshots, "
         f"{news_count} news items"
     )
     logger.info("Prediction markets ingestion complete — {}", summary)
