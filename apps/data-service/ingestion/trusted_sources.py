@@ -58,7 +58,14 @@ TRUSTED_SOURCES: set[str] = {
     "Al Jazeera",
     "Defense News",
 
-    # Industry
+    # Sports
+    "ESPN",
+    "BBC Sport",
+
+    # Health / science
+    "STAT News",
+
+    # Industry / government
     "SEC",
     "Federal Reserve",
     "U.S. Treasury",
