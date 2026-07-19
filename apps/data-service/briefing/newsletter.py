@@ -341,9 +341,19 @@ def _build_user_prompt(
     yesterday_perf: dict | None = None,
     predictions: list[dict] | None = None,
 ) -> str:
-    today = date.today().strftime("%A, %B %-d, %Y")
+    today_date = date.today()
+    today = today_date.strftime("%A, %B %-d, %Y")
+    is_weekend = today_date.weekday() >= 5
 
     parts = [f"Today is {today}. Write the Plebs.finance daily newsletter.\n"]
+
+    if is_weekend:
+        parts.append(
+            "WEEKEND EDITION: Traditional markets are closed. Lean into crypto (24/7), "
+            "prediction markets, world events, sports, and anything else people are talking about. "
+            "Keep it a bit more relaxed in tone. This is the weekend read, not the Monday morning sprint. "
+            "3-4 stories is fine instead of the usual 4-5.\n"
+        )
 
     if yesterday_perf:
         parts.append("YESTERDAY'S SIGNAL SCORECARD:")

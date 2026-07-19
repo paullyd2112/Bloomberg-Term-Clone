@@ -70,6 +70,20 @@ def ingest_rss_feeds(
     total_inserted = 0
     cutoff = datetime.now(timezone.utc) - timedelta(hours=cutoff_hours)
 
+    existing_headlines: set[str] = set()
+    try:
+        existing = (
+            supabase.table("news_items")
+            .select("headline")
+            .gte("published_at", cutoff.isoformat())
+            .limit(500)
+            .execute()
+        )
+        for row in existing.data or []:
+            existing_headlines.add(row["headline"][:80].lower())
+    except Exception:
+        pass
+
     for feed in feeds:
         if not is_trusted_source(feed["source"]):
             logger.warning("{}: {} is not in the trusted source list, skipping", log_prefix, feed["source"])
@@ -108,12 +122,11 @@ def ingest_rss_feeds(
         if not rows:
             continue
 
-        seen = set()
         deduped = []
         for r in rows:
             key = r["headline"][:80].lower()
-            if key not in seen:
-                seen.add(key)
+            if key not in existing_headlines:
+                existing_headlines.add(key)
                 deduped.append(r)
 
         deduped = deduped[:per_feed_limit]
@@ -127,3 +140,68 @@ def ingest_rss_feeds(
             sentry_sdk.capture_exception(e)
 
     return f"{total_inserted} articles ingested"
+
+
+# ─── Feed health monitor ─────────────────────────────────────────────────────
+
+ALL_FEED_SOURCES = {
+    "CoinDesk", "Decrypt", "The Block",
+    "TechCrunch", "Ars Technica", "The Verge",
+    "Al Jazeera", "Defense News",
+    "ESPN", "BBC Sport",
+    "NPR", "STAT News",
+    "BBC News", "The New York Times",
+}
+
+SILENT_THRESHOLD_HOURS = 72
+
+
+def check_feed_health() -> str:
+    """Check which RSS feed sources have gone silent (no articles in 72h).
+    Returns a summary and sends an email alert for any dead feeds."""
+    import os
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=SILENT_THRESHOLD_HOURS)).isoformat()
+
+    try:
+        result = (
+            supabase.table("news_items")
+            .select("source")
+            .gte("published_at", cutoff)
+            .limit(1000)
+            .execute()
+        )
+        active_sources = {r["source"] for r in (result.data or [])}
+    except Exception as e:
+        logger.error("feed_health: DB query failed — {}", e)
+        return f"feed health check failed: {e}"
+
+    silent = ALL_FEED_SOURCES - active_sources
+    if not silent:
+        logger.info("feed_health: all {} sources active in last {}h", len(ALL_FEED_SOURCES), SILENT_THRESHOLD_HOURS)
+        return f"all {len(ALL_FEED_SOURCES)} feeds healthy"
+
+    silent_list = ", ".join(sorted(silent))
+    logger.warning("feed_health: {} silent sources (no articles in {}h): {}", len(silent), SILENT_THRESHOLD_HOURS, silent_list)
+
+    try:
+        import resend
+        resend.api_key = os.environ.get("RESEND_API_KEY", "") or os.environ.get("RESEND_API_KEY_", "")
+        if resend.api_key:
+            alert_email = os.environ.get("ALERT_EMAIL", "paulsolomonaqua@gmail.com")
+            resend.Emails.send({
+                "from": "Plebs Alerts <alerts@plebs.finance>",
+                "to": [alert_email],
+                "subject": f"Feed health: {len(silent)} silent source(s)",
+                "text": (
+                    f"The following news sources have produced 0 articles in the "
+                    f"last {SILENT_THRESHOLD_HOURS} hours:\n\n"
+                    f"{chr(10).join(f'  - {s}' for s in sorted(silent))}\n\n"
+                    f"This likely means the RSS feed URL changed or went offline. "
+                    f"Check the feed URLs in apps/data-service/ingestion/."
+                ),
+            })
+    except Exception as e:
+        logger.warning("feed_health: alert email failed — {}", e)
+
+    return f"{len(silent)} silent: {silent_list}"
