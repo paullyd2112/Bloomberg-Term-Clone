@@ -80,15 +80,14 @@ YOUR VOICE:
 - Smart but never academic. Never condescending
 
 COVERAGE SCOPE:
-You are NOT just a signal recap. You are a market analyst writing a morning brief. Cover the full landscape:
+You are NOT just a signal recap. You are a market analyst writing a morning brief that covers the full landscape of world events, crypto markets, and prediction markets:
 - The signal data below is your starting point, not your whole story
-- Connect dots: a geopolitical event affects oil, which affects transport costs, which affects earnings
-- Cover macro themes: rate decisions, inflation prints, geopolitics (wars, sanctions, strait closures), supply chain disruptions, commodity moves, currency shifts
-- Cover sector narratives: chip shortages and semis, energy and oil supply, AI infrastructure spend, banking stress, housing data
-- Cover AI/tech industry news on its own terms, not just as capex: a new model release, a product launch, a usage-tier or pricing change from a major AI lab (OpenAI, Anthropic, Google, Meta) is a story readers care about, both for what it signals about the AI trade and because plenty of readers use these products directly
+- Connect dots: a geopolitical event affects oil, which affects crypto sentiment, which affects risk assets across the board
+- Cover world events and US major news: elections, diplomacy, wars, sanctions, energy crises, trade policy, Fed decisions, inflation prints. These are the stories that shape markets and readers' lives
+- Cover prediction markets: Polymarket probabilities are real-time crowd intelligence. A market at 73% YES on a Fed cut is harder data than an analyst quote. Use them as narrative anchors
+- Cover AI/tech industry news on its own terms: a new model release, a product launch, a usage-tier or pricing change from a major AI lab (OpenAI, Anthropic, Google, Meta) is a story readers care about
 - Think about what's moving markets TODAY and what smart money is watching THIS WEEK
-- Geopolitics is one theme among several, not the default. A big geopolitical story (Iran, China trade, energy crisis) earns its spot the same way an AI product launch, a sentiment shift, or a sector narrative does: because it's the most interesting thing that happened, not because it's geopolitics
-- Use the news headlines provided to identify broader themes beyond just ticker-level moves
+- Use the news headlines and prediction market data provided to identify broader themes beyond just ticker-level moves
 
 STORY ORDER — THIS MATTERS:
 - Story 1 MUST be a hook that sets the tone for the whole newsletter, something that makes people lean in. Rotate what kind of hook it is based on what's actually most interesting today, don't default to the same category every day. Good hooks: a macro/Fed/inflation story, a geopolitical move, a cultural/generational market narrative ("Gen Z thinks the American Dream is dead"), or a major AI/tech industry story (a new model launch, a big product release). If the biggest story of the day is a geopolitical one, lead with it; if it's an AI launch or a sentiment shift, lead with that instead. Don't reach for geopolitics out of habit when something else is the more interesting lead.
@@ -231,6 +230,70 @@ def _fetch_recent_news(limit: int = 25) -> list[dict]:
         return []
 
 
+def _fetch_prediction_markets(limit: int = 10) -> list[dict]:
+    since = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+    try:
+        result = (
+            supabase.table("raw_prices")
+            .select("identifier, price, volume, metadata")
+            .eq("asset_type", "prediction")
+            .gte("captured_at", since)
+            .order("volume", desc=True)
+            .limit(200)
+        ).execute()
+
+        seen, unique = set(), []
+        for r in result.data or []:
+            if r["identifier"] not in seen:
+                seen.add(r["identifier"])
+                unique.append(r)
+
+        meta = (r.get("metadata") or {}) if unique else {}
+        markets = []
+        for r in unique:
+            meta = r.get("metadata") or {}
+            title = meta.get("title", "")
+            cat = meta.get("category", "")
+            if not title or cat == "sports":
+                continue
+            markets.append({
+                "title": title,
+                "yes_price": meta.get("yes_price", r.get("price")),
+                "category": cat,
+                "volume": r.get("volume", 0),
+                "condition_id": r["identifier"],
+            })
+
+        # Fetch AI signals for these markets
+        if markets:
+            cids = [m["condition_id"] for m in markets]
+            sig_result = (
+                supabase.table("signals")
+                .select("identifier, direction, confidence")
+                .eq("asset_type", "prediction")
+                .eq("is_backtest", False)
+                .in_("identifier", cids)
+                .neq("direction", "HOLD")
+                .order("created_at", desc=True)
+                .limit(50)
+                .execute()
+            )
+            sig_map = {}
+            for s in sig_result.data or []:
+                if s["identifier"] not in sig_map:
+                    sig_map[s["identifier"]] = s
+            for m in markets:
+                sig = sig_map.get(m["condition_id"])
+                if sig:
+                    m["signal_direction"] = sig["direction"]
+                    m["signal_confidence"] = sig["confidence"]
+
+        return markets[:limit]
+    except Exception as e:
+        logger.warning("newsletter: prediction markets fetch failed — {}", e)
+        return []
+
+
 def _fetch_yesterday_performance() -> dict | None:
     yesterday = (date.today() - timedelta(days=1)).isoformat()
     day_before = (date.today() - timedelta(days=2)).isoformat()
@@ -271,6 +334,7 @@ def _build_user_prompt(
     macro: list[dict],
     news: list[dict],
     yesterday_perf: dict | None = None,
+    predictions: list[dict] | None = None,
 ) -> str:
     today = date.today().strftime("%A, %B %-d, %Y")
 
@@ -334,6 +398,23 @@ def _build_user_prompt(
                 + (f" — {url}" if url else "")
             )
 
+    if predictions:
+        parts.append("\nPREDICTION MARKETS (Polymarket — live implied probabilities):")
+        for p in predictions:
+            yes_pct = round(float(p.get("yes_price", 0)) * 100)
+            line = f"  {p['title']} — YES {yes_pct}%"
+            if p.get("volume"):
+                line += f" (vol ${float(p['volume']):,.0f})"
+            if p.get("signal_direction"):
+                line += f" [AI signal: {p['signal_direction']} {p.get('signal_confidence', '')}%]"
+            parts.append(line)
+        parts.append(
+            "  Use these as narrative fuel: prediction markets quantify what traders actually "
+            "think will happen. A market at 73% YES on 'Fed cuts by September' is a stronger "
+            "data point than an analyst quote. Weave the most interesting ones into stories "
+            "or give them their own section.\n"
+        )
+
     parts.append(
         "\nWrite 4-5 stories using the structure. DO NOT just recap the signals above. "
         "Use the signals and news as a starting point, then broaden out. Fewer, tighter stories "
@@ -352,17 +433,17 @@ def _build_user_prompt(
         "if the data has more. Never place them back-to-back. Mention other crypto moves inside "
         "broader market stories if needed, but don't give them their own section.\n\n"
         "MIX OF STORIES:\n"
-        "- 2 stories driven by the signal data and ticker-level moves above\n"
-        "- 1 story on macro/geopolitical themes: oil supply, rate policy, sanctions, "
-        "trade wars, currency moves, inflation data. Connect these to specific sectors and tickers. "
-        "This is a ceiling, not a quota: skip it entirely on a day with no real geopolitical news "
-        "rather than manufacturing one.\n"
+        "- 1-2 stories driven by crypto signal data and ticker-level moves above\n"
+        "- 1 story on world events / US major news: geopolitics, rate policy, sanctions, trade wars, "
+        "energy supply, inflation data, elections, diplomacy. These are the stories that move markets "
+        "and shape the world. Connect them to how they affect crypto and risk assets.\n"
+        "- 1 story weaving in prediction market probabilities: use the Polymarket data above to "
+        "quantify what traders are betting on. A market at 73% is a stronger signal than a pundit's "
+        "guess. Pair prediction market odds with the news that's driving them. If an AI signal "
+        "disagrees with the market price, that's a story.\n"
         "- 1 story on AI/tech industry news when there's a real one in the data above: a new model "
         "release, product launch, or usage/pricing change from a major AI lab. Cover it as its own "
-        "story, not folded into an AI-capex sector narrative, and connect it to what it means for "
-        "users and for AI-adjacent stocks.\n"
-        "- 1 story on sector narratives: chip supply chains, energy infrastructure, "
-        "AI capex, banking/credit, housing, commodities. What's the bigger picture?\n"
+        "story, not folded into an AI-capex sector narrative.\n"
         "- If there's a congressional trade worth highlighting, work it into a story.\n\n"
         "Opening line sets the tone for the day. Make it count.\n\n"
         "IMPORTANT: Each section (what_happened, what_we_know, could_mean) should be "
@@ -414,9 +495,12 @@ def generate_newsletter() -> dict | None:
     options        = _fetch_options_flow()
     macro          = _fetch_macro_events_today()
     news           = _fetch_recent_news()
+    predictions    = _fetch_prediction_markets()
     yesterday_perf = _fetch_yesterday_performance()
 
-    user_prompt = _build_user_prompt(signals, congress, options, macro, news, yesterday_perf)
+    user_prompt = _build_user_prompt(
+        signals, congress, options, macro, news, yesterday_perf, predictions,
+    )
 
     try:
         content: NewsletterContent = client.chat.completions.create(
@@ -459,6 +543,7 @@ def generate_newsletter() -> dict | None:
                 "top_signals":   signals[:5],
                 "options_flow":  options[:3],
                 "congress":      congress[:3],
+                "predictions":   predictions[:5],
                 "macro_today":   macro,
                 "yesterday_performance": yesterday_perf,
             },
