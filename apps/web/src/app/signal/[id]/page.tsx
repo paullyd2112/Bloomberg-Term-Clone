@@ -125,7 +125,7 @@ export default async function SharedSignalPage({
         .select("price")
         .eq("asset_type", "crypto")
         .eq("identifier", s.identifier)
-        .order("updated_at", { ascending: false })
+        .order("captured_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (priceRow?.price != null) {
@@ -139,14 +139,15 @@ export default async function SharedSignalPage({
     } else if (s.asset_type === "prediction") {
       const { data: priceRow } = await supabase
         .from("raw_prices")
-        .select("yes_price")
+        .select("metadata")
         .eq("asset_type", "prediction")
         .eq("identifier", s.identifier)
-        .order("updated_at", { ascending: false })
+        .order("captured_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (priceRow?.yes_price != null) {
-        currentPrice = Number(priceRow.yes_price);
+      const yesPrice = (priceRow?.metadata as Record<string, unknown> | null)?.yes_price;
+      if (yesPrice != null) {
+        currentPrice = Number(yesPrice);
         const entry = Number(s.price_at_signal);
         const diff = (currentPrice - entry) * 100;
         unrealizedPnl = s.direction === "NO" ? -diff : diff;

@@ -163,7 +163,7 @@ async function fetchSignals(): Promise<Signal[]> {
         .select("identifier, price")
         .eq("asset_type", "crypto")
         .in("identifier", cryptoIds)
-        .order("updated_at", { ascending: false });
+        .order("captured_at", { ascending: false });
       for (const row of cryptoPrices ?? []) {
         if (!priceMap.has(`crypto:${row.identifier}`)) {
           priceMap.set(`crypto:${row.identifier}`, Number(row.price));
@@ -175,13 +175,14 @@ async function fetchSignals(): Promise<Signal[]> {
       const predIds = Array.from(new Set(predPending.map((s) => s.identifier)));
       const { data: predPrices } = await supabase
         .from("raw_prices")
-        .select("identifier, yes_price")
+        .select("identifier, metadata")
         .eq("asset_type", "prediction")
         .in("identifier", predIds)
-        .order("updated_at", { ascending: false });
+        .order("captured_at", { ascending: false });
       for (const row of predPrices ?? []) {
-        if (row.yes_price != null && !priceMap.has(`prediction:${row.identifier}`)) {
-          priceMap.set(`prediction:${row.identifier}`, Number(row.yes_price));
+        const yesPrice = (row.metadata as Record<string, unknown> | null)?.yes_price;
+        if (yesPrice != null && !priceMap.has(`prediction:${row.identifier}`)) {
+          priceMap.set(`prediction:${row.identifier}`, Number(yesPrice));
         }
       }
     }

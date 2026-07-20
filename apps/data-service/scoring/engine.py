@@ -1653,6 +1653,19 @@ def score_crypto(subscription: str | None = None) -> str:
         sentry_sdk.capture_exception(e)
         return f"failed to fetch identifiers — {type(e).__name__}: {e}"
 
+    # CORE_CRYPTO must always be in the scoring loop — the pre-query's 5h
+    # window + RSI filter can miss them if ingestion was delayed or failed,
+    # even though score_asset's get_scoring_price_row() looks back 5 DAYS.
+    # This was the root cause of 0 crypto signals for 11 days (July 9-20).
+    from scoring.price_data import get_scoring_price_row
+    for core_sym in CORE_CRYPTO:
+        if core_sym not in seen:
+            fallback = get_scoring_price_row("crypto", core_sym)
+            if fallback:
+                rows.append(fallback)
+                seen.add(core_sym)
+                logger.info("[crypto] {} missing from 5h pre-query, recovered via scoring price merge", core_sym)
+
     fg = _get_fear_greed()
     benchmarks   = _get_market_benchmark()
     macro_events = _get_upcoming_macro(days=2)
