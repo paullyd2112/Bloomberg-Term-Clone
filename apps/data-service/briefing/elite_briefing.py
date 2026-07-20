@@ -94,23 +94,62 @@ def _get_news_for_tickers(tickers: list[str]) -> list[dict]:
         return []
 
 
+def _get_prediction_highlights(limit: int = 5) -> list[dict]:
+    since = (datetime.now(timezone.utc) - timedelta(hours=12)).isoformat()
+    try:
+        result = (
+            supabase.table("raw_prices")
+            .select("identifier, price, volume, metadata")
+            .eq("asset_type", "prediction")
+            .gte("captured_at", since)
+            .order("volume", desc=True)
+            .limit(100)
+        ).execute()
+
+        seen, markets = set(), []
+        for r in result.data or []:
+            if r["identifier"] in seen:
+                continue
+            seen.add(r["identifier"])
+            meta = r.get("metadata") or {}
+            title = meta.get("title", "")
+            cat = meta.get("category", "")
+            if not title or cat == "sports":
+                continue
+            markets.append({
+                "title": title,
+                "yes_price": meta.get("yes_price", r.get("price")),
+                "volume": r.get("volume", 0),
+            })
+        return markets[:limit]
+    except Exception as e:
+        logger.warning("elite_briefing: prediction markets fetch failed — {}", e)
+        return []
+
+
 # ─── AI summary ──────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """You are Pleby, the AI trading analyst at Plebs.finance. You're writing a personalized morning briefing for an Elite subscriber.
 
 VOICE: Direct, data-driven, conversational. No filler. No corporate speak. Short sentences.
 
-FORMAT: Write 2-4 short paragraphs covering the subscriber's watchlist. Lead with the most actionable item.
-- Bold ticker symbols: **AAPL**, **NVDA**
+FORMAT: Write 2-4 short paragraphs covering the subscriber's watchlist and the broader market picture. Lead with the most actionable item.
+- Bold ticker symbols: **BTC**, **ETH**, **SOL**
 - Mention signal directions and confidence when available
 - Reference specific news headlines when relevant
-- Keep it under 250 words total
+- If prediction market data is provided, weave in the most interesting probabilities as narrative anchors (e.g. "Polymarket has Fed cuts at 73% by September")
+- Keep it under 300 words total
 - End with one forward-looking sentence about what to watch today
 
-Do NOT use: "delve", "navigate", "unpack", "game-changer", "it remains to be seen", exclamation marks, or rhetorical questions."""
+Do NOT use: "delve", "navigate", "unpack", "game-changer", "it remains to be seen", exclamation marks, em dashes, or rhetorical questions."""
 
 
-def _generate_summary(watchlist: list[dict], signals: list[dict], news: list[dict]) -> str | None:
+def _generate_summary(
+    watchlist: list[dict],
+    signals: list[dict],
+    news: list[dict],
+    predictions: list[dict] | None = None,
+) -> str | None:
     tickers_str = ", ".join(f"{w['identifier']} ({w.get('asset_type', 'stock')})" for w in watchlist)
 
     parts = [f"The subscriber watches: {tickers_str}\n"]
@@ -127,6 +166,13 @@ def _generate_summary(watchlist: list[dict], signals: list[dict], news: list[dic
         parts.append("\nRECENT NEWS ON THEIR WATCHLIST:")
         for n in news:
             parts.append(f"  [{n['identifier']}] {n['headline']} — {n.get('source', '')}")
+
+    if predictions:
+        parts.append("\nPREDICTION MARKETS (Polymarket — top markets by volume):")
+        for p in predictions:
+            yes_pct = round(float(p.get("yes_price", 0)) * 100)
+            parts.append(f"  {p['title']} — YES {yes_pct}% (vol ${float(p.get('volume', 0)):,.0f})")
+        parts.append("  Weave the most interesting prediction into the briefing as a data point.")
 
     if not signals and not news:
         parts.append("No new signals or news on their watchlist in the last 36 hours.")
@@ -282,6 +328,8 @@ def send_elite_briefings() -> str:
         logger.info("elite_briefing: no elite subscribers")
         return "0 elite subscribers"
 
+    predictions = _get_prediction_highlights()
+
     sent, failed, skipped = 0, 0, 0
     last_error: str = ""
 
@@ -302,7 +350,7 @@ def send_elite_briefings() -> str:
         signals = _get_signals_for_tickers(tickers)
         news    = _get_news_for_tickers(tickers)
 
-        summary = _generate_summary(watchlist, signals, news)
+        summary = _generate_summary(watchlist, signals, news, predictions)
         if not summary:
             failed += 1
             continue

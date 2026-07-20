@@ -18,6 +18,10 @@ from ingestion.fred import enrich_macro_events
 from ingestion.news import ingest_news
 from ingestion.tech_news import ingest_tech_news
 from ingestion.geopolitics_news import ingest_geopolitics_news
+from ingestion.sports_news import ingest_sports_news
+from ingestion.health_science_news import ingest_health_science_news
+from ingestion.world_news import ingest_world_news
+from ingestion.rss_utils import check_feed_health
 from ingestion.crypto_momentum import ingest_momentum_coins
 from ingestion.apewisdom import ingest_apewisdom
 from scoring.engine import score_prediction_markets
@@ -100,6 +104,18 @@ def job_ingest_tech_news():
 
 def job_ingest_geopolitics_news():
     return ingest_geopolitics_news()
+
+def job_ingest_sports_news():
+    return ingest_sports_news()
+
+def job_ingest_health_science_news():
+    return ingest_health_science_news()
+
+def job_ingest_world_news():
+    return ingest_world_news()
+
+def job_check_feed_health():
+    return check_feed_health()
 
 def job_crypto_momentum():
     return ingest_momentum_coins()
@@ -327,16 +343,29 @@ scheduler.add_job(lambda: _run_job("ingest_tech_news", job_ingest_tech_news),
 # sanctions, and Congress/defense activity the finance-wire feed misses
 scheduler.add_job(lambda: _run_job("ingest_geopolitics_news", job_ingest_geopolitics_news),
                   CronTrigger(hour=6, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_geopolitics_news")
+# Sports news (RSS, no API key) — ESPN + BBC Sport, 7 days/week
+scheduler.add_job(lambda: _run_job("ingest_sports_news", job_ingest_sports_news),
+                  CronTrigger(hour=6, minute=45, timezone="America/New_York"), id="ingest_sports_news")
+# Health/science news (RSS, no API key) — NPR Health + STAT News, 7 days/week
+scheduler.add_job(lambda: _run_job("ingest_health_science_news", job_ingest_health_science_news),
+                  CronTrigger(hour=6, minute=45, timezone="America/New_York"), id="ingest_health_science_news")
+# General world/US news (RSS, no API key) — BBC World + NPR + NYT, 7 days/week
+scheduler.add_job(lambda: _run_job("ingest_world_news", job_ingest_world_news),
+                  CronTrigger(hour=6, minute=45, timezone="America/New_York"), id="ingest_world_news")
+# Feed health monitor — alert if any RSS source goes silent for 72h
+scheduler.add_job(lambda: _run_job("check_feed_health", job_check_feed_health),
+                  CronTrigger(hour=8, minute=0, timezone="America/New_York"), id="check_feed_health")
 
-# Newsletter — generate at 7:00am, send via Resend at 7:15am ET weekdays, retry at 7:45am
+# Newsletter — generate at 7:00am, send via Resend at 7:15am ET, retry at 7:45am
+# Runs 7 days/week (weekend editions draw from daily feeds: sports, world, health, crypto)
 scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newsletter),
-                  CronTrigger(hour=7, minute=0, day_of_week="mon-fri", timezone="America/New_York"), id="generate_newsletter")
+                  CronTrigger(hour=7, minute=0, timezone="America/New_York"), id="generate_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter", job_send_newsletter),
-                  CronTrigger(hour=7, minute=15, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter")
+                  CronTrigger(hour=7, minute=15, timezone="America/New_York"), id="send_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter_retry", job_send_newsletter_retry),
-                  CronTrigger(hour=7, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="send_newsletter_retry")
+                  CronTrigger(hour=7, minute=45, timezone="America/New_York"), id="send_newsletter_retry")
 scheduler.add_job(lambda: _run_job("send_elite_briefings", job_send_elite_briefings),
-                  CronTrigger(hour=7, minute=20, day_of_week="mon-fri", timezone="America/New_York"), id="send_elite_briefings")
+                  CronTrigger(hour=7, minute=20, timezone="America/New_York"), id="send_elite_briefings")
 scheduler.add_job(lambda: _run_job("send_welcome_sequence", job_send_welcome_sequence),
                   CronTrigger(hour=9, minute=0, timezone="America/New_York"), id="send_welcome_sequence")
 
@@ -587,6 +616,10 @@ def run_job_manual(job_name: str):
         "ingest_news": job_ingest_news,
         "ingest_tech_news": job_ingest_tech_news,
         "ingest_geopolitics_news": job_ingest_geopolitics_news,
+        "ingest_sports_news": job_ingest_sports_news,
+        "ingest_health_science_news": job_ingest_health_science_news,
+        "ingest_world_news": job_ingest_world_news,
+        "check_feed_health": job_check_feed_health,
         "ingest_crypto": job_ingest_crypto,
         "ingest_prediction_markets": job_ingest_prediction_markets,
         "score_crypto": job_score_crypto,
