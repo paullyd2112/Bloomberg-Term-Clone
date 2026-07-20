@@ -148,6 +148,65 @@ async function fetchSignals(): Promise<Signal[]> {
     }
   }
 
+  // Compute unrealized P&L for PENDING signals using latest prices.
+  const pendingSignals = signals.filter((s) => s.outcome === "PENDING" && s.price_at_signal != null);
+  if (pendingSignals.length > 0) {
+    const cryptoPending = pendingSignals.filter((s) => s.asset_type === "crypto");
+    const predPending = pendingSignals.filter((s) => s.asset_type === "prediction");
+
+    const priceMap = new Map<string, number>();
+
+    if (cryptoPending.length > 0) {
+      const cryptoIds = Array.from(new Set(cryptoPending.map((s) => s.identifier)));
+      const { data: cryptoPrices } = await supabase
+        .from("raw_prices")
+        .select("identifier, price")
+        .eq("asset_type", "crypto")
+        .in("identifier", cryptoIds)
+        .order("updated_at", { ascending: false });
+      for (const row of cryptoPrices ?? []) {
+        if (!priceMap.has(`crypto:${row.identifier}`)) {
+          priceMap.set(`crypto:${row.identifier}`, Number(row.price));
+        }
+      }
+    }
+
+    if (predPending.length > 0) {
+      const predIds = Array.from(new Set(predPending.map((s) => s.identifier)));
+      const { data: predPrices } = await supabase
+        .from("raw_prices")
+        .select("identifier, yes_price")
+        .eq("asset_type", "prediction")
+        .in("identifier", predIds)
+        .order("updated_at", { ascending: false });
+      for (const row of predPrices ?? []) {
+        if (row.yes_price != null && !priceMap.has(`prediction:${row.identifier}`)) {
+          priceMap.set(`prediction:${row.identifier}`, Number(row.yes_price));
+        }
+      }
+    }
+
+    for (const s of signals) {
+      if (s.outcome !== "PENDING" || s.price_at_signal == null) continue;
+      const currentPrice = priceMap.get(`${s.asset_type}:${s.identifier}`);
+      if (currentPrice == null) continue;
+
+      const entry = Number(s.price_at_signal);
+      if (entry === 0) continue;
+
+      if (s.asset_type === "prediction") {
+        // For predictions, show probability point change (current - entry) * 100
+        // Direction matters: YES signal profits when price goes up, NO when it goes down
+        const diff = (currentPrice - entry) * 100;
+        s.unrealized_pnl = s.direction === "NO" ? -diff : diff;
+      } else {
+        // For crypto, show % change adjusted for direction
+        const pctChange = ((currentPrice - entry) / entry) * 100;
+        s.unrealized_pnl = s.direction === "SELL" ? -pctChange : pctChange;
+      }
+    }
+  }
+
   return signals;
 }
 

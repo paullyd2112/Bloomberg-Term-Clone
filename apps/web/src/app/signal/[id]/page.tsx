@@ -8,7 +8,7 @@ type Signal = {
   id:              number;
   asset_type:      string;
   identifier:      string;
-  direction:       "BUY" | "SELL" | "HOLD";
+  direction:       "BUY" | "SELL" | "HOLD" | "YES" | "NO";
   confidence:      number;
   reasoning:       string;
   time_horizon:    string;
@@ -38,6 +38,8 @@ const DIRECTION_STYLE: Record<string, string> = {
   BUY:  "bg-green-500/20 text-green-400 border-green-700",
   SELL: "bg-red-500/20 text-red-400 border-red-700",
   HOLD: "bg-zinc-700/40 text-zinc-400 border-zinc-600",
+  YES:  "bg-green-500/20 text-green-400 border-green-700",
+  NO:   "bg-red-500/20 text-red-400 border-red-700",
 };
 
 const OUTCOME_STYLE: Record<string, { label: string; cls: string }> = {
@@ -113,6 +115,45 @@ export default async function SharedSignalPage({
     ? (await fetchPredictionTitle(s.identifier)) ?? s.identifier
     : s.identifier;
 
+  // Compute unrealized P&L for PENDING signals
+  let unrealizedPnl: number | null = null;
+  let currentPrice: number | null = null;
+  if (s.outcome === "PENDING" && s.price_at_signal != null) {
+    if (s.asset_type === "crypto") {
+      const { data: priceRow } = await supabase
+        .from("raw_prices")
+        .select("price")
+        .eq("asset_type", "crypto")
+        .eq("identifier", s.identifier)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (priceRow?.price != null) {
+        currentPrice = Number(priceRow.price);
+        const entry = Number(s.price_at_signal);
+        if (entry > 0) {
+          const pct = ((currentPrice - entry) / entry) * 100;
+          unrealizedPnl = s.direction === "SELL" ? -pct : pct;
+        }
+      }
+    } else if (s.asset_type === "prediction") {
+      const { data: priceRow } = await supabase
+        .from("raw_prices")
+        .select("yes_price")
+        .eq("asset_type", "prediction")
+        .eq("identifier", s.identifier)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (priceRow?.yes_price != null) {
+        currentPrice = Number(priceRow.yes_price);
+        const entry = Number(s.price_at_signal);
+        const diff = (currentPrice - entry) * 100;
+        unrealizedPnl = s.direction === "NO" ? -diff : diff;
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center px-4 py-16">
       {/* Brand */}
@@ -147,11 +188,15 @@ export default async function SharedSignalPage({
             </div>
           </div>
 
-          {s.outcome !== "PENDING" && (
+          {s.outcome !== "PENDING" ? (
             <span className={`text-sm font-semibold flex-shrink-0 ${outcome.cls}`}>
               {outcome.label}
             </span>
-          )}
+          ) : unrealizedPnl != null ? (
+            <span className={`text-sm font-semibold flex-shrink-0 font-mono ${unrealizedPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+              {unrealizedPnl >= 0 ? "+" : ""}{unrealizedPnl.toFixed(1)}%
+            </span>
+          ) : null}
         </div>
 
         {/* Confidence bar */}
@@ -194,7 +239,19 @@ export default async function SharedSignalPage({
             <span>
               Entry:{" "}
               <span className="font-mono text-zinc-300">
-                ${Number(s.price_at_signal).toLocaleString()}
+                {s.asset_type === "prediction"
+                  ? `${(Number(s.price_at_signal) * 100).toFixed(0)}¢`
+                  : `$${Number(s.price_at_signal).toLocaleString()}`}
+              </span>
+            </span>
+          )}
+          {currentPrice != null && (
+            <span>
+              Now:{" "}
+              <span className={`font-mono ${unrealizedPnl != null && unrealizedPnl >= 0 ? "text-green-400" : unrealizedPnl != null ? "text-red-400" : "text-zinc-300"}`}>
+                {s.asset_type === "prediction"
+                  ? `${(currentPrice * 100).toFixed(0)}¢`
+                  : `$${currentPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
               </span>
             </span>
           )}
