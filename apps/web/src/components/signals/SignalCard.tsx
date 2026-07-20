@@ -18,6 +18,8 @@ export type Signal = {
   // fetch time since `identifier` is a Polymarket conditionId (a long hex
   // hash), not a human-readable name.
   market_title?: string | null;
+  // Unrealized P&L for PENDING signals: % change from entry to current price.
+  unrealized_pnl?: number | null;
 };
 
 const DIRECTION_TEXT: Record<string, string> = {
@@ -162,15 +164,20 @@ export default function SignalCard({ signal }: { signal: Signal }) {
         {signal.reasoning}
       </p>
 
-      {/* Outcome */}
+      {/* Outcome / Unrealized P&L */}
       <span
         className={clsx(
-          "relative z-10 hidden w-12 flex-shrink-0 text-right font-mono text-[10px] font-semibold uppercase tracking-wider lg:block",
-          OUTCOME_TEXT[signal.outcome],
+          "relative z-10 hidden flex-shrink-0 text-right font-mono text-[10px] font-semibold uppercase tracking-wider lg:block",
+          signal.outcome === "PENDING" && signal.unrealized_pnl != null
+            ? signal.unrealized_pnl >= 0 ? "w-14 text-emerald-400" : "w-14 text-red-400"
+            : clsx("w-12", OUTCOME_TEXT[signal.outcome]),
         )}
-        aria-hidden={signal.outcome === "PENDING"}
       >
-        {signal.outcome === "PENDING" ? "" : signal.outcome}
+        {signal.outcome === "PENDING"
+          ? signal.unrealized_pnl != null
+            ? `${signal.unrealized_pnl >= 0 ? "+" : ""}${signal.unrealized_pnl.toFixed(1)}%`
+            : ""
+          : signal.outcome}
       </span>
 
       {/* Timestamp */}
