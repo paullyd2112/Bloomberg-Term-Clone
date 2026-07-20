@@ -183,10 +183,10 @@ Stock features are **disabled and hidden, NOT deleted** — code stays intact fo
 **What stays active:**
 - Crypto scoring: every 2h (12x/day) — CORE_CRYPTO (BTC, ETH, SOL, XRP, ADA) scored directly,
   TIER1_CRYPTO (48 coins) prescreened with Haiku first, lower-tier coins only if >5% daily move
-- Prediction markets: 2x/day via Polymarket
-- News ingestion: continues (serves crypto + predictions)
+- Prediction markets: 2x/day via Polymarket, up to 10 signals/day, 30 candidate pool
+- News ingestion: continues (serves crypto + predictions + world coverage)
 - Congressional trades: stays active (still useful context, low cost)
-- Newsletter/briefings: continue, content shifts to crypto+predictions focus
+- Newsletter/briefings: continue 7 days/week, content covers world broadly (see NEWSLETTER section)
 
 **Rationale:** Crypto signals were consistently strong in backtests (88-94% win rate, small n). Stock
 signals had fundamental data pipeline bugs (see ALGO section) and BUY-side edge was unproven (31-37%).
@@ -212,6 +212,79 @@ deliberately — not actively used, update separately if rerunning backtests.
 - TIER1_CRYPTO (48 coins): Haiku prescreen (~$0.001/call) filters ~70-80%, only 65+ confidence
   escalates to Sonnet 5 for full scoring
 - Lower-tier coins: only scored if >5% daily move (CRYPTO_MOVER_THRESHOLD = 5.0)
+
+# PREDICTION SIGNAL GUARDRAILS (July 2026)
+Prediction markets pass through a guardrail stack before any signal is written:
+
+1. **Category gate** (`prediction_filters.is_allowed_category`): title-based inference since Polymarket
+   Gamma API returns empty categories. Allowed: politics, elections, geopolitics, economics, macro, fed,
+   finance, crypto, web3, technology, science. Sports blocked unless verified cross-exchange arb >= 7%.
+2. **Pricing bracket** (`check_pricing_bracket`): both YES and NO must be in $0.10-$0.90 range. Blocks
+   penny meme markets and near-certain outcomes with no upside.
+3. **Volume gate**: 24h volume >= $10,000. Liquidity proxy since CLOB depth check is disabled.
+4. **Ground-truth mismatch** (`check_ground_truth_mismatch`): >= 7% mismatch vs Kalshi/PredictIt/CME
+   FedWatch implied probability. Fails open if no reference data available.
+5. **CLOB liquidity check**: DISABLED. Polymarket's CLOB API returns $0.001-$0.999 spreads on every
+   token regardless of actual liquidity, making spread/depth checks useless (blocked 100% of markets).
+   Volume gate serves as liquidity proxy. Function kept intact for future use.
+
+Pass rate: ~22% of Polymarket markets (110/500 tested). Pricing bracket blocks the most (347 penny/meme),
+category blocks sports (29), volume blocks illiquid (14).
+
+Prediction resolver (`scoring/resolver.py`): settlement-based, queries Polymarket CLOB settlement API
+(`closed=True`, `tokens[].winner=True/False`). Verified working against real settled markets. No code
+changes needed — distinct from price-based stock/crypto resolution.
+
+Constants: `MAX_PREDICTION_SIGNALS_PER_DAY = 10`, `PREDICTION_CANDIDATE_LIMIT = 30`,
+`ADAPTIVE_HAIKU_BASE_THRESHOLD = 65`, `ADAPTIVE_HAIKU_TIGHT_THRESHOLD = 80`.
+
+# NEWSLETTER & BRIEFING (July 2026 overhaul)
+Newsletter shifted from stock-heavy finance recap to a **full world morning brief**:
+
+**Coverage scope** — stories can span any domain based on what's newsworthy:
+- Crypto markets (primary focus, 1-2 stories per issue)
+- Prediction markets (Polymarket probabilities as narrative anchors)
+- Geopolitics/diplomacy (wars, sanctions, trade policy, energy)
+- AI/tech (model releases, product launches, industry moves)
+- Health/science (pandemics, FDA, breakthroughs, climate)
+- Sports/culture (championships, records, cultural moments)
+- US domestic (Fed, inflation, jobs, policy, Supreme Court)
+
+**Prediction markets integration:**
+- `_fetch_prediction_markets()` queries top Polymarket markets by volume, deduplicates, filters
+  sports, joins AI signals from the `signals` table
+- Prediction data passed to Claude prompt as structured section with YES probabilities, volume, signals
+- Stored in `content_json.predictions` for frontend access
+
+**Weekend edition** — newsletter generates and sends 7 days/week (not just weekdays). Weekend editions
+get a lighter prompt: 3-4 stories instead of 4-5, lean into crypto (24/7), prediction markets, sports,
+world events. More relaxed tone.
+
+**Elite briefing** — `_get_prediction_highlights()` fetches top 5 prediction markets globally (not
+per-watchlist), included in every subscriber's AI summary prompt.
+
+# NEWS FEED INFRASTRUCTURE (July 2026)
+All RSS feeds — zero API cost. Scheduled at 6:45am ET before newsletter generation at 7am.
+
+| Module | Sources | Identifier | Schedule |
+|--------|---------|-----------|----------|
+| `ingestion/news.py` | Finnhub API | `market` | Weekdays |
+| `ingestion/crypto_news.py` | CoinDesk, Decrypt, The Block | `CRYPTO_GENERAL` | With crypto ingestion |
+| `ingestion/tech_news.py` | TechCrunch, Ars Technica, The Verge (AI-filtered) | `AI` | Weekdays |
+| `ingestion/geopolitics_news.py` | Al Jazeera, Defense News | `GEOPOLITICS` | Weekdays |
+| `ingestion/sports_news.py` | ESPN, BBC Sport | `SPORTS` | Daily (7d/week) |
+| `ingestion/health_science_news.py` | NPR Health, STAT News | `HEALTH_SCIENCE` | Daily (7d/week) |
+| `ingestion/world_news.py` | BBC World, NPR, NYT World | `WORLD` | Daily (7d/week) |
+
+**Cross-feed dedup** — `rss_utils.py` queries existing `news_items` headlines before inserting.
+Same story from two feeds won't produce duplicate rows.
+
+**Feed health monitor** — `check_feed_health()` runs daily at 8am ET. Checks which RSS sources have
+zero articles in the last 72 hours. Sends email alert listing dead feeds. Available via
+`POST /run-job/check_feed_health`.
+
+**Trusted sources** (`ingestion/trusted_sources.py`): whitelist of ~40 vetted outlets. New feeds must
+be added here before they'll be ingested.
 
 # POST-LAUNCH UPGRADE CHECKLIST (trigger: 10 paying users, not free signups)
 Everything below is currently on a free/cheapest tier to keep costs at zero pre-revenue. Once there are
