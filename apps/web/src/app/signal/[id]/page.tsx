@@ -16,23 +16,8 @@ type Signal = {
   news_context:    string[] | null;
   created_at:      string;
   outcome:         "WIN" | "LOSS" | "NEUTRAL" | "PENDING";
+  market_title?:   string | null;
 };
-
-// Prediction-market identifiers are Polymarket conditionId hex hashes, not
-// readable names — look up raw_prices.metadata.title so shared links and
-// the page title show the actual market question instead of a hex string.
-async function fetchPredictionTitle(identifier: string): Promise<string | null> {
-  const supabase = createClient();
-  const { data } = await supabase
-    .from("raw_prices")
-    .select("metadata")
-    .eq("asset_type", "prediction")
-    .eq("identifier", identifier)
-    .limit(1)
-    .maybeSingle();
-  const title = (data?.metadata as Record<string, unknown> | null)?.title;
-  return typeof title === "string" ? title : null;
-}
 
 const DIRECTION_STYLE: Record<string, string> = {
   BUY:  "bg-green-500/20 text-green-400 border-green-700",
@@ -64,14 +49,14 @@ export async function generateMetadata({
   const supabase = createClient();
   const { data } = await supabase
     .from("signals")
-    .select("direction, identifier, asset_type, confidence, reasoning")
+    .select("direction, identifier, asset_type, confidence, reasoning, market_title")
     .eq("id", params.id)
     .single();
 
   if (!data) return { title: "Signal — Plebs.Finance" };
 
   const displayName = data.asset_type === "prediction"
-    ? (await fetchPredictionTitle(data.identifier)) ?? data.identifier
+    ? data.market_title ?? data.identifier
     : data.identifier;
   const title = `${data.direction} ${displayName} (${data.confidence}%) — Plebs.Finance`;
   const desc  = (data.reasoning as string).slice(0, 160);
@@ -112,7 +97,7 @@ export default async function SharedSignalPage({
   const outcome   = OUTCOME_STYLE[s.outcome];
   const timeAgo   = formatDistanceToNow(new Date(s.created_at), { addSuffix: true });
   const displayName = s.asset_type === "prediction"
-    ? (await fetchPredictionTitle(s.identifier)) ?? s.identifier
+    ? s.market_title ?? s.identifier
     : s.identifier;
 
   // Compute unrealized P&L for PENDING signals
