@@ -256,7 +256,7 @@ export default async function DashboardPage() {
   const allPending = resolved === 0 && pending > 0;
 
   return (
-    <div className="p-5 md:p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-5 md:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Page header */}
       <header className="flex flex-col gap-1">
         <div className="flex items-center gap-2.5">
@@ -291,9 +291,9 @@ export default async function DashboardPage() {
           </div>
         </div>
       ) : (
-        <>
+        <div>
           {/* Compact summary bar on mobile, full cards on sm+ */}
-          <div className="sm:hidden flex items-center gap-0 bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden divide-x divide-white/[0.06]">
+          <div className="sm:hidden flex items-center bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden divide-x divide-white/[0.06]">
             <MiniStat label="Signals" value={signals.length} />
             <MiniStat label="Pending" value={pending} />
             <MiniStat label="Wins" value={winCount} color="green" />
@@ -305,16 +305,12 @@ export default async function DashboardPage() {
             <StatCard label="Wins" value={winCount} color="green" icon={TrendingUp} />
             <StatCard label="Losses" value={lossCount} color="red" icon={TrendingDown} />
           </div>
-        </>
+        </div>
       )}
 
       {/* Signal feed — the product, front and center */}
       <section>
-        <h2 className="flex items-center gap-3 mb-4">
-          <span className="text-emerald-400 text-[10px] leading-none">●</span>
-          <span className="h-px w-8 bg-white/15" />
-          <span className="text-[15px] font-semibold tracking-tight text-zinc-300">Latest Signals</span>
-        </h2>
+        <SectionHeader primary divider className="mb-4">Latest Signals</SectionHeader>
         <SignalFeed signals={signals} />
       </section>
 

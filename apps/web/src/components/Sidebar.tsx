@@ -58,7 +58,7 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "More",
+    label: "",
     items: [
       { href: "/dashboard/congress",  label: "Congress",  icon: Landmark },
       { href: "/dashboard/referrals", label: "Referrals", icon: Gift },
@@ -85,10 +85,12 @@ export default function Sidebar({ tier, billingInterval }: { tier: Tier; billing
       {/* Nav */}
       <nav className="flex-1 py-3 overflow-y-auto px-3 space-y-4">
         {NAV_GROUPS.map((group) => (
-          <div key={group.label}>
-            <div className="px-3 pb-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
-              {group.label}
-            </div>
+          <div key={group.label || "ungrouped"}>
+            {group.label && (
+              <div className="px-3 pb-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
+                {group.label}
+              </div>
+            )}
             <div className="space-y-0.5">
               {group.items.map(({ href, label, icon: Icon, tier: requiredTier }) => {
                 const locked =

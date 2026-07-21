@@ -12,6 +12,19 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+const STORAGE_KEY_TAB = "mp-tab";
+const STORAGE_KEY_COLLAPSED = "mp-collapsed";
+
+function readStorage<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const v = localStorage.getItem(key);
+    return v !== null ? (JSON.parse(v) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function MarketPulse({
   moversContent,
   whalesContent,
@@ -21,19 +34,33 @@ export default function MarketPulse({
   whalesContent: ReactNode;
   redditContent: ReactNode;
 }) {
-  const [activeTab, setActiveTab] = useState<TabId>("movers");
-  const [collapsed, setCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabId>(() => readStorage(STORAGE_KEY_TAB, "movers" as TabId));
+  const [collapsed, setCollapsed] = useState(() => readStorage(STORAGE_KEY_COLLAPSED, false));
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const mql = window.matchMedia("(max-width: 639px)");
-    if (mql.matches) setCollapsed(true);
+    setHydrated(true);
+    if (!localStorage.getItem(STORAGE_KEY_COLLAPSED)) {
+      const mql = window.matchMedia("(max-width: 639px)");
+      if (mql.matches) setCollapsed(true);
+    }
   }, []);
 
-  const content: Record<TabId, ReactNode> = {
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY_TAB, JSON.stringify(activeTab)); } catch {}
+  }, [activeTab]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY_COLLAPSED, JSON.stringify(collapsed)); } catch {}
+  }, [collapsed]);
+
+  const contentMap: Record<TabId, ReactNode> = {
     movers: moversContent,
     whales: whalesContent,
     reddit: redditContent,
   };
+
+  const isOpen = hydrated ? !collapsed : true;
 
   return (
     <section className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden">
@@ -62,7 +89,7 @@ export default function MarketPulse({
           </svg>
         </button>
 
-        {!collapsed && (
+        {isOpen && (
           <div className="flex items-center gap-0.5 ml-auto pr-2">
             {TABS.map((tab) => {
               const Icon = tab.icon;
@@ -89,10 +116,10 @@ export default function MarketPulse({
         )}
       </div>
 
-      {/* Tab content */}
-      {!collapsed && (
+      {/* Tab content — only active tab is mounted */}
+      {isOpen && (
         <div className="p-4">
-          {content[activeTab]}
+          {contentMap[activeTab]}
         </div>
       )}
     </section>

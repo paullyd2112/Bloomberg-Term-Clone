@@ -108,10 +108,11 @@ export default function SignalCard({ signal }: { signal: Signal }) {
         />
 
         {/* Row 1: direction + ticker + confidence */}
-        <div className="relative z-10 flex items-center gap-2 mb-1.5">
+        <div className={clsx("relative z-10 flex gap-2 mb-1.5", isPrediction ? "items-start" : "items-center")}>
           <span
             className={clsx(
               "font-mono text-[11px] font-bold tracking-wide flex-shrink-0",
+              isPrediction && "mt-0.5",
               DIRECTION_TEXT[signal.direction] ?? DIRECTION_TEXT.HOLD,
             )}
           >
@@ -123,7 +124,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
             className={clsx(
               "relative z-10 font-semibold text-white transition-colors hover:text-emerald-400 min-w-0",
               isPrediction
-                ? "text-xs leading-snug line-clamp-1"
+                ? "text-xs leading-snug line-clamp-2"
                 : "truncate font-mono text-sm",
             )}
           >

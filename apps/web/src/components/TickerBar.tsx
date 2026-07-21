@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type TickerItem = {
   identifier: string;
@@ -114,20 +114,8 @@ const NYSE_HOLIDAYS: Set<string> = new Set([
   "2027-06-18","2027-07-05","2027-09-06","2027-11-25","2027-12-24",
 ]);
 
-function isMarketOpen(): boolean {
-  return getMarketStatus() === "open";
-}
-
-function nudgePrice(base: number): number {
-  const magnitude = base * 0.0003;
-  const delta = (Math.random() - 0.5) * 2 * magnitude;
-  return Math.max(0.0001, base + delta);
-}
-
 export default function TickerBar({ showStatus = true }: { showStatus?: boolean } = {}) {
   const [items, setItems] = useState<TickerItem[]>([]);
-  const baseItems = useRef<TickerItem[]>([]);
-  const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -136,9 +124,7 @@ export default function TickerBar({ showStatus = true }: { showStatus?: boolean 
       const data = await res.json();
       const valid = (data.items as TickerItem[]).filter((i) => i.price != null);
       if (valid.length > 0) {
-        baseItems.current = valid;
         setItems(valid);
-        setLoaded(true);
       }
     } catch {}
   }, []);
@@ -148,20 +134,6 @@ export default function TickerBar({ showStatus = true }: { showStatus?: boolean 
     const id = setInterval(load, 30_000);
     return () => clearInterval(id);
   }, [load]);
-
-  useEffect(() => {
-    if (!loaded) return;
-    const id = setInterval(() => {
-      const open = isMarketOpen();
-      setItems(baseItems.current.map((item) => ({
-        ...item,
-        price: (item.asset_type === "crypto" || open)
-          ? nudgePrice(item.price)
-          : item.price,
-      })));
-    }, 2500);
-    return () => clearInterval(id);
-  }, [loaded]);
 
   if (items.length === 0) return null;
 
