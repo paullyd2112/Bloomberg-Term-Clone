@@ -13,6 +13,7 @@ import SkipTrialBanner from "@/components/SkipTrialBanner";
 import SystemSafeguards from "@/components/dashboard/SystemSafeguards";
 import RedditTrending from "@/components/dashboard/RedditTrending";
 import MarketPulse from "@/components/dashboard/MarketPulse";
+import TrackRecord from "@/components/dashboard/TrackRecord";
 
 export const revalidate = 60;
 
@@ -357,80 +358,11 @@ export default async function DashboardPage() {
         }
       />
 
-      {/* Platform accuracy */}
+      {/* Platform accuracy — consolidated single card */}
       {accuracy && (
         <section>
           <SectionHeader divider className="mb-4">Signal track record</SectionHeader>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {/* Overall */}
-            <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4">
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Overall</div>
-              <div className="flex items-baseline gap-2">
-                <span className={`text-2xl font-bold tabular-nums ${rateColor(accuracy.overallWinRate)}`}>
-                  {(accuracy.overallWinRate * 100).toFixed(1)}%
-                </span>
-                <span className="text-xs text-zinc-500">win rate · {accuracy.totalResolved} signals</span>
-              </div>
-              <div className="text-xs text-zinc-500 mt-1">
-                {accuracy.totalWins}W – {accuracy.totalLosses}L
-              </div>
-            </div>
-
-            {/* Yesterday */}
-            {accuracy.yesterday && (
-              <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4">
-                <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Yesterday</div>
-                <div className="flex items-baseline gap-2">
-                  <span className={`text-2xl font-bold tabular-nums ${rateColor(accuracy.yesterday.winRate)}`}>
-                    {(accuracy.yesterday.winRate * 100).toFixed(0)}%
-                  </span>
-                  <span className="text-xs text-zinc-500">win rate · {accuracy.yesterday.resolved} signals</span>
-                </div>
-                <div className="text-xs text-zinc-500 mt-1">
-                  {accuracy.yesterday.wins}W – {accuracy.yesterday.losses}L
-                </div>
-              </div>
-            )}
-
-            {/* By asset class */}
-            <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4">
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">By asset</div>
-              <div className="space-y-1.5">
-                {accuracy.byAssetClass.map((a) => (
-                  <div key={a.asset_type} className="flex items-baseline justify-between">
-                    <span className="text-xs text-zinc-400 capitalize">{a.asset_type}</span>
-                    <div className="flex items-baseline gap-1.5">
-                      <span className={`text-sm font-semibold tabular-nums ${rateColor(a.winRate)}`}>
-                        {(a.winRate * 100).toFixed(1)}%
-                      </span>
-                      <span className="text-[10px] text-zinc-600">({a.resolved} signal{a.resolved === 1 ? "" : "s"})</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Month over month */}
-            {accuracy.byMonth.length > 0 && (
-              <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4 sm:col-span-2 lg:col-span-3">
-                <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Month over month</div>
-                <div className="flex gap-4 overflow-x-auto scrollbar-none">
-                  {accuracy.byMonth.map((m) => {
-                    const monthResolved = m.wins + m.losses;
-                    return (
-                      <div key={m.month} className="flex-shrink-0 min-w-[80px]">
-                        <div className="text-xs text-zinc-400 font-mono">{m.month}</div>
-                        <div className={`text-lg font-bold tabular-nums ${rateColor(m.winRate)}`}>
-                          {(m.winRate * 100).toFixed(0)}%
-                        </div>
-                        <div className="text-[10px] text-zinc-600">{m.wins}W – {m.losses}L · {monthResolved} signals</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+          <TrackRecord accuracy={accuracy} />
         </section>
       )}
 
@@ -450,12 +382,6 @@ export default async function DashboardPage() {
       */}
     </div>
   );
-}
-
-function rateColor(rate: number): string {
-  if (rate >= 0.55) return "text-emerald-400";
-  if (rate >= 0.45) return "text-amber-400";
-  return "text-red-400";
 }
 
 function StatCard({
