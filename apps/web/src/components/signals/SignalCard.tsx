@@ -93,107 +93,180 @@ export default function SignalCard({ signal }: { signal: Signal }) {
     : "—";
 
   return (
-    <div
-      className={clsx(
-        "group relative flex items-center gap-3 sm:gap-4 border-l-2 py-3 pl-3 pr-3 sm:pl-4 sm:pr-4 transition-colors hover:bg-white/[0.025]",
-        DIRECTION_ACCENT[signal.direction] ?? DIRECTION_ACCENT.HOLD,
-      )}
-    >
-      {/* Full-row click target → signal detail (siblings with z-10 stay clickable) */}
-      <Link
-        href={`/signal/${signal.id}`}
-        aria-label={`${signal.direction} ${displayName} at ${signal.confidence}% confidence — view details`}
-        className="absolute inset-0 z-0"
-      />
-
-      {/* Direction */}
-      <span
+    <>
+      {/* Mobile: stacked mini-card */}
+      <div
         className={clsx(
-          "relative z-10 w-10 flex-shrink-0 font-mono text-[11px] font-bold tracking-wide",
-          DIRECTION_TEXT[signal.direction] ?? DIRECTION_TEXT.HOLD,
+          "group relative sm:hidden border-l-2 px-3 py-3 transition-colors hover:bg-white/[0.025]",
+          DIRECTION_ACCENT[signal.direction] ?? DIRECTION_ACCENT.HOLD,
         )}
       >
-        {signal.direction}
-      </span>
-
-      {/* Ticker + type */}
-      <div className={clsx(
-        "relative z-10 flex min-w-0 items-baseline gap-1.5",
-        isPrediction ? "flex-1 max-w-[16rem] sm:max-w-[22rem]" : "w-[4.5rem] flex-shrink-0 sm:w-32",
-      )}>
         <Link
-          href={`/dashboard/asset/${signal.asset_type}/${encodeURIComponent(signal.identifier)}`}
-          title={isPrediction ? displayName : undefined}
+          href={`/signal/${signal.id}`}
+          aria-label={`${signal.direction} ${displayName} at ${signal.confidence}% confidence — view details`}
+          className="absolute inset-0 z-0"
+        />
+
+        {/* Row 1: direction + ticker + confidence */}
+        <div className="relative z-10 flex items-center gap-2 mb-1.5">
+          <span
+            className={clsx(
+              "font-mono text-[11px] font-bold tracking-wide flex-shrink-0",
+              DIRECTION_TEXT[signal.direction] ?? DIRECTION_TEXT.HOLD,
+            )}
+          >
+            {signal.direction}
+          </span>
+          <Link
+            href={`/dashboard/asset/${signal.asset_type}/${encodeURIComponent(signal.identifier)}`}
+            title={isPrediction ? displayName : undefined}
+            className={clsx(
+              "relative z-10 font-semibold text-white transition-colors hover:text-emerald-400 min-w-0",
+              isPrediction
+                ? "text-xs leading-snug line-clamp-1"
+                : "truncate font-mono text-sm",
+            )}
+          >
+            {displayName}
+          </Link>
+          <span className={clsx("ml-auto font-mono text-xs font-bold tabular-nums flex-shrink-0", conf.text)}>
+            {signal.confidence}%
+          </span>
+        </div>
+
+        {/* Row 2: reasoning */}
+        <p className="relative z-10 text-[12px] leading-snug text-zinc-400 line-clamp-2 mb-1.5">
+          {signal.reasoning}
+        </p>
+
+        {/* Row 3: meta chips */}
+        <div className="relative z-10 flex items-center gap-2 text-[10px] text-zinc-600">
+          <span className="font-mono tabular-nums">{priceStr}</span>
+          <span>·</span>
+          <span className="font-mono uppercase tracking-wider">{horizon}</span>
+          <span>·</span>
+          <span className="font-mono tabular-nums">{timeAgo(signal.created_at)}</span>
+          {signal.outcome !== "PENDING" && (
+            <>
+              <span>·</span>
+              <span className={clsx("font-mono font-semibold uppercase", OUTCOME_TEXT[signal.outcome])}>
+                {signal.outcome}
+              </span>
+            </>
+          )}
+          {signal.outcome === "PENDING" && signal.unrealized_pnl != null && (
+            <>
+              <span>·</span>
+              <span className={clsx("font-mono font-semibold", signal.unrealized_pnl >= 0 ? "text-emerald-400" : "text-red-400")}>
+                {signal.unrealized_pnl >= 0 ? "+" : ""}{signal.unrealized_pnl.toFixed(1)}%
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Desktop: dense table row */}
+      <div
+        className={clsx(
+          "group relative hidden sm:flex items-center gap-4 border-l-2 py-3 pl-4 pr-4 transition-colors hover:bg-white/[0.025]",
+          DIRECTION_ACCENT[signal.direction] ?? DIRECTION_ACCENT.HOLD,
+        )}
+      >
+        <Link
+          href={`/signal/${signal.id}`}
+          aria-label={`${signal.direction} ${displayName} at ${signal.confidence}% confidence — view details`}
+          className="absolute inset-0 z-0"
+        />
+
+        {/* Direction */}
+        <span
           className={clsx(
-            "font-semibold text-white transition-colors hover:text-emerald-400",
-            isPrediction
-              ? "text-xs leading-snug line-clamp-2"
-              : "truncate font-mono text-sm",
+            "relative z-10 w-10 flex-shrink-0 font-mono text-[11px] font-bold tracking-wide",
+            DIRECTION_TEXT[signal.direction] ?? DIRECTION_TEXT.HOLD,
           )}
         >
-          {displayName}
-        </Link>
-        <span className="relative z-10 hidden flex-shrink-0 text-[10px] uppercase tracking-wider text-white lg:inline">
-          {typeLabel}
+          {signal.direction}
         </span>
-      </div>
 
-      {/* Confidence */}
-      <div className="relative z-10 flex w-14 flex-shrink-0 items-center gap-2 sm:w-[4.75rem]">
-        <div className="hidden h-1 flex-1 overflow-hidden rounded-full bg-white/[0.08] sm:block">
-          <div className={clsx("h-full rounded-full", conf.bar)} style={{ width: `${signal.confidence}%` }} />
+        {/* Ticker + type */}
+        <div className={clsx(
+          "relative z-10 flex min-w-0 items-baseline gap-1.5",
+          isPrediction ? "flex-1 max-w-[22rem]" : "w-32 flex-shrink-0",
+        )}>
+          <Link
+            href={`/dashboard/asset/${signal.asset_type}/${encodeURIComponent(signal.identifier)}`}
+            title={isPrediction ? displayName : undefined}
+            className={clsx(
+              "font-semibold text-white transition-colors hover:text-emerald-400",
+              isPrediction
+                ? "text-xs leading-snug line-clamp-2"
+                : "truncate font-mono text-sm",
+            )}
+          >
+            {displayName}
+          </Link>
+          <span className="relative z-10 hidden flex-shrink-0 text-[10px] uppercase tracking-wider text-white lg:inline">
+            {typeLabel}
+          </span>
         </div>
-        <span className={clsx("font-mono text-xs font-bold tabular-nums", conf.text)}>
-          {signal.confidence}
-          <span className="text-[10px] font-medium opacity-60">%</span>
+
+        {/* Confidence */}
+        <div className="relative z-10 flex w-[4.75rem] flex-shrink-0 items-center gap-2">
+          <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+            <div className={clsx("h-full rounded-full", conf.bar)} style={{ width: `${signal.confidence}%` }} />
+          </div>
+          <span className={clsx("font-mono text-xs font-bold tabular-nums", conf.text)}>
+            {signal.confidence}
+            <span className="text-[10px] font-medium opacity-60">%</span>
+          </span>
+        </div>
+
+        {/* Horizon */}
+        <span className="relative z-10 hidden w-14 flex-shrink-0 font-mono text-[10px] uppercase tracking-wider text-white md:block">
+          {horizon}
         </span>
+
+        {/* Price */}
+        <span className="relative z-10 w-20 flex-shrink-0 text-right font-mono text-xs tabular-nums text-white">
+          {priceStr}
+        </span>
+
+        {/* Reasoning */}
+        <p className="relative z-10 min-w-0 flex-1 truncate text-[13px] leading-tight text-white">
+          {signal.reasoning}
+        </p>
+
+        {/* Outcome / Unrealized P&L */}
+        <span
+          className={clsx(
+            "relative z-10 hidden flex-shrink-0 text-right font-mono text-[10px] font-semibold uppercase tracking-wider lg:block",
+            signal.outcome === "PENDING" && signal.unrealized_pnl != null
+              ? signal.unrealized_pnl >= 0 ? "w-14 text-emerald-400" : "w-14 text-red-400"
+              : clsx("w-12", OUTCOME_TEXT[signal.outcome]),
+          )}
+        >
+          {signal.outcome === "PENDING"
+            ? signal.unrealized_pnl != null
+              ? `${signal.unrealized_pnl >= 0 ? "+" : ""}${signal.unrealized_pnl.toFixed(1)}%`
+              : ""
+            : signal.outcome}
+        </span>
+
+        {/* Timestamp */}
+        <span className="relative z-10 hidden w-10 flex-shrink-0 text-right font-mono text-[10px] tabular-nums text-white lg:block">
+          {timeAgo(signal.created_at)}
+        </span>
+
+        {/* Share */}
+        <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 bg-background/80 pl-2 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          <ShareButton
+            signalId={signal.id}
+            ticker={displayName}
+            direction={signal.direction}
+            confidence={signal.confidence}
+          />
+        </div>
       </div>
-
-      {/* Horizon */}
-      <span className="relative z-10 hidden w-14 flex-shrink-0 font-mono text-[10px] uppercase tracking-wider text-white md:block">
-        {horizon}
-      </span>
-
-      {/* Price */}
-      <span className="relative z-10 hidden w-20 flex-shrink-0 text-right font-mono text-xs tabular-nums text-white sm:block">
-        {priceStr}
-      </span>
-
-      {/* Reasoning — click-through to detail via overlay */}
-      <p className="relative z-10 min-w-0 flex-1 truncate text-[13px] leading-tight text-white">
-        {signal.reasoning}
-      </p>
-
-      {/* Outcome / Unrealized P&L */}
-      <span
-        className={clsx(
-          "relative z-10 hidden flex-shrink-0 text-right font-mono text-[10px] font-semibold uppercase tracking-wider lg:block",
-          signal.outcome === "PENDING" && signal.unrealized_pnl != null
-            ? signal.unrealized_pnl >= 0 ? "w-14 text-emerald-400" : "w-14 text-red-400"
-            : clsx("w-12", OUTCOME_TEXT[signal.outcome]),
-        )}
-      >
-        {signal.outcome === "PENDING"
-          ? signal.unrealized_pnl != null
-            ? `${signal.unrealized_pnl >= 0 ? "+" : ""}${signal.unrealized_pnl.toFixed(1)}%`
-            : ""
-          : signal.outcome}
-      </span>
-
-      {/* Timestamp */}
-      <span className="relative z-10 hidden w-10 flex-shrink-0 text-right font-mono text-[10px] tabular-nums text-white lg:block">
-        {timeAgo(signal.created_at)}
-      </span>
-
-      {/* Share — floats in on hover over the timestamp */}
-      <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 bg-background/80 pl-2 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-        <ShareButton
-          signalId={signal.id}
-          ticker={displayName}
-          direction={signal.direction}
-          confidence={signal.confidence}
-        />
-      </div>
-    </div>
+    </>
   );
 }

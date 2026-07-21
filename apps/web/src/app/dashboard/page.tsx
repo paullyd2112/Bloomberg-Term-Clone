@@ -291,12 +291,21 @@ export default async function DashboardPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard label="Total signals" value={signals.length} icon={Activity} />
-          <StatCard label="Pending" value={pending} icon={Clock} />
-          <StatCard label="Wins" value={winCount} color="green" icon={TrendingUp} />
-          <StatCard label="Losses" value={lossCount} color="red" icon={TrendingDown} />
-        </div>
+        <>
+          {/* Compact summary bar on mobile, full cards on sm+ */}
+          <div className="sm:hidden flex items-center gap-0 bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden divide-x divide-white/[0.06]">
+            <MiniStat label="Signals" value={signals.length} />
+            <MiniStat label="Pending" value={pending} />
+            <MiniStat label="Wins" value={winCount} color="green" />
+            <MiniStat label="Losses" value={lossCount} color="red" />
+          </div>
+          <div className="hidden sm:grid grid-cols-4 gap-3">
+            <StatCard label="Total signals" value={signals.length} icon={Activity} />
+            <StatCard label="Pending" value={pending} icon={Clock} />
+            <StatCard label="Wins" value={winCount} color="green" icon={TrendingUp} />
+            <StatCard label="Losses" value={lossCount} color="red" icon={TrendingDown} />
+          </div>
+        </>
       )}
 
       {/* Signal feed — the product, front and center */}
@@ -380,6 +389,30 @@ export default async function DashboardPage() {
         <SectorHeatmap />
       </Suspense>
       */}
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: number;
+  color?: "green" | "red";
+}) {
+  const valueColor =
+    color === "green"
+      ? "text-emerald-400"
+      : color === "red"
+      ? "text-red-400"
+      : "text-white";
+
+  return (
+    <div className="flex-1 flex flex-col items-center py-3 gap-0.5">
+      <span className={`text-lg font-bold tabular-nums ${valueColor}`}>{value}</span>
+      <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{label}</span>
     </div>
   );
 }

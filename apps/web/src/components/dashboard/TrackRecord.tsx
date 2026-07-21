@@ -88,9 +88,9 @@ export default function TrackRecord({ accuracy }: { accuracy: PlatformAccuracy }
           <span className="tabular-nums">{accuracy.totalResolved} signals</span>
         </div>
 
-        {/* Sparkline */}
+        {/* Sparkline — visible on all viewports */}
         {accuracy.byMonth.length >= 2 && (
-          <div className="hidden sm:block ml-auto">
+          <div className="ml-auto">
             <Sparkline months={accuracy.byMonth} />
           </div>
         )}

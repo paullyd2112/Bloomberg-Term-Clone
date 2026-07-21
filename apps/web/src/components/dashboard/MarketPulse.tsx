@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { clsx } from "clsx";
 import { TrendingUp, Fish, MessageCircle } from "lucide-react";
 
@@ -23,6 +23,11 @@ export default function MarketPulse({
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("movers");
   const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 639px)");
+    if (mql.matches) setCollapsed(true);
+  }, []);
 
   const content: Record<TabId, ReactNode> = {
     movers: moversContent,
