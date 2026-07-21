@@ -199,7 +199,7 @@ function Stats() {
   const items = [
     { value: "50+",   label: "Coins scored" },
     { value: "12×",   label: "Scoring runs per day" },
-    { value: "7a",    label: "Daily briefing, ET" },
+    { value: "7d",    label: "Daily briefing" },
     { value: "14d",   label: "Trial period" },
   ];
 
@@ -485,7 +485,7 @@ const FAQS = [
   },
   {
     q: "What's in the newsletter?",
-    a: "A full morning brief covering crypto markets, prediction markets, geopolitics, AI and tech, health and science, sports, and whatever else is moving the world. It runs 7 days a week and you can choose your preferred frequency in settings.",
+    a: "A full morning brief covering crypto markets, prediction markets, geopolitics, AI and tech, health and science, sports, and whatever else is moving the world. Think 7 days a week is too much? You can choose your newsletter frequency in settings.",
   },
   {
     q: "How accurate are the signals?",
