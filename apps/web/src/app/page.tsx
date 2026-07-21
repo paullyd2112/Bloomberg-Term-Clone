@@ -42,7 +42,7 @@ function Nav() {
         <div className="hidden md:flex items-center gap-8 text-sm text-secondary-foreground">
           <a href="#terminal" className="hover:text-white transition-colors">The terminal</a>
           <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
-          <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
+          <a href="/faq" className="hover:text-white transition-colors">FAQ</a>
         </div>
 
         <div className="flex items-center gap-1 sm:gap-3">
@@ -574,7 +574,8 @@ const FOOTER_COLS = [
     links: [
       { label: "The terminal", href: "#terminal" },
       { label: "Pricing", href: "#pricing" },
-      { label: "FAQ", href: "#faq" },
+      { label: "FAQ", href: "/faq" },
+      { label: "Glossary", href: "/glossary" },
       { label: "Dashboard", href: "/dashboard" },
     ],
   },
