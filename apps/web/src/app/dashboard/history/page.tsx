@@ -148,33 +148,7 @@ export default async function HistoryPage({
 
   const signals = (data ?? []) as ResolvedSignal[];
 
-  // Backfill market_title from raw_prices for older signals that don't have it.
-  const missingTitleIds = Array.from(
-    new Set(
-      signals
-        .filter((s) => s.asset_type === "prediction" && !s.market_title)
-        .map((s) => s.identifier),
-    ),
-  );
-  if (missingTitleIds.length > 0) {
-    const { data: priceRows } = await supabase
-      .from("raw_prices")
-      .select("identifier, metadata")
-      .eq("asset_type", "prediction")
-      .in("identifier", missingTitleIds);
-    const titleByIdentifier = new Map<string, string>();
-    for (const row of priceRows ?? []) {
-      const title = (row.metadata as Record<string, unknown> | null)?.title;
-      if (typeof title === "string" && title && !titleByIdentifier.has(row.identifier)) {
-        titleByIdentifier.set(row.identifier, title);
-      }
-    }
-    for (const s of signals) {
-      if (s.asset_type === "prediction" && !s.market_title) {
-        s.market_title = titleByIdentifier.get(s.identifier) ?? null;
-      }
-    }
-  }
+  // market_title is stored directly on the signal row since migration 012.
 
   // Only include signals with valid entry prices in aggregate metrics
   const pricedSignals = signals.filter((s) => s.price_at_signal != null && s.price_at_signal > 0);

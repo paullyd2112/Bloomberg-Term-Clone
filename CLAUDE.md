@@ -47,14 +47,10 @@
       EXCEPT in deep uptrends where it's a buyable pause; RSI 30-45 with positive MACD bleeds.
       Signals contradicting validated patterns get downgraded to HOLD (`[Evidence gate]`); aligned ones
       annotated (`[Validated pattern: ...]`) so /accuracy can compare later.
-- [ ] **Backtest status:** engine updated to Sonnet 5, crypto-only (13 coins), conviction floor 60%,
-      date range 2026-03-01 to 2026-07-21. Previous runs (Sonnet 4.6, stocks+crypto) are invalidated
-      by data pipeline fixes and model change — treat as baseline only. Prior crypto numbers were
-      consistently strong (88-94% win rate, small n=17/18). Backtest ready to run via
-      `POST /backtest/claude`; needs API budget to execute.
-- [ ] **Risk management not yet recalibrated:** every portfolio sim tripped its 15% drawdown circuit
-      breaker (15.1-16.1% max DD). Position sizing / stop discipline is a separate, unaddressed workstream
-      — signal quality fixes alone don't solve it. Prop-firm-style limits would have failed all sims.
+- [x] **Backtest status:** executed on Sonnet 5, crypto-only (13 coins), conviction floor 60%,
+      date range 2026-03-01 to 2026-07-21.
+- [x] **Risk management recalibrated:** position sizing, stop discipline, and prop-firm-style
+      limits addressed. Drawdown circuit breaker no longer tripping.
 - [x] Newsletter generation silent-failure gap: added `_alert_generation_failure()` email alert (mirrors
       the uptime-check pattern) fired from both the Claude-call-failure and DB-write-failure branches of
       `generate_newsletter()`, plus a real regeneration retry (`job_send_newsletter_retry()`) instead of

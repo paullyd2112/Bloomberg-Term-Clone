@@ -43,7 +43,8 @@ async function fetchPlatformAccuracy(): Promise<PlatformAccuracy | null> {
     .in("asset_type", ["crypto", "prediction"])
     .eq("is_backtest", false)
     .in("outcome", ["WIN", "LOSS"])
-    .gte("created_at", ENGINE_CUTOFF);
+    .gte("created_at", ENGINE_CUTOFF)
+    .limit(5000);
 
   if (error || !data || data.length === 0) {
     return null;
@@ -124,34 +125,7 @@ async function fetchSignals(): Promise<Signal[]> {
   }
   const signals = (data as Signal[]) ?? [];
 
-  // New signals store market_title directly; backfill from raw_prices for
-  // older signals that don't have it yet.
-  const missingTitleIds = Array.from(
-    new Set(
-      signals
-        .filter((s) => s.asset_type === "prediction" && !s.market_title)
-        .map((s) => s.identifier),
-    ),
-  );
-  if (missingTitleIds.length > 0) {
-    const { data: priceRows } = await supabase
-      .from("raw_prices")
-      .select("identifier, metadata")
-      .eq("asset_type", "prediction")
-      .in("identifier", missingTitleIds);
-    const titleByIdentifier = new Map<string, string>();
-    for (const row of priceRows ?? []) {
-      const title = (row.metadata as Record<string, unknown> | null)?.title;
-      if (typeof title === "string" && title && !titleByIdentifier.has(row.identifier)) {
-        titleByIdentifier.set(row.identifier, title);
-      }
-    }
-    for (const s of signals) {
-      if (s.asset_type === "prediction" && !s.market_title) {
-        s.market_title = titleByIdentifier.get(s.identifier) ?? null;
-      }
-    }
-  }
+  // market_title is stored directly on the signal row since migration 012.
 
   // Compute unrealized P&L for PENDING signals using latest prices.
   const pendingSignals = signals.filter((s) => s.outcome === "PENDING" && s.price_at_signal != null);

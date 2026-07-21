@@ -143,7 +143,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
         </p>
 
         {/* Row 3: meta chips */}
-        <div className="relative z-10 flex items-center gap-2 text-[10px] text-zinc-600">
+        <div className="relative z-10 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-zinc-600">
           <span className="font-mono tabular-nums">{priceStr}</span>
           <span>·</span>
           <span className="font-mono uppercase tracking-wider">{horizon}</span>

@@ -52,33 +52,6 @@ export default function ScreenerClient() {
 
       const signals = (signalRes.data as Signal[]) ?? [];
 
-      const missingTitleIds = Array.from(
-        new Set(
-          signals
-            .filter((s) => s.asset_type === "prediction" && !s.market_title)
-            .map((s) => s.identifier),
-        ),
-      );
-      if (missingTitleIds.length > 0) {
-        const { data: priceRows } = await supabase
-          .from("raw_prices")
-          .select("identifier, metadata")
-          .eq("asset_type", "prediction")
-          .in("identifier", missingTitleIds);
-        const titleByIdentifier = new Map<string, string>();
-        for (const row of priceRows ?? []) {
-          const title = (row.metadata as Record<string, unknown> | null)?.title;
-          if (typeof title === "string" && title && !titleByIdentifier.has(row.identifier)) {
-            titleByIdentifier.set(row.identifier, title);
-          }
-        }
-        for (const s of signals) {
-          if (s.asset_type === "prediction" && !s.market_title) {
-            s.market_title = titleByIdentifier.get(s.identifier) ?? null;
-          }
-        }
-      }
-
       setSignals(signals);
       setLoading(false);
     })();
