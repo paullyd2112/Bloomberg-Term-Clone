@@ -19,7 +19,7 @@ async function fetchSectorData(): Promise<SectorStats[]> {
     .from("signals")
     .select("identifier, direction, confidence")
     .eq("asset_type", "stock")
-    .gte("confidence", 70)
+    .gte("confidence", 60)
     .gte("created_at", sevenDaysAgo.toISOString());
 
   if (error || !data) {

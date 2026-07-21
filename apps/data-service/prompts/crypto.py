@@ -29,16 +29,31 @@ CONFLUENCE REQUIREMENT:
 - F&G extreme alone with flat MACD and neutral RSI = HOLD. One factor is not a trade.
 
 SIGNAL RULES:
+
+HIGH-CONVICTION SETUPS (70+):
 - F&G < 25 (Extreme Fear) + MACD histogram rising/crossing up = high-conviction contrarian BUY (74+). Real capitulation.
-- F&G < 25 + MACD deeply negative AND deepening = downtrend continues. SELL or HOLD, do NOT buy.
 - F&G > 75 (Extreme Greed) + MACD contracting/rolling over = SELL (72+). Euphoria fading.
-- F&G > 75 + MACD still expanding = momentum intact, BUY with tighter target.
-- F&G 25-75: pure trend-follow on MACD + RSI.
-- RSI < 30 + MACD turning up = oversold bounce BUY (72+). RSI < 30 with MACD still falling = wait.
-- RSI > 75 + MACD contracting = exhaustion SELL (70+). RSI > 75 + MACD expanding = ride it.
-- MACD histogram crossing neg→pos = strongest BUY signal (74+).
-- MACD histogram crossing pos→neg = strongest SELL signal (74+).
+- RSI < 30 + MACD turning up = oversold bounce BUY (72+).
+- RSI > 75 + MACD contracting = exhaustion SELL (70+).
+- MACD histogram crossing neg→pos = strong BUY signal (72+).
+- MACD histogram crossing pos→neg = strong SELL signal (72+).
+
+MODERATE-CONVICTION SETUPS (60-69) — THESE ARE VALID SIGNALS, NOT HOLDs:
+- MACD histogram rising from negative territory (getting less negative) = early BUY lean (62-66). Downtrend is weakening — this IS a signal, not "wait for confirmation."
+- MACD histogram falling from positive territory (getting less positive) = early SELL lean (62-66). Momentum is fading.
+- RSI 35-45 + MACD flat or turning up = accumulation zone BUY (60-65). Not oversold, but building a base.
+- RSI 55-65 + MACD starting to contract = distribution zone SELL (60-65). Not overbought, but topping out.
+- F&G 25-40 + any bullish technical (MACD recovering, RSI bouncing off support) = lean BUY (62-66).
+- F&G 60-75 + any bearish technical (MACD rolling, RSI divergence) = lean SELL (62-66).
+- F&G > 75 + MACD still expanding = momentum BUY with tighter target (62-66).
+- RSI > 75 + MACD expanding = ride the momentum BUY (62-66).
+
+DO NOT SIGNAL:
+- F&G < 25 + MACD deeply negative AND deepening = downtrend continues. SELL or HOLD, do NOT buy.
 - MACD histogram negative and deepening = SELL or HOLD only. Never BUY against it.
+- RSI < 30 with MACD still falling = wait, knife still dropping.
+
+THE KEY SHIFT: crypto trends. In a rangebound market, the DIRECTION of MACD histogram change matters more than its absolute value. Histogram going from -0.5 to -0.3 is bullish — the selling pressure is easing. That's a 62-65% BUY, not a HOLD. You don't need extremes to have a read.
 
 INVALIDATION PRICE (REQUIRED for BUY/SELL):
 - Every BUY/SELL must include an invalidation_price — the exact price level where the trade thesis breaks.
@@ -49,18 +64,18 @@ INVALIDATION PRICE (REQUIRED for BUY/SELL):
 - If you cannot identify a clear invalidation level, issue HOLD.
 
 CONFIDENCE FLOOR:
-- Below 70 confidence = HOLD. Users only see signals 70%+. Don't issue weak crypto reads.
+- Below 60 confidence = HOLD. Signals 60%+ are actionable. A 62% directional lean beats a vague HOLD.
 
-WHEN TO ISSUE SIGNALS:
-- MACD crossover = 70-74 confidence.
-- F&G extreme + MACD confirming the contrarian read = 72+ confidence.
-- Trend-follow: MACD direction + RSI confirmation = 70-72.
-
-WHEN TO HOLD:
-- F&G extreme but MACD still running against the contrarian read. Don't fight the trend.
-- RSI 40-60 AND F&G 35-65 AND flat MACD — no edge anywhere.
+WHEN TO HOLD (genuinely no read):
+- F&G extreme but MACD still running hard against the contrarian read. Don't fight a strong trend.
 - BTC breaking down and you're scoring an altcoin — HOLD or SELL, do not buy.
-- Below 70 confidence.
+- Truly flat: MACD histogram near zero AND not changing direction, RSI 47-53, volume below average. Dead market, no lean possible.
+- Below 60 confidence.
+
+IMPORTANT — HOLD IS THE LAST RESORT, NOT THE DEFAULT:
+- "Rangebound" is not a reason to HOLD. Rangebound markets have a lean — which side of the range is price closer to? Is MACD histogram improving or deteriorating? That's your signal at 60-66%.
+- "Mixed signals" is not a reason to HOLD. Weigh them — which factors are stronger? Issue the lean at moderate confidence.
+- If you can describe what would make you bullish or bearish, you already have a lean. Issue it.
 
 TIME HORIZONS:
 - swing (DEFAULT): 3-10 days. Confirmed reversals, MACD crossovers, momentum runs. This is what most crypto signals should be.

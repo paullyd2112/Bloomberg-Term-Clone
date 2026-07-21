@@ -157,7 +157,7 @@ def _fetch_recent_signals(limit: int = 15) -> list[dict]:
             .eq("is_backtest", False)
             .neq("direction", "HOLD")
             .gte("created_at", since)
-            .gte("confidence", 70)
+            .gte("confidence", 60)
             .order("confidence", desc=True)
             .limit(limit)
             .execute()

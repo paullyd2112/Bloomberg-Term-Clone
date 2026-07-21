@@ -71,7 +71,7 @@ Every signal Claude produces passes through these gates **in order**, any of whi
 a BUY/SELL to HOLD (saving the signal write + preventing bad calls). Gates are code-enforced —
 they override the model regardless of what the prompt says.
 
-1. **Confidence gate** (`risk_engine.CONFIDENCE_MINIMUM = 75`): BUY/SELL below 75% → HOLD
+1. **Confidence gate** (`risk_engine.CONFIDENCE_MINIMUM = 60`): BUY/SELL below 60% → HOLD
 2. **Circuit breaker** (±8% change_24h): no SELLs after >8% gap up, no BUYs after >8% gap down
 3. **SPY regime gate** (stocks only): SPY below SMA-50 → no BUYs; SPY >5% above SMA-50 → no SELLs
 4. **SPY 1h SMA-20 gate** (stocks only): SPY below 20-period SMA on 1h candles → no BUYs

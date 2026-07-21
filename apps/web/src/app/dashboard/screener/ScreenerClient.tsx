@@ -46,7 +46,7 @@ export default function ScreenerClient() {
         .select("id, asset_type, identifier, direction, confidence, reasoning, time_horizon, price_at_signal, news_context, created_at, outcome")
         .eq("is_backtest", false)
         .in("asset_type", ["crypto", "prediction"])
-        .gte("confidence", 70)
+        .gte("confidence", 60)
         .order("created_at", { ascending: false })
         .limit(500);
 
