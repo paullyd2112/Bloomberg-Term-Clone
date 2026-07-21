@@ -19,19 +19,27 @@ export default async function SettingsPage() {
   const profile = await getUserProfile();
   const tier = (profile?.tier as Tier) ?? "free";
 
-  // Fetched separately + defensively: the email_alerts column ships in
-  // migration 005, which may not be applied yet. Default to opted-in.
   let emailAlerts = true;
   let smsAlerts = false;
+  let newsletterFreq: "daily" | "weekdays" | "every_other_day" | "weekly" | "weekends" = "daily";
   try {
     const supabase = createClient();
-    const { data } = await supabase
-      .from("profiles")
-      .select("email_alerts, sms_alerts")
-      .eq("id", user.id)
-      .single();
-    if (data && typeof data.email_alerts === "boolean") emailAlerts = data.email_alerts;
-    if (data && typeof data.sms_alerts === "boolean") smsAlerts = data.sms_alerts;
+    const [alertsResult, freqResult] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("email_alerts, sms_alerts")
+        .eq("id", user.id)
+        .single(),
+      supabase
+        .from("newsletter_subscribers")
+        .select("newsletter_frequency")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    ]);
+    const alertData = alertsResult.data;
+    if (alertData && typeof alertData.email_alerts === "boolean") emailAlerts = alertData.email_alerts;
+    if (alertData && typeof alertData.sms_alerts === "boolean") smsAlerts = alertData.sms_alerts;
+    if (freqResult.data?.newsletter_frequency) newsletterFreq = freqResult.data.newsletter_frequency;
   } catch {
     // columns not present yet — keep defaults
   }
@@ -107,6 +115,8 @@ export default async function SettingsPage() {
         initialAssets={(profile?.asset_preferences as AssetPref[]) ?? []}
         initialEmailAlerts={emailAlerts}
         initialSmsAlerts={smsAlerts}
+        initialNewsletterFreq={newsletterFreq}
+        tier={tier}
       />
 
       <p className="text-zinc-600 text-xs">

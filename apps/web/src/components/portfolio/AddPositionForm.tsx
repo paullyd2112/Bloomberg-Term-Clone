@@ -6,12 +6,19 @@ import { useRouter } from "next/navigation";
 type AssetType = "stock" | "crypto";
 type Direction = "LONG" | "SHORT" | "YES" | "NO";
 
-export default function AddPositionForm({ onClose }: { onClose: () => void }) {
+export type PositionDefaults = {
+  asset_type?: string;
+  identifier?: string;
+  direction?: string;
+  entry_price?: string;
+};
+
+export default function AddPositionForm({ onClose, defaults }: { onClose: () => void; defaults?: PositionDefaults }) {
   const router = useRouter();
-  const [assetType, setAssetType] = useState<AssetType>("stock");
-  const [identifier, setIdentifier] = useState("");
-  const [direction, setDirection]   = useState<Direction>("LONG");
-  const [entryPrice, setEntryPrice] = useState("");
+  const [assetType, setAssetType] = useState<AssetType>((defaults?.asset_type as AssetType) || "crypto");
+  const [identifier, setIdentifier] = useState(defaults?.identifier ?? "");
+  const [direction, setDirection]   = useState<Direction>((defaults?.direction as Direction) || "LONG");
+  const [entryPrice, setEntryPrice] = useState(defaults?.entry_price ?? "");
   const [size, setSize]             = useState("");
   const [error, setError]           = useState("");
   const [loading, setLoading]       = useState(false);

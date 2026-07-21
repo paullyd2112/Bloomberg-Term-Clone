@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { BacktestParams, BacktestResults, EquityPoint } from "@/app/api/backtest/route";
+import { clsx } from "clsx";
+import type { BacktestParams, BacktestResults, EquityPoint, BreakdownEntry, TradeEntry } from "@/app/api/backtest/route";
 
 const DEFAULT_PARAMS: BacktestParams = {
   asset_type:     "all",
@@ -26,7 +27,7 @@ function EquityCurve({ points }: { points: EquityPoint[] }) {
   const minPnl = Math.min(0, ...pnls);
   const maxPnl = Math.max(0, ...pnls);
   const range  = maxPnl - minPnl || 1;
-  const W = 600, H = 80, PAD = 4;
+  const W = 600, H = 100, PAD = 4;
 
   const toX = (i: number) => PAD + (i / (points.length - 1)) * (W - PAD * 2);
   const toY = (v: number) => PAD + ((maxPnl - v) / range) * (H - PAD * 2);
@@ -42,12 +43,10 @@ function EquityCurve({ points }: { points: EquityPoint[] }) {
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
-      className="w-full h-20"
+      className="w-full h-24"
       preserveAspectRatio="none"
     >
-      {/* Zero line */}
       <line x1={PAD} y1={zeroY} x2={W - PAD} y2={zeroY} stroke="rgba(255,255,255,0.12)" strokeWidth="0.5" />
-      {/* Equity curve */}
       <path d={pathD} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
     </svg>
   );
@@ -66,6 +65,118 @@ function MetricCard({
       <div className={`text-xl font-bold tabular-nums ${valueClass}`}>{value}</div>
       <div className="text-xs text-zinc-500 mt-0.5">{label}</div>
       {sub && <div className="text-[11px] text-zinc-600 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <h3 className="flex items-center gap-2.5 font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em]">
+      <span className="text-emerald-400 text-[10px] leading-none">●</span>
+      {label}
+    </h3>
+  );
+}
+
+function BreakdownTable({ data, labelKey }: { data: Record<string, BreakdownEntry>; labelKey: string }) {
+  const entries = Object.entries(data);
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-[10px] text-zinc-600 uppercase tracking-wider">
+            <th className="text-left py-1.5 pr-3 font-medium">{labelKey}</th>
+            <th className="text-right py-1.5 px-2 font-medium">Trades</th>
+            <th className="text-right py-1.5 px-2 font-medium">W/L</th>
+            <th className="text-right py-1.5 px-2 font-medium">Win %</th>
+            <th className="text-right py-1.5 pl-2 font-medium">P&L</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map(([key, entry]) => (
+            <tr key={key} className="border-t border-white/[0.04]">
+              <td className="py-1.5 pr-3 font-mono text-xs text-white uppercase">{key}</td>
+              <td className="text-right py-1.5 px-2 tabular-nums text-zinc-400">{entry.trades}</td>
+              <td className="text-right py-1.5 px-2 tabular-nums text-zinc-400">
+                <span className="text-emerald-400">{entry.wins}</span>
+                <span className="text-zinc-600">/</span>
+                <span className="text-red-400">{entry.losses}</span>
+              </td>
+              <td className={clsx(
+                "text-right py-1.5 px-2 tabular-nums font-semibold",
+                entry.win_rate >= 55 ? "text-emerald-400" : entry.win_rate >= 45 ? "text-amber-400" : "text-red-400",
+              )}>
+                {entry.win_rate}%
+              </td>
+              <td className={clsx(
+                "text-right py-1.5 pl-2 tabular-nums font-semibold",
+                entry.total_pnl >= 0 ? "text-emerald-400" : "text-red-400",
+              )}>
+                {entry.total_pnl >= 0 ? "+" : ""}${entry.total_pnl.toLocaleString()}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TradeLog({ trades }: { trades: TradeEntry[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? trades : trades.slice(0, 20);
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-[10px] text-zinc-600 uppercase tracking-wider">
+            <th className="text-left py-1.5 pr-2 font-medium">Date</th>
+            <th className="text-left py-1.5 px-2 font-medium">Asset</th>
+            <th className="text-left py-1.5 px-2 font-medium">Dir</th>
+            <th className="text-right py-1.5 px-2 font-medium">Conf</th>
+            <th className="text-right py-1.5 px-2 font-medium">P&L</th>
+            <th className="text-right py-1.5 pl-2 font-medium">Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {visible.map((t, i) => (
+            <tr key={i} className="border-t border-white/[0.04]">
+              <td className="py-1.5 pr-2 font-mono text-[11px] text-zinc-500 tabular-nums">{t.date}</td>
+              <td className="py-1.5 px-2 text-xs text-white font-semibold truncate max-w-[8rem]">{t.identifier}</td>
+              <td className={clsx(
+                "py-1.5 px-2 font-mono text-[11px] font-bold",
+                t.direction === "BUY" || t.direction === "YES" ? "text-emerald-400" : "text-red-400",
+              )}>
+                {t.direction}
+              </td>
+              <td className="text-right py-1.5 px-2 font-mono text-xs tabular-nums text-zinc-400">{t.confidence}%</td>
+              <td className={clsx(
+                "text-right py-1.5 px-2 font-mono text-xs tabular-nums font-semibold",
+                t.pnl >= 0 ? "text-emerald-400" : "text-red-400",
+              )}>
+                {t.pnl >= 0 ? "+" : ""}${t.pnl.toLocaleString()}
+              </td>
+              <td className={clsx(
+                "text-right py-1.5 pl-2 font-mono text-[10px] font-semibold uppercase",
+                t.outcome === "WIN" ? "text-emerald-400" : t.outcome === "LOSS" ? "text-red-400" : "text-zinc-500",
+              )}>
+                {t.outcome}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {trades.length > 20 && (
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className="mt-2 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+        >
+          {showAll ? `Show less` : `Show all ${trades.length} trades`}
+        </button>
+      )}
     </div>
   );
 }
@@ -106,7 +217,7 @@ export default function BacktestClient() {
     <div className="space-y-6">
       {/* Config panel */}
       <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-white tracking-tight">Configure backtest</h2>
+        <SectionHeader label="Configure" />
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {/* Asset type */}
@@ -217,7 +328,7 @@ export default function BacktestClient() {
           disabled={loading}
           className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold px-6 py-2.5 rounded-lg text-sm transition-colors"
         >
-          {loading ? "Running…" : "Run backtest →"}
+          {loading ? "Running..." : "Run backtest"}
         </button>
       </div>
 
@@ -237,7 +348,7 @@ export default function BacktestClient() {
                 <MetricCard
                   label="Total trades"
                   value={String(results.total_trades)}
-                  sub={`${results.wins}W · ${results.losses}L · ${results.neutrals}N`}
+                  sub={`${results.wins}W / ${results.losses}L / ${results.neutrals}N`}
                 />
                 <MetricCard
                   label="Win rate"
@@ -267,16 +378,37 @@ export default function BacktestClient() {
               {/* Equity curve */}
               <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="flex items-center gap-2.5 font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em]">
-                    <span className="text-emerald-400 text-[10px] leading-none">●</span>
-                    Equity curve
-                  </span>
+                  <SectionHeader label="Equity curve" />
                   <span className={`text-xs font-semibold tabular-nums ${results.total_pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                     {results.total_pnl >= 0 ? "+" : ""}${results.total_pnl.toLocaleString()} total
                   </span>
                 </div>
                 <EquityCurve points={results.equity_curve} />
               </div>
+
+              {/* Breakdowns */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {Object.keys(results.by_asset).length > 0 && (
+                  <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
+                    <SectionHeader label="By asset type" />
+                    <BreakdownTable data={results.by_asset} labelKey="Type" />
+                  </div>
+                )}
+                {Object.keys(results.by_direction).length > 0 && (
+                  <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
+                    <SectionHeader label="By direction" />
+                    <BreakdownTable data={results.by_direction} labelKey="Dir" />
+                  </div>
+                )}
+              </div>
+
+              {/* Trade log */}
+              {results.trades && results.trades.length > 0 && (
+                <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
+                  <SectionHeader label="Trade log" />
+                  <TradeLog trades={results.trades} />
+                </div>
+              )}
             </>
           )}
         </div>
