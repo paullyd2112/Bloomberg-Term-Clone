@@ -965,7 +965,7 @@ def score_asset(
     from scoring.risk_engine import check_confidence_gate, CONFIDENCE_MINIMUM
     effective_floor = confidence_floor_override or CONFIDENCE_MINIMUM
     conf_rejection = signal.confidence < effective_floor
-    if conf_rejection and signal.direction in ("BUY", "SELL"):
+    if conf_rejection and signal.direction in ("BUY", "SELL", "YES", "NO"):
         logger.info(
             "{}/{}: confidence gate — {} ({}%), floor {}% — downgrading to HOLD",
             asset_type, identifier, signal.direction, signal.confidence, effective_floor,
