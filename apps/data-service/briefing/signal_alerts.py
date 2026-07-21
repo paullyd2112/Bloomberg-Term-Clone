@@ -1,10 +1,15 @@
 """
-High-confidence signal email alerts — automatic notifications for BUY/SELL signals.
+High-confidence signal alerts — automatic notifications for BUY/SELL signals.
 
 Called from scoring/engine.py after a signal is written. Only fires for:
   - Direction: BUY or SELL (never HOLD)
   - Confidence: >= MIN_CONFIDENCE (70% default)
   - Tier: pro or elite subscribers only (free users get the newsletter CTA instead)
+
+Delivery channels (all fire in parallel):
+  - Email (Resend)
+  - Web push (VAPID)
+  - Telegram Bot API (instant, sub-second)
 """
 
 import os
@@ -25,9 +30,58 @@ MIN_CONFIDENCE = 70
 ACTIONABLE_DIRECTIONS = {"BUY", "SELL"}
 PAID_TIERS = {"pro", "elite"}
 
-# Rate-limit: don't spam the same ticker within 6 hours
-_recent_alerts: dict[str, datetime] = {}
-COOLDOWN_HOURS = 6
+COOLDOWN_HOURS_CRYPTO = 2
+COOLDOWN_HOURS_DEFAULT = 6
+
+
+def _get_cooldown_hours(asset_type: str) -> int:
+    if asset_type in ("crypto", "cryptocurrency"):
+        return COOLDOWN_HOURS_CRYPTO
+    return COOLDOWN_HOURS_DEFAULT
+
+
+def _check_cooldown(asset_type: str, identifier: str, direction: str) -> bool:
+    """Check notification_log for recent sends. Returns True if in cooldown."""
+    cooldown_h = _get_cooldown_hours(asset_type)
+    try:
+        result = (
+            supabase.table("notification_log")
+            .select("sent_at")
+            .eq("asset_type", asset_type)
+            .eq("identifier", identifier)
+            .eq("direction", direction)
+            .eq("status", "sent")
+            .order("sent_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            last_sent = datetime.fromisoformat(result.data[0]["sent_at"].replace("Z", "+00:00"))
+            hours_ago = (datetime.now(timezone.utc) - last_sent).total_seconds() / 3600
+            if hours_ago < cooldown_h:
+                logger.debug(
+                    "signal_alerts: cooldown — {}:{} sent {:.1f}h ago (limit {}h)",
+                    identifier, direction, hours_ago, cooldown_h,
+                )
+                return True
+    except Exception as e:
+        logger.warning("signal_alerts: cooldown check failed, proceeding — {}", e)
+    return False
+
+
+def _log_notification(user_id: str, signal: dict, channel: str, status: str = "sent"):
+    try:
+        supabase.table("notification_log").insert({
+            "user_id": user_id,
+            "signal_id": signal.get("id"),
+            "channel": channel,
+            "status": status,
+            "asset_type": signal.get("asset_type"),
+            "identifier": signal.get("identifier"),
+            "direction": signal.get("direction"),
+        }).execute()
+    except Exception as e:
+        logger.warning("signal_alerts: failed to log {} notification — {}", channel, e)
 
 
 def _should_alert(signal: dict) -> bool:
@@ -41,13 +95,10 @@ def _should_alert(signal: dict) -> bool:
     if signal.get("is_backtest"):
         return False
 
-    key = f"{signal.get('asset_type')}:{signal.get('identifier')}:{direction}"
-    last_sent = _recent_alerts.get(key)
-    if last_sent:
-        hours_ago = (datetime.now(timezone.utc) - last_sent).total_seconds() / 3600
-        if hours_ago < COOLDOWN_HOURS:
-            logger.debug("signal_alerts: skipping {} — sent {:.1f}h ago", key, hours_ago)
-            return False
+    asset_type = signal.get("asset_type", "")
+    identifier = signal.get("identifier", "")
+    if _check_cooldown(asset_type, identifier, direction):
+        return False
 
     return True
 
@@ -131,11 +182,9 @@ def _render_email(signal: dict) -> tuple[str, str, str]:
 
     subject = f"{emoji} {direction} {identifier} — {confidence}% confidence"
 
-    asset_url = f"{APP_URL}/dashboard/asset/{asset_type}/{identifier}"
+    signal_id = signal.get("id", "")
+    asset_url = f"{APP_URL}/dashboard/signals?highlight={signal_id}" if signal_id else f"{APP_URL}/dashboard/asset/{asset_type}/{identifier}"
 
-    # Two-cell colored-<td> bar, not nested divs — the classic Outlook-safe
-    # progress bar pattern, since Outlook won't reliably size/color nested
-    # <div>s but does honor table cell widths + bgcolor.
     confidence_bar = f"""
       <table role="presentation" cellpadding="0" cellspacing="0" width="56" style="width:56px;">
         <tr>
@@ -143,6 +192,21 @@ def _render_email(signal: dict) -> tuple[str, str, str]:
           <td width="{100 - confidence}%" bgcolor="#27272a" style="background-color:#27272a;font-size:1px;line-height:5px;">&nbsp;</td>
         </tr>
       </table>"""
+
+    trade_setup = signal.get("trade_setup") or {}
+    stop = trade_setup.get("stop_loss")
+    target = trade_setup.get("take_profit")
+    setup_line = ""
+    if stop or target:
+        parts = []
+        if stop:
+            parts.append(f"Stop {_fmt_price(stop)}")
+        if target:
+            parts.append(f"Target {_fmt_price(target)}")
+        setup_line = f"""
+      <div style="color:#a1a1aa;font-size:12px;font-family:{MONO};margin-bottom:8px;letter-spacing:.04em;">
+        {'  ·  '.join(parts)}
+      </div>"""
 
     card_inner = f"""
       <div style="font-family:{MONO};font-size:26px;font-weight:800;color:{color};margin-bottom:10px;">
@@ -156,9 +220,10 @@ def _render_email(signal: dict) -> tuple[str, str, str]:
         </tr>
       </table>
 
-      <div style="color:#71717a;font-size:12px;font-family:{MONO};margin-bottom:18px;text-transform:uppercase;letter-spacing:.06em;">
+      <div style="color:#71717a;font-size:12px;font-family:{MONO};margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">
         {_horizon_label(horizon)} &middot; Entry {_fmt_price(price)}
       </div>
+      {setup_line}
 
       {_chunk_reasoning(reasoning)}"""
 
@@ -192,7 +257,7 @@ def _render_email(signal: dict) -> tuple[str, str, str]:
     </table>
 
     <a href="{asset_url}" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:14px;text-decoration:none;padding:10px 20px;border-radius:6px;margin:0 0 24px;">
-      View {identifier} on Plebs →
+      View signal on Plebs →
     </a>
 
     <hr style="border:none;border-top:1px solid #1e1e22;margin:24px 0;">
@@ -212,8 +277,17 @@ def _render_email(signal: dict) -> tuple[str, str, str]:
     text = (
         f"{direction} {identifier} — {confidence}% confidence\n"
         f"Time horizon: {_horizon_label(horizon)}\n"
-        f"Entry price: {_fmt_price(price)}\n\n"
-        f"{reasoning}\n\n"
+        f"Entry price: {_fmt_price(price)}\n"
+    )
+    if stop or target:
+        parts = []
+        if stop:
+            parts.append(f"Stop: {_fmt_price(stop)}")
+        if target:
+            parts.append(f"Target: {_fmt_price(target)}")
+        text += " / ".join(parts) + "\n"
+    text += (
+        f"\n{reasoning}\n\n"
         f"View on Plebs: {asset_url}\n\n"
         f"Not financial advice — always do your own research."
     )
@@ -234,24 +308,54 @@ def _send_push_notifications(signal: dict, subscribers: list[dict]) -> int:
     confidence = signal.get("confidence", 0)
     asset_type = signal.get("asset_type", "")
     market_title = signal.get("market_title")
+    signal_id = signal.get("id", "")
 
     display_name = market_title or identifier
     title = f"{direction} {display_name} — {confidence}%"
-    body = (signal.get("reasoning") or "")[:200]
-    url = f"/dashboard/asset/{asset_type}/{identifier}"
+
+    trade_setup = signal.get("trade_setup") or {}
+    stop = trade_setup.get("stop_loss")
+    target = trade_setup.get("take_profit")
+    reasoning = (signal.get("reasoning") or "")[:180]
+
+    if stop or target:
+        parts = []
+        if stop:
+            parts.append(f"Stop {_fmt_price(stop)}")
+        if target:
+            parts.append(f"Target {_fmt_price(target)}")
+        reasoning = f"{' / '.join(parts)}\n{reasoning}"
+
+    url = f"/dashboard/signals?highlight={signal_id}" if signal_id else f"/dashboard/asset/{asset_type}/{identifier}"
 
     pushed = 0
     user_ids = {s["user_id"] for s in subscribers if s.get("user_id")}
     for uid in user_ids:
-        pushed += send_push_to_user(uid, title, body, url)
+        count = send_push_to_user(uid, title, reasoning, url)
+        if count:
+            pushed += count
+            _log_notification(uid, signal, "push")
 
     if pushed:
         logger.info("signal_alerts: pushed {} notification(s) for {} {}", pushed, direction, identifier)
     return pushed
 
 
+def _send_telegram_notifications(signal: dict) -> int:
+    """Send Telegram messages for a high-confidence signal."""
+    try:
+        from notifications.telegram import send_signal_to_all_subscribers
+    except ImportError:
+        return 0
+
+    sent = send_signal_to_all_subscribers(signal)
+    if sent:
+        logger.info("signal_alerts: telegram {} message(s) for {} {}", sent, signal.get("direction"), signal.get("identifier"))
+    return sent
+
+
 def notify_high_confidence_signal(signal: dict) -> int:
-    """Send email + push alerts for a high-confidence BUY/SELL signal.
+    """Send email + push + telegram alerts for a high-confidence BUY/SELL signal.
     Returns number of emails sent."""
     if not _should_alert(signal):
         return 0
@@ -261,6 +365,7 @@ def notify_high_confidence_signal(signal: dict) -> int:
         return 0
 
     _send_push_notifications(signal, subscribers)
+    _send_telegram_notifications(signal)
 
     if not resend.api_key:
         logger.debug("signal_alerts: no RESEND_API_KEY, skipping emails")
@@ -285,8 +390,10 @@ def notify_high_confidence_signal(signal: dict) -> int:
         except Exception as e:
             logger.warning("signal_alerts: failed to send to {} — {}", email, e)
 
-    key = f"{signal.get('asset_type')}:{signal.get('identifier')}:{signal['direction']}"
-    _recent_alerts[key] = datetime.now(timezone.utc)
+    if sent:
+        user_ids = {s["user_id"] for s in subscribers if s.get("user_id")}
+        for uid in user_ids:
+            _log_notification(uid, signal, "email")
 
     logger.info(
         "signal_alerts: {} {} {}% — sent to {}/{} subscribers",

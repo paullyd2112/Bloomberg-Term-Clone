@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
+import PushToggle from "@/components/notifications/PushToggle";
+import TelegramConnect from "@/components/notifications/TelegramConnect";
 
 type Experience = "beginner" | "intermediate" | "advanced";
 type AssetPref  = "stocks" | "crypto" | "predictions";
@@ -231,6 +233,11 @@ export default function SettingsForm({
         <p className="text-[11px] text-zinc-600 mt-1.5">
           Requires a phone number above. Standard messaging rates may apply.
         </p>
+
+        <div className="mt-4 pt-4 border-t border-white/[0.06] space-y-4">
+          <PushToggle />
+          <TelegramConnect />
+        </div>
       </div>
 
       {/* Save */}

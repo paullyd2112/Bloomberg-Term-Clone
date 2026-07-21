@@ -932,6 +932,81 @@ def send_newsletter_now():
     return jsonify({"status": "ok", "result": result})
 
 
+@app.route("/telegram/webhook", methods=["POST"])
+def telegram_webhook():
+    """Handle incoming Telegram bot messages (set via Bot API setWebhook)."""
+    from flask import request as flask_request
+    import secrets
+
+    data = flask_request.get_json(silent=True) or {}
+    message = data.get("message", {})
+    text = (message.get("text") or "").strip()
+    chat_id = str(message.get("chat", {}).get("id", ""))
+    username = message.get("from", {}).get("username", "")
+
+    if not chat_id:
+        return jsonify({"ok": True})
+
+    from notifications.telegram import _send_message
+
+    if text.startswith("/start"):
+        parts = text.split(maxsplit=1)
+        if len(parts) == 2:
+            link_code = parts[1].strip()
+            try:
+                result = (
+                    supabase.table("profiles")
+                    .select("id")
+                    .eq("telegram_link_code", link_code)
+                    .limit(1)
+                    .execute()
+                )
+                if result.data:
+                    supabase.table("profiles").update({
+                        "telegram_chat_id": chat_id,
+                        "telegram_link_code": None,
+                    }).eq("id", result.data[0]["id"]).execute()
+                    _send_message(chat_id, "✅ <b>Linked!</b> You'll now get instant signal alerts here.\n\nType /stop to unlink.")
+                else:
+                    _send_message(chat_id, "❌ Invalid or expired link code. Generate a new one from Settings on plebs.finance.")
+            except Exception as e:
+                logger.error("telegram webhook: link failed — {}", e)
+                _send_message(chat_id, "Something went wrong. Try again in a moment.")
+        else:
+            _send_message(chat_id, "👋 <b>Plebs.finance Signal Bot</b>\n\nTo link your account, go to Settings on plebs.finance and click \"Connect Telegram\". You'll get a link to tap that connects automatically.")
+        return jsonify({"ok": True})
+
+    if text == "/stop":
+        try:
+            supabase.table("profiles").update({
+                "telegram_chat_id": None,
+            }).eq("telegram_chat_id", chat_id).execute()
+            _send_message(chat_id, "🔕 Unlinked. You won't receive alerts here anymore.\n\nType /start to reconnect anytime.")
+        except Exception as e:
+            logger.error("telegram webhook: unlink failed — {}", e)
+        return jsonify({"ok": True})
+
+    if text == "/status":
+        try:
+            result = (
+                supabase.table("profiles")
+                .select("id")
+                .eq("telegram_chat_id", chat_id)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                _send_message(chat_id, "✅ Your Telegram is linked and active. Signals will arrive here instantly.")
+            else:
+                _send_message(chat_id, "❌ Not linked. Go to Settings on plebs.finance to connect.")
+        except Exception:
+            pass
+        return jsonify({"ok": True})
+
+    _send_message(chat_id, "Commands:\n/start — Link your Plebs account\n/stop — Unlink\n/status — Check connection")
+    return jsonify({"ok": True})
+
+
 @app.route("/health")
 def health():
     from supabase_client import supabase
