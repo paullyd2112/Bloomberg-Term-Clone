@@ -52,15 +52,19 @@ export default function ScreenerClient() {
 
       const signals = (signalRes.data as Signal[]) ?? [];
 
-      const predictionIds = Array.from(
-        new Set(signals.filter((s) => s.asset_type === "prediction").map((s) => s.identifier)),
+      const missingTitleIds = Array.from(
+        new Set(
+          signals
+            .filter((s) => s.asset_type === "prediction" && !s.market_title)
+            .map((s) => s.identifier),
+        ),
       );
-      if (predictionIds.length > 0) {
+      if (missingTitleIds.length > 0) {
         const { data: priceRows } = await supabase
           .from("raw_prices")
           .select("identifier, metadata")
           .eq("asset_type", "prediction")
-          .in("identifier", predictionIds);
+          .in("identifier", missingTitleIds);
         const titleByIdentifier = new Map<string, string>();
         for (const row of priceRows ?? []) {
           const title = (row.metadata as Record<string, unknown> | null)?.title;
@@ -69,7 +73,7 @@ export default function ScreenerClient() {
           }
         }
         for (const s of signals) {
-          if (s.asset_type === "prediction") {
+          if (s.asset_type === "prediction" && !s.market_title) {
             s.market_title = titleByIdentifier.get(s.identifier) ?? null;
           }
         }

@@ -597,6 +597,7 @@ def _write_signal(
     risk_budget: "RiskBudget | None" = None,
     atr: float | None = None,
     subscription: str | None = None,
+    market_title: str | None = None,
 ) -> dict:
     from scoring.risk_engine import (
         score_setup, format_trade_setup, AssetClass,
@@ -693,6 +694,8 @@ def _write_signal(
         "is_stale_test":   STALE_TEST_MODE,
         "outcome":         "PENDING",
     }
+    if market_title:
+        base["market_title"] = market_title
     if trade_setup_data:
         base["trade_setup"] = trade_setup_data
     result = supabase.table("signals").insert(base).execute()
@@ -1229,10 +1232,13 @@ def score_asset(
         except (TypeError, ValueError):
             pass
 
+    pred_title = meta.get("title") if asset_type == "prediction" else None
+
     try:
         record = _write_signal(
             asset_type, identifier, current_price, signal, news_with_urls,
             risk_budget=risk_budget, atr=atr_value, subscription=subscription,
+            market_title=pred_title,
         )
         logger.info(
             "{}/{}: {} {}% confidence — {}",

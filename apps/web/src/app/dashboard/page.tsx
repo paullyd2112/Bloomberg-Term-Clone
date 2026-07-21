@@ -124,18 +124,21 @@ async function fetchSignals(): Promise<Signal[]> {
   }
   const signals = (data as Signal[]) ?? [];
 
-  // Prediction-market identifiers are Polymarket conditionId hashes, not
-  // readable names — join in raw_prices.metadata.title so the feed/cards
-  // can show the actual market question instead of a hex string.
-  const predictionIds = Array.from(
-    new Set(signals.filter((s) => s.asset_type === "prediction").map((s) => s.identifier)),
+  // New signals store market_title directly; backfill from raw_prices for
+  // older signals that don't have it yet.
+  const missingTitleIds = Array.from(
+    new Set(
+      signals
+        .filter((s) => s.asset_type === "prediction" && !s.market_title)
+        .map((s) => s.identifier),
+    ),
   );
-  if (predictionIds.length > 0) {
+  if (missingTitleIds.length > 0) {
     const { data: priceRows } = await supabase
       .from("raw_prices")
       .select("identifier, metadata")
       .eq("asset_type", "prediction")
-      .in("identifier", predictionIds);
+      .in("identifier", missingTitleIds);
     const titleByIdentifier = new Map<string, string>();
     for (const row of priceRows ?? []) {
       const title = (row.metadata as Record<string, unknown> | null)?.title;
@@ -144,7 +147,7 @@ async function fetchSignals(): Promise<Signal[]> {
       }
     }
     for (const s of signals) {
-      if (s.asset_type === "prediction") {
+      if (s.asset_type === "prediction" && !s.market_title) {
         s.market_title = titleByIdentifier.get(s.identifier) ?? null;
       }
     }

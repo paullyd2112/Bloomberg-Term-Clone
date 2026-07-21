@@ -148,18 +148,20 @@ export default async function HistoryPage({
 
   const signals = (data ?? []) as ResolvedSignal[];
 
-  // Prediction-market identifiers are Polymarket conditionId hashes, not
-  // readable names — join in raw_prices.metadata.title so the table can
-  // show the actual market question instead of a hex string.
-  const predictionIds = Array.from(
-    new Set(signals.filter((s) => s.asset_type === "prediction").map((s) => s.identifier)),
+  // Backfill market_title from raw_prices for older signals that don't have it.
+  const missingTitleIds = Array.from(
+    new Set(
+      signals
+        .filter((s) => s.asset_type === "prediction" && !s.market_title)
+        .map((s) => s.identifier),
+    ),
   );
-  if (predictionIds.length > 0) {
+  if (missingTitleIds.length > 0) {
     const { data: priceRows } = await supabase
       .from("raw_prices")
       .select("identifier, metadata")
       .eq("asset_type", "prediction")
-      .in("identifier", predictionIds);
+      .in("identifier", missingTitleIds);
     const titleByIdentifier = new Map<string, string>();
     for (const row of priceRows ?? []) {
       const title = (row.metadata as Record<string, unknown> | null)?.title;
@@ -168,7 +170,7 @@ export default async function HistoryPage({
       }
     }
     for (const s of signals) {
-      if (s.asset_type === "prediction") {
+      if (s.asset_type === "prediction" && !s.market_title) {
         s.market_title = titleByIdentifier.get(s.identifier) ?? null;
       }
     }
