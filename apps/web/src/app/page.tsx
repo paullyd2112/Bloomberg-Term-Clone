@@ -338,8 +338,8 @@ function NewsletterBand() {
               The daily brief, before the market wakes up
             </h3>
             <p className="text-muted-foreground text-sm mt-2 leading-relaxed">
-              Crypto and prediction markets in plain English, every weekday at 7am ET.
-              Written by the same AI that scores the signals. Unsubscribe anytime.
+              Crypto, prediction markets, geopolitics, tech, and more — in plain English, 7 days a week.
+              Written by the same AI that scores the signals. Choose your frequency, unsubscribe anytime.
             </p>
           </div>
           <NewsletterSignup />
@@ -481,7 +481,11 @@ const FAQS = [
   },
   {
     q: "What markets do you cover?",
-    a: "Crypto first: BTC, ETH, SOL, and 50+ coins, rescored around the clock. Elite adds AI-scored YES/NO calls on Polymarket prediction markets. Congressional trade disclosures and a daily morning briefing round it out.",
+    a: "Crypto and prediction markets. We score BTC, ETH, SOL, and 50+ coins around the clock, plus AI-scored YES/NO calls on Polymarket prediction contracts. Every signal comes with a confidence score and full reasoning.",
+  },
+  {
+    q: "What's in the newsletter?",
+    a: "A full morning brief covering crypto markets, prediction markets, geopolitics, AI and tech, health and science, sports, and whatever else is moving the world. It runs 7 days a week and you can choose your preferred frequency in settings.",
   },
   {
     q: "How accurate are the signals?",
@@ -546,8 +550,8 @@ function CTAStrip() {
 
           <div className="mt-12 pt-10 border-t border-white/[0.06] max-w-md mx-auto">
             <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
-              Not ready? Get the free daily newsletter. Crypto and prediction
-              markets in plain English, every weekday morning.
+              Not ready? Get the free daily newsletter. Crypto, prediction
+              markets, and world news in plain English, 7 days a week.
             </p>
             <NewsletterSignup />
           </div>
