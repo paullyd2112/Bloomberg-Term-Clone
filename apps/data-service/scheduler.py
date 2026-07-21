@@ -784,13 +784,37 @@ def diag_crypto_indicators():
     """Show current indicator data for CORE_CRYPTO — diagnostic only."""
     from scoring.price_data import get_scoring_price_row
     from scoring.engine import CORE_CRYPTO, _get_fear_greed
+    from supabase_client import supabase as sb
+    from datetime import timedelta
+
     results = {}
+    cutoff_5d = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
     for sym in sorted(CORE_CRYPTO):
         row = get_scoring_price_row("crypto", sym)
         if not row:
             results[sym] = {"error": "no data"}
             continue
         meta = row.get("metadata") or {}
+
+        ind_count = 0
+        try:
+            r = (sb.table("raw_prices").select("id", count="exact")
+                 .eq("asset_type", "crypto").eq("identifier", sym)
+                 .filter("metadata->rsi_14", "not.is", "null")
+                 .gte("captured_at", cutoff_5d).execute())
+            ind_count = r.count or 0
+        except Exception:
+            pass
+
+        total_count = 0
+        try:
+            r = (sb.table("raw_prices").select("id", count="exact")
+                 .eq("asset_type", "crypto").eq("identifier", sym)
+                 .gte("captured_at", cutoff_5d).execute())
+            total_count = r.count or 0
+        except Exception:
+            pass
+
         results[sym] = {
             "price": row.get("price"),
             "change_24h": row.get("change_24h"),
@@ -801,6 +825,9 @@ def diag_crypto_indicators():
             "prev_macd_hist": meta.get("prev_macd_hist"),
             "volume_ratio": meta.get("volume_ratio"),
             "captured_at": row.get("captured_at"),
+            "sources": meta.get("sources"),
+            "rows_5d_total": total_count,
+            "rows_5d_with_indicators": ind_count,
         }
     fg = _get_fear_greed()
     return jsonify({"fear_greed": fg, "indicators": results})
