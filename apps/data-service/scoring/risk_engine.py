@@ -910,7 +910,10 @@ def score_setup(
             suppression_reason=dual.alpha.suppression_reason,
         )
 
-    default_alloc = dual.allocations.get(DEFAULT_PROFILE)
+    effective_profile = DEFAULT_PROFILE
+    if asset_class in PROP_EXCLUDED_ASSETS:
+        effective_profile = "retail_standard"
+    default_alloc = dual.allocations.get(effective_profile)
     if default_alloc is None or default_alloc.suppressed:
         reason = default_alloc.suppression_reason if default_alloc else "no default profile"
         return TradeSetup(
