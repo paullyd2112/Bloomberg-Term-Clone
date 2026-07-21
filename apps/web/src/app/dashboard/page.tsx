@@ -12,6 +12,7 @@ import SectionHeader from "@/components/ui/SectionHeader";
 import SkipTrialBanner from "@/components/SkipTrialBanner";
 import SystemSafeguards from "@/components/dashboard/SystemSafeguards";
 import RedditTrending from "@/components/dashboard/RedditTrending";
+import MarketPulse from "@/components/dashboard/MarketPulse";
 
 export const revalidate = 60;
 
@@ -297,6 +298,65 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {/* Signal feed — the product, front and center */}
+      <section>
+        <h2 className="flex items-center gap-3 mb-4">
+          <span className="text-emerald-400 text-[10px] leading-none">●</span>
+          <span className="h-px w-8 bg-white/15" />
+          <span className="text-[15px] font-semibold tracking-tight text-zinc-300">Latest Signals</span>
+        </h2>
+        <SignalFeed signals={signals} />
+      </section>
+
+      {/* Market Pulse — movers, whales, reddit in a tabbed container */}
+      <MarketPulse
+        moversContent={
+          movers.length > 0 ? (
+            <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+              {movers.map((m) => {
+                const up = (m.change_24h ?? 0) >= 0;
+                return (
+                  <Link
+                    key={`${m.asset_type}:${m.identifier}`}
+                    href={`/dashboard/asset/${m.asset_type}/${m.identifier}`}
+                    className="group flex-shrink-0 bg-white/[0.04] border border-white/[0.08] rounded-lg px-4 py-3 flex flex-col gap-1.5 min-w-[120px] hover:bg-white/[0.07] hover:border-white/[0.12] transition-all"
+                  >
+                    <span className="font-mono text-xs font-semibold text-white truncate">
+                      {m.identifier}
+                    </span>
+                    <span
+                      className={`flex items-center gap-1 text-sm font-semibold tabular-nums ${
+                        up ? "text-emerald-400" : "text-red-400"
+                      }`}
+                    >
+                      {up ? (
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      ) : (
+                        <ArrowDownRight className="h-3.5 w-3.5" />
+                      )}
+                      {up ? "+" : ""}
+                      {Number(m.change_24h).toFixed(2)}%
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-zinc-500 text-sm text-center py-6">No movers right now.</p>
+          )
+        }
+        whalesContent={<WhaleSentinel bare />}
+        redditContent={
+          <Suspense
+            fallback={
+              <div className="h-40 bg-white/[0.02] rounded-lg animate-pulse" />
+            }
+          >
+            <RedditTrending bare />
+          </Suspense>
+        }
+      />
+
       {/* Platform accuracy */}
       {accuracy && (
         <section>
@@ -374,65 +434,8 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      {/* Top movers */}
-      {movers.length > 0 && (
-        <section>
-          <SectionHeader divider className="mb-4">Top movers (24h)</SectionHeader>
-          <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-            {movers.map((m) => {
-              const up = (m.change_24h ?? 0) >= 0;
-              return (
-                <Link
-                  key={`${m.asset_type}:${m.identifier}`}
-                  href={`/dashboard/asset/${m.asset_type}/${m.identifier}`}
-                  className="group flex-shrink-0 bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-4 py-3 flex flex-col gap-1.5 min-w-[120px] hover:bg-white/[0.05] hover:border-white/[0.1] transition-all"
-                >
-                  <span className="font-mono text-xs font-semibold text-white truncate">
-                    {m.identifier}
-                  </span>
-                  <span
-                    className={`flex items-center gap-1 text-sm font-semibold tabular-nums ${
-                      up ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    {up ? (
-                      <ArrowUpRight className="h-3.5 w-3.5" />
-                    ) : (
-                      <ArrowDownRight className="h-3.5 w-3.5" />
-                    )}
-                    {up ? "+" : ""}
-                    {Number(m.change_24h).toFixed(2)}%
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Whale Sentinel — live large Polymarket trades */}
-      <WhaleSentinel />
-
-      {/* Reddit trending */}
-      <section>
-        <SectionHeader divider className="mb-4">Reddit trending</SectionHeader>
-        <Suspense
-          fallback={
-            <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-6 h-40 animate-pulse" />
-          }
-        >
-          <RedditTrending />
-        </Suspense>
-      </section>
-
       {/* System safeguards */}
       <SystemSafeguards />
-
-      {/* Signal feed — the product, surfaced above supporting analytics */}
-      <section>
-        <SectionHeader divider className="mb-4">Latest signals</SectionHeader>
-        <SignalFeed signals={signals} />
-      </section>
 
       {/* Crypto-only pivot (July 2026): SectorHeatmap aggregates stock
           signals by sector and renders empty with stock scoring off.

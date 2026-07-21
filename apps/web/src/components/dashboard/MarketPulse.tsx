@@ -1,0 +1,95 @@
+"use client";
+
+import { useState, type ReactNode } from "react";
+import { clsx } from "clsx";
+import { TrendingUp, Fish, MessageCircle } from "lucide-react";
+
+const TABS = [
+  { id: "movers",  label: "Movers",  icon: TrendingUp },
+  { id: "whales",  label: "Whales",  icon: Fish },
+  { id: "reddit",  label: "Reddit",  icon: MessageCircle },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
+export default function MarketPulse({
+  moversContent,
+  whalesContent,
+  redditContent,
+}: {
+  moversContent: ReactNode;
+  whalesContent: ReactNode;
+  redditContent: ReactNode;
+}) {
+  const [activeTab, setActiveTab] = useState<TabId>("movers");
+  const [collapsed, setCollapsed] = useState(false);
+
+  const content: Record<TabId, ReactNode> = {
+    movers: moversContent,
+    whales: whalesContent,
+    reddit: redditContent,
+  };
+
+  return (
+    <section className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden">
+      {/* Header bar with tabs */}
+      <div className="flex items-center gap-0 border-b border-white/[0.06]">
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex items-center gap-2 px-4 py-3 hover:bg-white/[0.02] transition-colors flex-shrink-0"
+          aria-label={collapsed ? "Expand market pulse" : "Collapse market pulse"}
+        >
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          </span>
+          <span className="font-mono text-[11px] font-semibold text-zinc-400 uppercase tracking-[0.15em]">
+            Market Pulse
+          </span>
+          <svg
+            className={clsx("h-3.5 w-3.5 text-zinc-600 transition-transform", collapsed && "-rotate-90")}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {!collapsed && (
+          <div className="flex items-center gap-0.5 ml-auto pr-2">
+            {TABS.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={clsx(
+                    "flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium transition-colors",
+                    activeTab === tab.id
+                      ? "bg-white/[0.06] text-white"
+                      : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]",
+                  )}
+                >
+                  <Icon className={clsx(
+                    "h-3 w-3",
+                    activeTab === tab.id ? "text-emerald-400" : "text-zinc-600",
+                  )} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Tab content */}
+      {!collapsed && (
+        <div className="p-4">
+          {content[activeTab]}
+        </div>
+      )}
+    </section>
+  );
+}
