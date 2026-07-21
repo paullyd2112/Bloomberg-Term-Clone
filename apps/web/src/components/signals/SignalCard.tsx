@@ -83,7 +83,9 @@ export default function SignalCard({ signal }: { signal: Signal }) {
   const isPrediction = signal.asset_type === "prediction";
   // Polymarket identifiers are conditionId hex hashes, not readable names —
   // show the market question instead wherever a "ticker" would normally go.
-  const displayName = isPrediction && signal.market_title ? signal.market_title : signal.identifier;
+  const displayName = isPrediction
+    ? signal.market_title || `Market ${signal.identifier.slice(0, 8)}…`
+    : signal.identifier;
   const priceStr = isPrediction
     ? signal.price_at_signal != null
       ? `${(Number(signal.price_at_signal) * 100).toFixed(0)}¢`

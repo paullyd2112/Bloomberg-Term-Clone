@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { Activity, Clock, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getUserTier, getUserProfile } from "@/lib/user";
+import { getUserTierAndProfile } from "@/lib/user";
 import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
 import SubscribeGate from "@/components/ui/SubscribeGate";
@@ -158,34 +158,41 @@ async function fetchSignals(): Promise<Signal[]> {
 
     const priceMap = new Map<string, number>();
 
-    if (cryptoPending.length > 0) {
-      const cryptoIds = Array.from(new Set(cryptoPending.map((s) => s.identifier)));
-      const { data: cryptoPrices } = await supabase
-        .from("raw_prices")
-        .select("identifier, price")
-        .eq("asset_type", "crypto")
-        .in("identifier", cryptoIds)
-        .order("captured_at", { ascending: false });
-      for (const row of cryptoPrices ?? []) {
-        if (!priceMap.has(`crypto:${row.identifier}`)) {
-          priceMap.set(`crypto:${row.identifier}`, Number(row.price));
-        }
+    const cryptoIds = cryptoPending.length > 0
+      ? Array.from(new Set(cryptoPending.map((s) => s.identifier)))
+      : [];
+    const predIds = predPending.length > 0
+      ? Array.from(new Set(predPending.map((s) => s.identifier)))
+      : [];
+
+    const [cryptoPricesRes, predPricesRes] = await Promise.all([
+      cryptoIds.length > 0
+        ? supabase
+            .from("raw_prices")
+            .select("identifier, price")
+            .eq("asset_type", "crypto")
+            .in("identifier", cryptoIds)
+            .order("captured_at", { ascending: false })
+        : Promise.resolve({ data: null }),
+      predIds.length > 0
+        ? supabase
+            .from("raw_prices")
+            .select("identifier, metadata")
+            .eq("asset_type", "prediction")
+            .in("identifier", predIds)
+            .order("captured_at", { ascending: false })
+        : Promise.resolve({ data: null }),
+    ]);
+
+    for (const row of cryptoPricesRes.data ?? []) {
+      if (!priceMap.has(`crypto:${row.identifier}`)) {
+        priceMap.set(`crypto:${row.identifier}`, Number(row.price));
       }
     }
-
-    if (predPending.length > 0) {
-      const predIds = Array.from(new Set(predPending.map((s) => s.identifier)));
-      const { data: predPrices } = await supabase
-        .from("raw_prices")
-        .select("identifier, metadata")
-        .eq("asset_type", "prediction")
-        .in("identifier", predIds)
-        .order("captured_at", { ascending: false });
-      for (const row of predPrices ?? []) {
-        const yesPrice = (row.metadata as Record<string, unknown> | null)?.yes_price;
-        if (yesPrice != null && !priceMap.has(`prediction:${row.identifier}`)) {
-          priceMap.set(`prediction:${row.identifier}`, Number(yesPrice));
-        }
+    for (const row of predPricesRes.data ?? []) {
+      const yesPrice = (row.metadata as Record<string, unknown> | null)?.yes_price;
+      if (yesPrice != null && !priceMap.has(`prediction:${row.identifier}`)) {
+        priceMap.set(`prediction:${row.identifier}`, Number(yesPrice));
       }
     }
 
@@ -241,12 +248,9 @@ async function fetchTopMovers() {
 }
 
 export default async function DashboardPage() {
-  const tier    = await getUserTier();
-  const profile = await getUserProfile();
-  const [signals, movers, accuracy] = await Promise.all([
-    fetchSignals(),
-    fetchTopMovers(),
-    fetchPlatformAccuracy(),
+  const [{ tier, profile }, [signals, movers, accuracy]] = await Promise.all([
+    getUserTierAndProfile(),
+    Promise.all([fetchSignals(), fetchTopMovers(), fetchPlatformAccuracy()]),
   ]);
 
   const winCount  = signals.filter((s) => s.outcome === "WIN").length;
