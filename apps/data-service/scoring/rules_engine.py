@@ -558,14 +558,14 @@ def score_crypto_rules(subscription: str | None = None) -> str:
     candidates to the full AI engine (Claude) for high-conviction signals."""
     from scoring.engine import (
         _get_market_benchmark, CORE_CRYPTO, TIER1_CRYPTO,
-        MAX_CRYPTO_SIGNALS_PER_DAY, _crypto_signals_today_count,
+        CRYPTO_HARD_CAP, _crypto_signals_today_count,
         _crypto_volatility_qualifies, _is_dry_spell_easing_active,
         score_crypto as score_crypto_ai,
     )
 
     existing_today = _crypto_signals_today_count()
-    if existing_today >= MAX_CRYPTO_SIGNALS_PER_DAY:
-        return f"[hybrid] daily crypto cap reached ({existing_today}/{MAX_CRYPTO_SIGNALS_PER_DAY})"
+    if existing_today >= CRYPTO_HARD_CAP:
+        return f"[hybrid] daily crypto hard cap reached ({existing_today}/{CRYPTO_HARD_CAP})"
 
     benchmarks = _get_market_benchmark()
 

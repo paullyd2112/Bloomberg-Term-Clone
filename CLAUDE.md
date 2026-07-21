@@ -136,8 +136,10 @@ Multi-profile prop-firm-modeled position sizing:
 ## Key constants
 - `ENGINE_CUTOFF = "2026-07-04T11:00:00Z"` — signals before this are unreliable (data bugs)
 - `SIGNAL_COOLDOWN_H = 4` — skip if signal generated within 4 hours
+- `CRYPTO_SIGNAL_COOLDOWN_H = 1` — shorter cooldown for 24/7 crypto markets
 - `MAX_STOCK_SIGNALS_PER_DAY = 3` — hard cap on stock signals per calendar day
-- `MAX_CRYPTO_SIGNALS_PER_DAY = 3` — hard cap on fresh crypto signals per UTC day
+- `CRYPTO_SOFT_CAP = 6` — after 6 signals/day, confidence threshold escalates (70%+ for 7-10, 80%+ for 11-15)
+- `CRYPTO_HARD_CAP = 15` — absolute ceiling on crypto signals per UTC day
 - `MAX_CONCURRENT_CRYPTO_BUYS = 2` — max simultaneous open crypto longs
 - `CRYPTO_MAJORS = {BTC, ETH}` — correlated majors; ≤1 alt allowed alongside an open major
 - `STOCK_RVOL_MINIMUM = 2.5` / `HIGH_BETA_RVOL_MINIMUM = 3.5`
@@ -150,8 +152,9 @@ sims can't recur on a more-correlated asset class:
   (clamped 1–5%) as the stop instead of a flat 3%. Model `invalidation_price` still takes precedence
   when provided; ATR is the volatility-adaptive fallback.
 - **Correlation cap**: gate #8 above (max 2 concurrent longs, ≤1 alt with a major).
-- **Daily cap**: `MAX_CRYPTO_SIGNALS_PER_DAY = 3`, enforced in both `score_crypto()` and
-  `score_crypto_rules()` before Claude spend.
+- **Escalating daily cap**: soft cap at 6 signals/day (base 60% floor), escalating to 70% for
+  signals 7-10 and 80% for 11-15, hard ceiling at 15. Enforced in `score_crypto()` and
+  `score_crypto_rules()`. Strong setups always pass; marginal ones filter out as the day fills.
 - Verified deterministically (no API spend): cap truth table passes; worst-case correlated single-day
   drawdown cluster drops 67% (6→2 concurrent longs). A paid Claude backtest was NOT rerun.
 

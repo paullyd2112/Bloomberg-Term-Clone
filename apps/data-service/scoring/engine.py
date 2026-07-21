@@ -24,7 +24,7 @@ load_dotenv()
 
 MODEL              = "claude-sonnet-5"
 SIGNAL_COOLDOWN_H        = 4   # default cooldown (stocks, predictions)
-CRYPTO_SIGNAL_COOLDOWN_H = 2   # shorter cooldown for 24/7 crypto markets
+CRYPTO_SIGNAL_COOLDOWN_H = 1   # shorter cooldown for 24/7 crypto markets
 MAX_TOKENS         = 1024
 ENGINE_CUTOFF      = "2026-07-04T11:00:00Z"  # signals before this date are unreliable
 
@@ -751,6 +751,7 @@ def score_asset(
     skip_hold: bool = True,
     risk_budget: "RiskBudget | None" = None,
     subscription: str | None = None,
+    confidence_floor_override: int | None = None,
 ) -> dict | None:
     """
     Build context from Supabase, call Claude via Instructor,
@@ -959,16 +960,17 @@ def score_asset(
 
     # Confidence gate — reject low-confidence signals before any further processing
     from scoring.risk_engine import check_confidence_gate, CONFIDENCE_MINIMUM
-    conf_rejection = check_confidence_gate(signal.confidence)
+    effective_floor = confidence_floor_override or CONFIDENCE_MINIMUM
+    conf_rejection = signal.confidence < effective_floor
     if conf_rejection and signal.direction in ("BUY", "SELL"):
         logger.info(
-            "{}/{}: confidence gate — {} ({}%), downgrading to HOLD",
-            asset_type, identifier, signal.direction, signal.confidence,
+            "{}/{}: confidence gate — {} ({}%), floor {}% — downgrading to HOLD",
+            asset_type, identifier, signal.direction, signal.confidence, effective_floor,
         )
         signal.direction = "HOLD"
         signal.reasoning = (
             f"[Confidence gate] Score {signal.confidence}/100 below "
-            f"minimum {CONFIDENCE_MINIMUM} threshold. " + signal.reasoning
+            f"minimum {effective_floor} threshold. " + signal.reasoning
         )
 
     # Circuit breaker — don't issue counter-trend signals after a large gap move.
@@ -1445,10 +1447,29 @@ CRYPTO_ATR_EXPANSION_RATIO = 1.2      # qualify if current range > 1.2x ATR (vol
 # port the stock breadth/daily-cap guards to crypto (tighter, because of that
 # correlation) so a bullish run can't stack a basket that all stops out
 # together when BTC rolls over — the exact cluster that blew the stock sims.
-MAX_CRYPTO_SIGNALS_PER_DAY = 6   # upper bound on fresh crypto signals per UTC day
+CRYPTO_SOFT_CAP = 6              # after this many signals/day, escalate confidence threshold
+CRYPTO_HARD_CAP = 15             # absolute ceiling to bound API cost
+CRYPTO_ESCALATION_TIERS = [
+    (6,  70),   # signals 7-10: need 70%+ confidence
+    (10, 80),   # signals 11-15: need 80%+ confidence
+]
 MIN_CRYPTO_SIGNALS_PER_DAY = 3   # target floor — ease thresholds if 0 signals by 4 PM EST
 MAX_CONCURRENT_CRYPTO_BUYS = 2   # max simultaneous open crypto longs
 CRYPTO_MAJORS = {"BTC", "ETH"}   # correlated majors; ≤1 alt alongside an open major
+
+def _crypto_escalated_confidence_floor(signals_today: int) -> int:
+    """Return the effective confidence floor based on daily signal count.
+
+    First CRYPTO_SOFT_CAP signals use the base CONFIDENCE_MINIMUM (60).
+    After that, the bar rises per CRYPTO_ESCALATION_TIERS so only
+    genuinely strong setups get through while marginal ones are filtered.
+    """
+    from scoring.risk_engine import CONFIDENCE_MINIMUM
+    for threshold_count, conf_floor in reversed(CRYPTO_ESCALATION_TIERS):
+        if signals_today >= threshold_count:
+            return conf_floor
+    return CONFIDENCE_MINIMUM
+
 
 ADAPTIVE_HAIKU_BASE_THRESHOLD = 65
 ADAPTIVE_HAIKU_TIGHT_THRESHOLD = 80
@@ -1685,15 +1706,15 @@ def score_crypto(subscription: str | None = None) -> str:
             bearish = False
         btc_regime = {"macd_hist": hist, "prev_macd_hist": prev_hist, "bearish": bearish}
 
-    # Daily crypto signal cap — stop before spending on Claude once the day's
-    # budget is used, mirroring the stock throttle. Layers under the tighter
-    # concurrent-position cap enforced per-BUY inside score_asset.
+    # Escalating daily cap — first CRYPTO_SOFT_CAP signals pass at the base
+    # confidence floor (60%), then the bar rises progressively. Hard ceiling
+    # at CRYPTO_HARD_CAP to bound API cost.
     existing_today = _crypto_signals_today_count()
-    if existing_today >= MAX_CRYPTO_SIGNALS_PER_DAY:
-        logger.warning("Daily crypto signal cap reached ({}/{}) — skipping crypto scan",
-                       existing_today, MAX_CRYPTO_SIGNALS_PER_DAY)
-        return f"0 scored — daily crypto cap reached ({existing_today}/{MAX_CRYPTO_SIGNALS_PER_DAY})"
-    remaining = MAX_CRYPTO_SIGNALS_PER_DAY - existing_today
+    if existing_today >= CRYPTO_HARD_CAP:
+        logger.warning("Daily crypto hard cap reached ({}/{}) — skipping crypto scan",
+                       existing_today, CRYPTO_HARD_CAP)
+        return f"0 scored — daily crypto hard cap reached ({existing_today}/{CRYPTO_HARD_CAP})"
+    escalated_floor = _crypto_escalated_confidence_floor(existing_today)
 
     haiku_calls, sonnet_calls = 0, 0
     success, skipped, failed = 0, 0, 0
@@ -1711,10 +1732,13 @@ def score_crypto(subscription: str | None = None) -> str:
     )
 
     for row in rows:
-        if signals_written_this_run >= remaining:
-            logger.info("[crypto] daily cap reached mid-run ({}/{}) — stopping scan",
-                        existing_today + signals_written_this_run, MAX_CRYPTO_SIGNALS_PER_DAY)
+        total_today = existing_today + signals_written_this_run
+        if total_today >= CRYPTO_HARD_CAP:
+            logger.info("[crypto] hard cap reached mid-run ({}/{}) — stopping scan",
+                        total_today, CRYPTO_HARD_CAP)
             break
+
+        escalated_floor = _crypto_escalated_confidence_floor(total_today)
 
         sym = row["identifier"]
         meta = row.get("metadata") or {}
@@ -1722,7 +1746,8 @@ def score_crypto(subscription: str | None = None) -> str:
         if sym in CORE_CRYPTO:
             try:
                 result = score_asset("crypto", sym, benchmarks=benchmarks, macro_events=macro_events,
-                                      btc_regime=btc_regime, subscription=subscription)
+                                      btc_regime=btc_regime, subscription=subscription,
+                                      confidence_floor_override=escalated_floor if total_today >= CRYPTO_SOFT_CAP else None)
                 sonnet_calls += 1
                 if result is None:
                     skipped += 1
@@ -1759,7 +1784,8 @@ def score_crypto(subscription: str | None = None) -> str:
 
         try:
             result = score_asset("crypto", sym, benchmarks=benchmarks, macro_events=macro_events,
-                                  btc_regime=btc_regime, subscription=subscription)
+                                  btc_regime=btc_regime, subscription=subscription,
+                                  confidence_floor_override=escalated_floor if total_today >= CRYPTO_SOFT_CAP else None)
             sonnet_calls += 1
             if result is None:
                 skipped += 1
@@ -1773,10 +1799,12 @@ def score_crypto(subscription: str | None = None) -> str:
 
     ease_note = ", dry-spell easing active" if dry_spell else ""
     threshold_note = f", adaptive Haiku threshold: {adaptive_threshold}"
-    cap_note = f", daily cap: {existing_today + signals_written_this_run}/{MAX_CRYPTO_SIGNALS_PER_DAY}"
+    total_today = existing_today + signals_written_this_run
+    floor_note = f", conf floor: {_crypto_escalated_confidence_floor(total_today)}%"
+    cap_note = f", signals today: {total_today} (soft {CRYPTO_SOFT_CAP}/hard {CRYPTO_HARD_CAP})"
     return (f"{success} scored, {skipped} skipped, {failed} failed — "
             f"{haiku_calls} Haiku, {sonnet_calls} Sonnet, {tier_skipped} tier-skipped"
-            f"{cap_note}{threshold_note}{ease_note}")
+            f"{cap_note}{floor_note}{threshold_note}{ease_note}")
 
 
 PREDICTION_CANDIDATE_POOL  = 150  # raw pool pulled before diversification
