@@ -155,6 +155,25 @@ def job_send_welcome_sequence():
 def job_resolve_outcomes():
     return resolve_outcomes()
 
+def job_cleanup_stale_prediction_signals():
+    """Delete stale HOLD/0 prediction signals created by the pre-fix risk engine."""
+    from supabase_client import supabase
+    try:
+        result = (
+            supabase.table("signals")
+            .delete()
+            .eq("asset_type", "prediction")
+            .eq("direction", "HOLD")
+            .eq("confidence", 0)
+            .execute()
+        )
+        deleted = len(result.data) if result.data else 0
+        logger.info("Cleaned up {} stale HOLD/0 prediction signals", deleted)
+        return f"{deleted} stale prediction signals deleted"
+    except Exception as e:
+        logger.error("Failed to clean up stale prediction signals: {}", e)
+        return f"error: {e}"
+
 def job_refresh_asset_accuracy():
     return refresh_asset_accuracy()
 
@@ -631,6 +650,7 @@ def run_job_manual(job_name: str):
         "send_newsletter": job_send_newsletter,
         "send_elite_briefings": job_send_elite_briefings,
         "ingest_whale_alerts": job_ingest_whale_alerts,
+        "cleanup_stale_predictions": job_cleanup_stale_prediction_signals,
     }
 
     fn = job_map.get(job_name)

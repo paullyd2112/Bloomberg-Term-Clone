@@ -25,6 +25,13 @@ REQUEST_TIMEOUT = 10.0
 # get tied up for minutes chasing history far older than any PENDING signal.
 MAX_SETTLEMENT_PAGES = 25
 
+# Price-drift thresholds for prediction markets (probability points, 0-1 scale).
+# If YES price moves >= 0.15 (15pp) from entry, resolve as WIN/LOSS.
+# After 30 days, relax to 0.10 (10pp) — old signals shouldn't stay PENDING forever.
+PREDICTION_DRIFT_THRESHOLD = 0.15
+PREDICTION_AGED_DRIFT_THRESHOLD = 0.10
+PREDICTION_AGED_DAYS = 30
+
 # ─── Resolution config by (asset_type, time_horizon) ────────────────────────
 # Each tuple: (min_age_hours, win_threshold, loss_threshold)
 # min_age_hours  = how long to wait before evaluating
@@ -98,6 +105,33 @@ def _get_current_price(asset_type: str, identifier: str) -> float | None:
         return float(result.data[0]["price"]) if result.data else None
     except Exception as e:
         logger.warning("price fetch failed for {}/{}: {}", asset_type, identifier, e)
+        return None
+
+
+def _get_prediction_current_price(identifier: str) -> float | None:
+    """Get the latest YES price for a prediction market from raw_prices."""
+    try:
+        result = (
+            supabase.table("raw_prices")
+            .select("price, metadata")
+            .eq("asset_type", "prediction")
+            .eq("identifier", identifier)
+            .order("captured_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            return None
+        row = result.data[0]
+        meta = row.get("metadata") or {}
+        yes_price = meta.get("yes_price")
+        if yes_price is not None:
+            return float(yes_price)
+        if row.get("price") is not None:
+            return float(row["price"])
+        return None
+    except Exception as e:
+        logger.warning("prediction price fetch failed for {}: {}", identifier, e)
         return None
 
 
@@ -323,7 +357,7 @@ def resolve_outcomes() -> str:
             logger.error("resolve error for signal {}: {}", signal.get("id"), e)
             sentry_sdk.capture_exception(e)
 
-    # ── Prediction markets: API settlement ───────────────────────────────────
+    # ── Prediction markets: settlement + price-drift ─────────────────────────
     if predictions:
         kalshi_ids     = [s["identifier"] for s in predictions
                           if (s.get("metadata") or {}).get("source") == "kalshi"
@@ -332,9 +366,6 @@ def resolve_outcomes() -> str:
                           if s["identifier"] not in kalshi_ids]
 
         async def _settle_predictions():
-            # gather() must be constructed inside a running loop — passing it
-            # directly as an asyncio.run() argument evaluates it eagerly,
-            # before any loop exists on this (thread-pool) worker thread.
             return await asyncio.gather(
                 _fetch_settled_kalshi(kalshi_ids),
                 _fetch_resolved_polymarket(polymarket_ids),
@@ -351,24 +382,73 @@ def resolve_outcomes() -> str:
 
         for signal in predictions:
             ident     = signal["identifier"]
-            settled   = settlement_map.get(ident)
-            if not settled:
-                continue  # market not yet resolved
-
             direction = signal["direction"]  # YES / NO / HOLD
-            outcome = "NEUTRAL"
-            if direction != "HOLD":
-                outcome = "WIN" if direction == settled else "LOSS"
 
-            try:
-                supabase.table("signals").update({
-                    "outcome":     outcome,
-                    "resolved_at": datetime.now(timezone.utc).isoformat(),
-                }).eq("id", signal["id"]).execute()
-                resolved_count += 1
-            except Exception as e:
-                logger.error("prediction resolve write failed for {}: {}", ident, e)
-                sentry_sdk.capture_exception(e)
+            # 1) Settlement-based resolution (authoritative)
+            settled = settlement_map.get(ident)
+            if settled:
+                outcome = "NEUTRAL"
+                if direction != "HOLD":
+                    outcome = "WIN" if direction == settled else "LOSS"
+                try:
+                    supabase.table("signals").update({
+                        "outcome":     outcome,
+                        "resolved_at": now.isoformat(),
+                    }).eq("id", signal["id"]).execute()
+                    resolved_count += 1
+                except Exception as e:
+                    logger.error("prediction resolve write failed for {}: {}", ident, e)
+                    sentry_sdk.capture_exception(e)
+                continue
+
+            # 2) Price-drift resolution — if the YES price has moved
+            #    significantly from entry, resolve without waiting for
+            #    settlement. Thresholds: >=15pp move = WIN/LOSS;
+            #    >=30 days old + >=10pp move = also resolve.
+            if direction in ("YES", "NO", "HOLD"):
+                entry_price = signal.get("price_at_signal")
+                if entry_price is None:
+                    continue
+                entry_price = float(entry_price)
+
+                current_price = _get_prediction_current_price(ident)
+                if current_price is None:
+                    continue
+
+                created = datetime.fromisoformat(
+                    signal["created_at"].replace("Z", "+00:00")
+                )
+                age_days = (now - created).total_seconds() / 86400
+                price_move = current_price - entry_price
+
+                drift_threshold = PREDICTION_DRIFT_THRESHOLD
+                if age_days >= PREDICTION_AGED_DAYS:
+                    drift_threshold = PREDICTION_AGED_DRIFT_THRESHOLD
+
+                if abs(price_move) >= drift_threshold:
+                    if direction == "YES":
+                        outcome = "WIN" if price_move > 0 else "LOSS"
+                    elif direction == "NO":
+                        outcome = "WIN" if price_move < 0 else "LOSS"
+                    else:
+                        outcome = "NEUTRAL"
+
+                    try:
+                        supabase.table("signals").update({
+                            "outcome":       outcome,
+                            "resolved_at":   now.isoformat(),
+                            "outcome_price": current_price,
+                        }).eq("id", signal["id"]).execute()
+                        resolved_count += 1
+                        logger.info(
+                            "prediction/{}: price-drift resolved {} → {} "
+                            "(entry={:.2f}, now={:.2f}, move={:+.2f}pp, age={:.0f}d)",
+                            ident[:12], direction, outcome,
+                            entry_price, current_price, price_move * 100, age_days,
+                        )
+                    except Exception as e:
+                        logger.error("prediction drift-resolve failed for {}: {}", ident, e)
+                        sentry_sdk.capture_exception(e)
 
     summary = (
         f"{resolved_count}/{len(pending)} signals resolved"
