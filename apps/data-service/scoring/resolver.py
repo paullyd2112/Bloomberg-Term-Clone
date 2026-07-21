@@ -41,10 +41,13 @@ RESOLUTION_CONFIG: dict[tuple[str, str], tuple[float, float, float]] = {
     ("stock", "intraday"):  (6,    0.008,  0.008),   # 6h, 0.8% symmetric
     ("stock", "swing"):     (120,  0.0175, 0.0175),   # 5 trading days, 1.75% symmetric
     ("stock", "longterm"):  (360,  0.05,   0.05),     # 15 trading days, 5% symmetric
-    # Crypto — wider thresholds due to higher volatility, still symmetric
-    ("crypto", "intraday"): (6,    0.02,  0.02),      # 6h, 2% symmetric
-    ("crypto", "swing"):    (120,  0.03,  0.03),      # 5 days, 3% symmetric
-    ("crypto", "longterm"): (360,  0.08,  0.08),      # 15 days, 8% symmetric
+    # Crypto — check early so clear wins/losses resolve fast. Swing starts at
+    # 24h (not 5d) because a 3% move can happen in hours; expiry at 2x (48h)
+    # expires signals that never hit threshold. Prompt targets 3-10 day swings
+    # but the resolver shouldn't wait 5 days to notice a coin already moved 5%.
+    ("crypto", "intraday"): (4,    0.02,  0.02),      # 4h, 2% symmetric
+    ("crypto", "swing"):    (24,   0.03,  0.03),      # 24h first check, 3% symmetric
+    ("crypto", "longterm"): (168,  0.08,  0.08),      # 7 days, 8% symmetric
 }
 
 # Fallback for signals with missing/unknown time_horizon

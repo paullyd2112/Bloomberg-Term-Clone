@@ -54,13 +54,14 @@ Rules:
 CRYPTO_SYSTEM = """You are a crypto signal screener. Given technical indicators and market sentiment, quickly assess: is there an actionable setup?
 
 Rules:
-- RSI < 35 + MACD turning up or volume surge = BUY (65+ confidence)
-- RSI > 65 + MACD contracting or declining volume = SELL (65+ confidence)
-- Fear & Greed < 30 + any bullish technical = contrarian BUY (70+)
-- Fear & Greed > 70 + any bearish technical = contrarian SELL (70+)
+- RSI < 40 + MACD turning up or volume surge = BUY (65+ confidence)
+- RSI > 60 + MACD contracting or declining volume = SELL (65+ confidence)
+- Fear & Greed < 35 + any bullish technical = contrarian BUY (65+)
+- Fear & Greed > 65 + any bearish technical = contrarian SELL (65+)
 - MACD crossover (either direction) = directional signal (65+)
-- MACD histogram rising from negative + RSI recovering = BUY lean (60-65)
-- Only 1 weak indicator firing with no trend context = HOLD (below 55)
+- MACD histogram direction changing (getting less negative or less positive) = lean signal (60-65)
+- RSI recovering from below 45 + MACD not deepening = BUY lean (60-65)
+- Truly flat market with no directional lean at all = HOLD (below 55)
 - Respond with direction, confidence 0-100, and a one-line reason."""
 
 
