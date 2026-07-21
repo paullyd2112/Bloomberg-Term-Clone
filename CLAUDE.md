@@ -231,9 +231,13 @@ Prediction markets pass through a guardrail stack before any signal is written:
 Pass rate: ~22% of Polymarket markets (110/500 tested). Pricing bracket blocks the most (347 penny/meme),
 category blocks sports (29), volume blocks illiquid (14).
 
-Prediction resolver (`scoring/resolver.py`): settlement-based, queries Polymarket CLOB settlement API
-(`closed=True`, `tokens[].winner=True/False`). Verified working against real settled markets. No code
-changes needed — distinct from price-based stock/crypto resolution.
+Prediction resolver (`scoring/resolver.py`): two-tier resolution system:
+1. **Settlement-based** (authoritative): queries Polymarket CLOB settlement API (`closed=True`,
+   `tokens[].winner=True/False`). Takes priority when market has settled.
+2. **Price-drift** (fast feedback): if YES price moves >=15pp from entry, resolve as WIN/LOSS
+   without waiting for settlement. After 30 days, threshold relaxes to 10pp so old signals
+   don't stay PENDING indefinitely. Constants: `PREDICTION_DRIFT_THRESHOLD = 0.15`,
+   `PREDICTION_AGED_DRIFT_THRESHOLD = 0.10`, `PREDICTION_AGED_DAYS = 30`.
 
 Constants: `MAX_PREDICTION_SIGNALS_PER_DAY = 10`, `PREDICTION_CANDIDATE_LIMIT = 30`,
 `ADAPTIVE_HAIKU_BASE_THRESHOLD = 64`, `ADAPTIVE_HAIKU_TIGHT_THRESHOLD = 80`.
