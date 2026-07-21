@@ -1148,6 +1148,30 @@ def score_asset(
                 + signal.reasoning
             )
 
+    # Reddit attention gate — if a coin has a massive mention spike (5x+)
+    # combined with a controversial upvote ratio, suppress BUYs. Smooth-brained
+    # apes pumping a coin they're actually arguing about = retail trap.
+    REDDIT_SPIKE_SUPPRESS_PCT = 400  # 5x spike
+    if asset_type == "crypto" and signal.direction == "BUY":
+        reddit = context.get("reddit_sentiment") if context else None
+        if reddit:
+            change = reddit.get("mention_change_pct")
+            controversial = reddit.get("controversial", False)
+            if change is not None and change >= REDDIT_SPIKE_SUPPRESS_PCT and controversial:
+                logger.warning(
+                    "{}/{}: reddit attention gate — {}% mention spike with controversial upvote ratio, "
+                    "downgrading BUY to HOLD",
+                    asset_type, identifier, change,
+                )
+                signal.direction = "HOLD"
+                signal.confidence = min(signal.confidence, 50)
+                signal.reasoning = (
+                    f"[Reddit attention gate] {change:.0f}% mention spike on Reddit with a controversial "
+                    f"upvote ratio (community is arguing, not hyping). Suppressing BUY — "
+                    f"retail attention spikes with low upvotes are historically traps. "
+                    + signal.reasoning
+                )
+
     # Breadth/correlation cap — if several names in the same batch are all
     # deeply extended and getting BUY calls, that's a synchronized-momentum
     # signature, not N independent bets (see: 8 correlated BUYs on 2026-04-17

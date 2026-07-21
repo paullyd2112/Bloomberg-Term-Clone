@@ -22,6 +22,9 @@ APEWISDOM_URL = "https://apewisdom.io/api/v1.0/filter/all-crypto/"
 REQUEST_TIMEOUT = 15.0
 MAX_TICKERS = 50
 
+HEATING_UP_THRESHOLD = 200  # % mention change to flag as "heating up"
+CONTROVERSIAL_RATIO = 0.3   # upvotes/mention below this = controversial
+
 
 def _fetch_trending() -> list[dict]:
     try:
@@ -93,6 +96,26 @@ def ingest_apewisdom() -> str:
     return summary
 
 
+def _compute_attention_metrics(mentions: int, mentions_24h_ago: int | None, upvotes: int) -> dict:
+    """Compute derived attention-quality metrics from raw ApeWisdom data."""
+    mention_change_pct = None
+    if mentions_24h_ago and mentions_24h_ago > 0:
+        mention_change_pct = round(
+            ((mentions - mentions_24h_ago) / mentions_24h_ago) * 100, 1
+        )
+
+    upvote_ratio = round(upvotes / mentions, 2) if mentions > 0 else 0.0
+    heating_up = mention_change_pct is not None and mention_change_pct >= HEATING_UP_THRESHOLD
+    controversial = upvote_ratio < CONTROVERSIAL_RATIO and mentions >= 5
+
+    return {
+        "mention_change_pct": mention_change_pct,
+        "upvote_ratio": upvote_ratio,
+        "heating_up": heating_up,
+        "controversial": controversial,
+    }
+
+
 def get_reddit_sentiment(ticker: str, limit: int = 1) -> dict | None:
     """Fetch the latest Reddit sentiment for a ticker. Used by scoring engine."""
     try:
@@ -112,20 +135,20 @@ def get_reddit_sentiment(ticker: str, limit: int = 1) -> dict | None:
 
         mentions = row.get("mentions", 0)
         mentions_24h_ago = meta.get("mentions_24h_ago")
+        upvotes = row.get("upvotes", 0)
 
-        mention_change_pct = None
-        if mentions_24h_ago and mentions_24h_ago > 0:
-            mention_change_pct = round(
-                ((mentions - mentions_24h_ago) / mentions_24h_ago) * 100, 1
-            )
+        metrics = _compute_attention_metrics(mentions, mentions_24h_ago, upvotes)
 
         return {
             "mentions": mentions,
             "mentions_24h_ago": mentions_24h_ago,
-            "mention_change_pct": mention_change_pct,
+            "mention_change_pct": metrics["mention_change_pct"],
             "rank": row.get("rank"),
             "rank_24h_ago": row.get("rank_24h_ago"),
-            "upvotes": row.get("upvotes", 0),
+            "upvotes": upvotes,
+            "upvote_ratio": metrics["upvote_ratio"],
+            "heating_up": metrics["heating_up"],
+            "controversial": metrics["controversial"],
             "captured_at": row.get("captured_at"),
         }
     except Exception as e:
@@ -133,8 +156,27 @@ def get_reddit_sentiment(ticker: str, limit: int = 1) -> dict | None:
         return None
 
 
+def _get_tracked_tickers() -> set[str]:
+    """Return the set of crypto tickers we have price data for in raw_prices."""
+    try:
+        result = (
+            supabase.table("raw_prices")
+            .select("identifier")
+            .eq("asset_type", "crypto")
+            .order("captured_at", desc=True)
+            .limit(500)
+            .execute()
+        )
+        if not result.data:
+            return set()
+        return {row["identifier"] for row in result.data}
+    except Exception as e:
+        logger.warning("apewisdom: tracked ticker lookup failed: {}", e)
+        return set()
+
+
 def get_trending_tickers(limit: int = 20) -> list[dict]:
-    """Fetch current trending tickers. Used by the dashboard API."""
+    """Fetch current trending tickers with tracked status and attention metrics."""
     try:
         result = (
             supabase.table("social_sentiment")
@@ -148,6 +190,8 @@ def get_trending_tickers(limit: int = 20) -> list[dict]:
         if not result.data:
             return []
 
+        tracked = _get_tracked_tickers()
+
         seen: dict[str, dict] = {}
         for row in result.data:
             t = row["ticker"]
@@ -155,18 +199,21 @@ def get_trending_tickers(limit: int = 20) -> list[dict]:
                 meta = row.get("metadata") or {}
                 mentions = row.get("mentions", 0)
                 mentions_24h_ago = meta.get("mentions_24h_ago")
-                mention_change_pct = None
-                if mentions_24h_ago and mentions_24h_ago > 0:
-                    mention_change_pct = round(
-                        ((mentions - mentions_24h_ago) / mentions_24h_ago) * 100, 1
-                    )
+                upvotes = row.get("upvotes", 0)
+
+                metrics = _compute_attention_metrics(mentions, mentions_24h_ago, upvotes)
+
                 seen[t] = {
                     "ticker": t,
                     "mentions": mentions,
-                    "mention_change_pct": mention_change_pct,
+                    "mention_change_pct": metrics["mention_change_pct"],
                     "rank": row.get("rank"),
                     "rank_24h_ago": row.get("rank_24h_ago"),
-                    "upvotes": row.get("upvotes", 0),
+                    "upvotes": upvotes,
+                    "upvote_ratio": metrics["upvote_ratio"],
+                    "heating_up": metrics["heating_up"],
+                    "controversial": metrics["controversial"],
+                    "tracked": t in tracked,
                     "captured_at": row.get("captured_at"),
                 }
             if len(seen) >= limit:

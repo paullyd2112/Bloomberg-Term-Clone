@@ -17,12 +17,15 @@ THE #1 RULE — TREND BEATS SENTIMENT:
 - MACD is your trend filter. Histogram negative AND deepening = downtrend intact. Do NOT buy regardless of how extreme the fear or how oversold the RSI. The knife is still falling.
 - Extreme Fear is ONLY a BUY when MACD confirms a turn: histogram rising toward zero, or fresh neg→pos crossover. That's capitulation. Histogram still deepening = ongoing crash. Don't buy.
 
-REDDIT SENTIMENT (ApeWisdom):
-- Reddit mentions are a retail-flow leading indicator. A sudden spike (>100% 24h change) in mentions with rising rank = retail attention incoming. Use as a CONFIRMING factor alongside technicals, never as a standalone signal.
+REDDIT ATTENTION (ApeWisdom):
+- Reddit mentions measure VOLUME OF ATTENTION, not sentiment quality. Apes can be smooth-brained — high mentions does NOT mean "Reddit likes it." It means Reddit is TALKING about it. Treat it as a retail-flow indicator, nothing more.
+- A sudden spike (>200% 24h change, flagged as "HEATING UP") = retail attention incoming. Confirming factor alongside technicals, never standalone.
 - High mentions + rising MACD = momentum confirmation (retail + smart money aligned).
-- High mentions + falling MACD = potential retail trap. Be cautious with BUYs.
+- High mentions + falling MACD = potential retail trap. Apes buying the dip into a downtrend. Be cautious with BUYs.
+- CONTROVERSIAL flag (low upvote ratio) = the mentions are arguments, not hype. Community is split or bearish on the coin. Treat as a yellow flag.
 - Rapidly climbing rank (e.g. #50 → #5) = breakout chatter. Cross-check with volume and technicals before acting.
 - Low/no mentions on a coin with strong technicals = under-the-radar setup. Slightly higher conviction if technicals are clean.
+- UNTRACKED coins (no price data in our system) are Reddit-only noise — we can't verify anything about them technically. Never give conviction to an untracked coin.
 
 CONFLUENCE REQUIREMENT:
 - A directional signal needs at least 2 confirming factors: MACD direction, RSI level, Fear & Greed extreme, volume ratio > 1.2x, Reddit sentiment spike.
@@ -120,13 +123,21 @@ def build_user_prompt(context: dict) -> str:
         if reddit.get("mention_change_pct") is not None:
             sign = "+" if reddit["mention_change_pct"] >= 0 else ""
             mention_delta = f" | 24h change: {sign}{reddit['mention_change_pct']}%"
+        flags = []
+        if reddit.get("heating_up"):
+            flags.append("HEATING UP")
+        if reddit.get("controversial"):
+            flags.append("CONTROVERSIAL")
+        flag_str = f"  ⚠ Flags: {', '.join(flags)}" if flags else ""
         lines += [
             "",
-            f"Reddit sentiment (ApeWisdom — r/CryptoCurrency, r/Bitcoin, r/SatoshiStreetBets, etc.):",
+            f"Reddit attention (ApeWisdom — r/CryptoCurrency, r/Bitcoin, r/SatoshiStreetBets, etc.):",
             f"  Mentions: {reddit['mentions']}{mention_delta}",
             f"  Rank: {rank_str}{prev_rank}",
-            f"  Upvotes: {reddit.get('upvotes', 0)}",
+            f"  Upvotes: {reddit.get('upvotes', 0)} | Upvote ratio: {reddit.get('upvote_ratio', 'N/A')}/mention",
         ]
+        if flag_str:
+            lines.append(flag_str)
 
     if context.get("news_headlines"):
         lines += ["", "Recent crypto news:"]
