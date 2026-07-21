@@ -149,9 +149,16 @@ export default function TickerBar({ showStatus = true }: { showStatus?: boolean 
       <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 z-10 bg-gradient-to-l from-black to-transparent" />
 
       <div className="flex animate-marquee">
-        {[...items, ...items].map((item, i) => (
-          <Item key={`${item.identifier}-${i}`} item={item} />
-        ))}
+        <div className="flex">
+          {items.map((item) => (
+            <Item key={item.identifier} item={item} />
+          ))}
+        </div>
+        <div className="flex" aria-hidden="true">
+          {items.map((item) => (
+            <Item key={item.identifier} item={item} />
+          ))}
+        </div>
       </div>
     </div>
   );
