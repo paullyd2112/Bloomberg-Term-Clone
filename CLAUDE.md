@@ -124,8 +124,8 @@ Multi-profile prop-firm-modeled position sizing:
 
 ## Two-stage cost optimization (Haiku prescreen)
 - `scoring/haiku_prescreen.py` uses `claude-haiku-4-5-20251001` (~$0.001/call)
-- CORE_CRYPTO (BTC, ETH, SOL, XRP, ADA): scored directly with Sonnet (always high-signal)
-- TIER1_CRYPTO (48 coins): Haiku prescreen filters ~70-80%, only 65+ confidence escalates
+- CORE_CRYPTO (BTC, ETH, SOL, XRP, ADA, DOGE, BNB, AVAX, LINK, UNI, SUI): scored directly with Sonnet (always high-signal)
+- TIER1_CRYPTO (42 coins): Haiku prescreen filters ~70-80%, only 64+ confidence escalates
 - Lower-tier coins: only scored if >5% daily move (`CRYPTO_MOVER_THRESHOLD = 5.0`)
 - Stock prescreen: core 9 tickers always Sonnet, rest Haiku-first
 
@@ -180,8 +180,8 @@ Stock features are **disabled and hidden, NOT deleted** — code stays intact fo
 - Stock code (ingestion, scoring, prompts) stays intact — just not scheduled or visible
 
 **What stays active:**
-- Crypto scoring: every 2h (12x/day) — CORE_CRYPTO (BTC, ETH, SOL, XRP, ADA) scored directly,
-  TIER1_CRYPTO (48 coins) prescreened with Haiku first, lower-tier coins only if >5% daily move
+- Crypto scoring: every 2h (12x/day) — CORE_CRYPTO (BTC, ETH, SOL, XRP, ADA, DOGE, BNB, AVAX, LINK, UNI, SUI) scored directly,
+  TIER1_CRYPTO (42 coins) prescreened with Haiku first, lower-tier coins only if >5% daily move
 - Prediction markets: 2x/day via Polymarket, up to 10 signals/day, 30 candidate pool
 - News ingestion: continues (serves crypto + predictions + world coverage)
 - Congressional trades: stays active (still useful context, low cost)
@@ -208,8 +208,8 @@ to crypto-only default (13 coins: 5 CORE + 8 TIER1), conviction floor 64%, date 
 - After intro period (post Aug 31): $3/$15 (same as Sonnet 4.6 was), so no cost increase
 
 **Two-stage scoring pipeline (cost optimization):**
-- CORE_CRYPTO (BTC, ETH, SOL, XRP, ADA): scored directly with Sonnet 5 (always high-signal)
-- TIER1_CRYPTO (48 coins): Haiku prescreen (~$0.001/call) filters ~70-80%, only 65+ confidence
+- CORE_CRYPTO (BTC, ETH, SOL, XRP, ADA, DOGE, BNB, AVAX, LINK, UNI, SUI): scored directly with Sonnet 5 (always high-signal)
+- TIER1_CRYPTO (42 coins): Haiku prescreen (~$0.001/call) filters ~70-80%, only 64+ confidence
   escalates to Sonnet 5 for full scoring
 - Lower-tier coins: only scored if >5% daily move (CRYPTO_MOVER_THRESHOLD = 5.0)
 
