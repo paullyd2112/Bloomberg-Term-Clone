@@ -779,6 +779,33 @@ def score_now_debug():
     return jsonify({"status": "ok", "env": env_diag, "db_test": db_test, "steps": steps})
 
 
+@app.route("/diag/crypto-indicators")
+def diag_crypto_indicators():
+    """Show current indicator data for CORE_CRYPTO — diagnostic only."""
+    from scoring.price_data import get_scoring_price_row
+    from scoring.engine import CORE_CRYPTO, _get_fear_greed
+    results = {}
+    for sym in sorted(CORE_CRYPTO):
+        row = get_scoring_price_row("crypto", sym)
+        if not row:
+            results[sym] = {"error": "no data"}
+            continue
+        meta = row.get("metadata") or {}
+        results[sym] = {
+            "price": row.get("price"),
+            "change_24h": row.get("change_24h"),
+            "rsi_14": meta.get("rsi_14"),
+            "macd_hist": meta.get("macd_hist"),
+            "macd_line": meta.get("macd_line"),
+            "macd_signal": meta.get("macd_signal"),
+            "prev_macd_hist": meta.get("prev_macd_hist"),
+            "volume_ratio": meta.get("volume_ratio"),
+            "captured_at": row.get("captured_at"),
+        }
+    fg = _get_fear_greed()
+    return jsonify({"fear_greed": fg, "indicators": results})
+
+
 @app.route("/resolve-now", methods=["GET", "POST"])
 def resolve_now():
     """
