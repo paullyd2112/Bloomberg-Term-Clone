@@ -2,10 +2,16 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import AddPositionForm from "./AddPositionForm";
+import AddPositionForm, { type PositionDefaults } from "./AddPositionForm";
 
-export default function AddPositionModal() {
-  const [open, setOpen] = useState(false);
+export default function AddPositionModal({
+  defaults,
+  autoOpen = false,
+}: {
+  defaults?: PositionDefaults;
+  autoOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(autoOpen);
 
   return (
     <>
@@ -23,8 +29,10 @@ export default function AddPositionModal() {
             onClick={() => setOpen(false)}
           />
           <div className="relative bg-zinc-950/95 backdrop-blur-xl border border-white/[0.08] ring-hairline rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h2 className="text-base font-semibold text-white tracking-tight mb-4">Add position</h2>
-            <AddPositionForm onClose={() => setOpen(false)} />
+            <h2 className="text-base font-semibold text-white tracking-tight mb-4">
+              {defaults?.identifier ? `Trade ${defaults.identifier}` : "Add position"}
+            </h2>
+            <AddPositionForm onClose={() => setOpen(false)} defaults={defaults} />
           </div>
         </div>
       )}

@@ -221,18 +221,49 @@ def _render_email(signal: dict) -> tuple[str, str, str]:
     return subject, html, text
 
 
+def _send_push_notifications(signal: dict, subscribers: list[dict]) -> int:
+    """Send push notifications for a high-confidence signal to all subscribers
+    who have push subscriptions registered."""
+    try:
+        from notifications.push import send_push_to_user
+    except ImportError:
+        return 0
+
+    identifier = signal.get("identifier", "")
+    direction = signal.get("direction", "")
+    confidence = signal.get("confidence", 0)
+    asset_type = signal.get("asset_type", "")
+    market_title = signal.get("market_title")
+
+    display_name = market_title or identifier
+    title = f"{direction} {display_name} — {confidence}%"
+    body = (signal.get("reasoning") or "")[:200]
+    url = f"/dashboard/asset/{asset_type}/{identifier}"
+
+    pushed = 0
+    user_ids = {s["user_id"] for s in subscribers if s.get("user_id")}
+    for uid in user_ids:
+        pushed += send_push_to_user(uid, title, body, url)
+
+    if pushed:
+        logger.info("signal_alerts: pushed {} notification(s) for {} {}", pushed, direction, identifier)
+    return pushed
+
+
 def notify_high_confidence_signal(signal: dict) -> int:
-    """Send email alerts for a high-confidence BUY/SELL signal.
+    """Send email + push alerts for a high-confidence BUY/SELL signal.
     Returns number of emails sent."""
     if not _should_alert(signal):
         return 0
 
-    if not resend.api_key:
-        logger.debug("signal_alerts: no RESEND_API_KEY, skipping")
-        return 0
-
     subscribers = _get_subscribers()
     if not subscribers:
+        return 0
+
+    _send_push_notifications(signal, subscribers)
+
+    if not resend.api_key:
+        logger.debug("signal_alerts: no RESEND_API_KEY, skipping emails")
         return 0
 
     subject, html, text = _render_email(signal)
