@@ -5,6 +5,7 @@ import { Check } from "lucide-react";
 
 type Experience = "beginner" | "intermediate" | "advanced";
 type AssetPref  = "stocks" | "crypto" | "predictions";
+type NewsletterFreq = "daily" | "weekdays" | "every_other_day" | "weekly" | "weekends";
 
 const EXPERIENCE_OPTIONS: { value: Experience; label: string }[] = [
   { value: "beginner",     label: "Beginner" },
@@ -17,6 +18,14 @@ const ASSET_OPTIONS: { value: AssetPref; label: string }[] = [
   { value: "predictions",  label: "Predictions" },
 ];
 
+const FREQUENCY_OPTIONS: { value: NewsletterFreq; label: string; desc: string }[] = [
+  { value: "daily",          label: "Daily",           desc: "Every morning" },
+  { value: "weekdays",       label: "Weekdays",        desc: "Mon–Fri" },
+  { value: "every_other_day", label: "Every other day", desc: "Alternating days" },
+  { value: "weekly",         label: "Weekly",           desc: "Monday recap" },
+  { value: "weekends",       label: "Weekends",         desc: "Sat & Sun" },
+];
+
 type Props = {
   initialFullName:    string;
   initialPhone:       string;
@@ -24,6 +33,7 @@ type Props = {
   initialAssets:      AssetPref[];
   initialEmailAlerts: boolean;
   initialSmsAlerts:   boolean;
+  initialNewsletterFreq: NewsletterFreq;
 };
 
 export default function SettingsForm({
@@ -33,6 +43,7 @@ export default function SettingsForm({
   initialAssets,
   initialEmailAlerts,
   initialSmsAlerts,
+  initialNewsletterFreq,
 }: Props) {
   const [fullName, setFullName]     = useState(initialFullName);
   const [phone, setPhone]           = useState(initialPhone);
@@ -40,6 +51,7 @@ export default function SettingsForm({
   const [assets, setAssets]         = useState<Set<AssetPref>>(new Set(initialAssets));
   const [emailAlerts, setEmailAlerts] = useState(initialEmailAlerts);
   const [smsAlerts, setSmsAlerts]     = useState(initialSmsAlerts);
+  const [newsletterFreq, setNewsletterFreq] = useState<NewsletterFreq>(initialNewsletterFreq);
   const [saving, setSaving]         = useState(false);
   const [status, setStatus]         = useState<"idle" | "saved" | "error">("idle");
 
@@ -56,19 +68,26 @@ export default function SettingsForm({
     setSaving(true);
     setStatus("idle");
     try {
-      const res = await fetch("/api/profile", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          full_name:          fullName.trim(),
-          phone_number:       phone.trim() || null,
-          trading_experience: experience ?? undefined,
-          asset_preferences:  assets.size > 0 ? Array.from(assets) : undefined,
-          email_alerts:       emailAlerts,
-          sms_alerts:         smsAlerts,
+      const [res, freqRes] = await Promise.all([
+        fetch("/api/profile", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({
+            full_name:          fullName.trim(),
+            phone_number:       phone.trim() || null,
+            trading_experience: experience ?? undefined,
+            asset_preferences:  assets.size > 0 ? Array.from(assets) : undefined,
+            email_alerts:       emailAlerts,
+            sms_alerts:         smsAlerts,
+          }),
         }),
-      });
-      if (!res.ok) throw new Error("Failed");
+        fetch("/api/newsletter/frequency", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ frequency: newsletterFreq }),
+        }),
+      ]);
+      if (!res.ok && !freqRes.ok) throw new Error("Failed");
       setStatus("saved");
     } catch {
       setStatus("error");
@@ -155,6 +174,30 @@ export default function SettingsForm({
             );
           })}
         </div>
+      </div>
+
+      {/* Newsletter frequency */}
+      <div>
+        <label className="block text-xs text-zinc-400 mb-1.5">Newsletter frequency</label>
+        <div className="flex gap-2 flex-wrap">
+          {FREQUENCY_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => { setNewsletterFreq(opt.value); setStatus("idle"); }}
+              className={`px-3 py-1.5 rounded-md border text-sm transition-colors ${
+                newsletterFreq === opt.value
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-white"
+                  : "border-white/[0.1] bg-white/[0.03] text-zinc-400 hover:text-white"
+              }`}
+              title={opt.desc}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-zinc-600 mt-1.5">
+          How often you receive the morning brief. Weekly sends a Monday recap.
+        </p>
       </div>
 
       {/* Notifications */}
