@@ -327,6 +327,10 @@ def _fetch_ohlcv(symbol: str) -> pd.DataFrame | None:
         logger.warning("{}: ALL crypto sources returned no data", symbol)
         return None
 
+    for i, f in enumerate(frames):
+        if f.index.tz is not None:
+            frames[i] = f.set_index(f.index.tz_convert("UTC").tz_localize(None))
+
     merged = frames[0]
     for extra in frames[1:]:
         new_ts = extra.index.difference(merged.index)
