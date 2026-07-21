@@ -76,15 +76,22 @@ CRYPTO_ASSETS = [
     ("SOL", "solana"),
     ("XRP", "ripple"),
     ("ADA", "cardano"),
-    # TIER1 sample — prescreened with Haiku in production
     ("DOGE", "dogecoin"),
+    ("BNB", "binancecoin"),
     ("AVAX", "avalanche-2"),
     ("LINK", "chainlink"),
-    ("DOT", "polkadot"),
     ("UNI", "uniswap"),
-    ("NEAR", "near"),
+    # TIER1 sample — prescreened with Haiku in production
     ("SUI", "sui"),
+    ("DOT", "polkadot"),
+    ("NEAR", "near"),
     ("APT", "aptos"),
+    ("TON", "the-open-network"),
+    ("TAO", "bittensor"),
+    ("ONDO", "ondo-finance"),
+    ("PENDLE", "pendle"),
+    ("KAS", "kaspa"),
+    ("JUP", "jupiter-exchange-solana"),
 ]
 
 EVAL_WINDOWS = {
