@@ -275,8 +275,8 @@ export default function OnboardingPage() {
             <div>
               <h1 className="text-2xl font-bold text-white">You&apos;re all set!</h1>
               <p className="text-zinc-400 text-sm mt-2">
-                One more step: choose a plan to get started. Credit card required
-                and you can cancel anytime during your 14-day trial without being charged.
+                One more step: choose a plan to get started, or continue with the free tier.
+                Paid plans include a free trial — cancel anytime without being charged.
               </p>
             </div>
 

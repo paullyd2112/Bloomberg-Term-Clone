@@ -18,7 +18,7 @@ export default function SignupPage() {
           >
             Plebs<span className="text-emerald-400">.</span>
           </Link>
-          <p className="mt-3 text-sm text-secondary-foreground">Start your 14-day free trial</p>
+          <p className="mt-3 text-sm text-secondary-foreground">Create your free account</p>
         </div>
         <Suspense
           fallback={

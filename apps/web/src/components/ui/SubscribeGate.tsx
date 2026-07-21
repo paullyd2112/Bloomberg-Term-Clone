@@ -24,7 +24,7 @@ export default function SubscribeGate({ message = "Subscribe to access this feat
         <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
       </Link>
       <p className="relative font-mono text-[11px] uppercase tracking-wider text-zinc-600">
-        14-day trial · Cancel anytime
+        Free trial · Cancel anytime
       </p>
     </div>
   );

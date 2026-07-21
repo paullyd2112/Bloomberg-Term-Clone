@@ -121,7 +121,7 @@ function Hero() {
                 href="/signup"
                 className="group inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-base px-6 py-3 rounded-xl transition-colors"
               >
-                Start 14-day trial
+                Get started free
                 <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </Link>
               <Link
@@ -353,12 +353,27 @@ function NewsletterBand() {
 
 const PLANS = [
   {
+    name:      "Free",
+    price:     "$0",
+    period:    "",
+    blurb:     "See the signals. Decide when you're ready for more.",
+    highlight: false,
+    cta:       "Create free account",
+    href:      "/signup",
+    features: [
+      "3 AI signals per day (4h delay)",
+      "Weekly Monday newsletter recap",
+      "Dashboard access (view-only)",
+      "Track record & accuracy stats",
+    ],
+  },
+  {
     name:      "Pro",
     price:     "$40",
     period:    "/mo",
     blurb:     "Everything you need to trade crypto with an edge.",
     highlight: false,
-    cta:       "Start 14-day trial",
+    cta:       "Start 7-day trial",
     href:      "/signup",
     features: [
       "24/7 AI signals for BTC, ETH & 50+ coins",
@@ -396,11 +411,11 @@ function Pricing() {
         <Reveal className="max-w-2xl mb-12">
           <SectionLabel index="03">Pricing</SectionLabel>
           <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest">
-            Two tiers. The signals pay for themselves.
+            Start free. Upgrade when the signals pay for themselves.
           </h2>
         </Reveal>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {PLANS.map((plan, i) => (
             <Reveal key={plan.name} delay={i * 80}>
               <div
@@ -453,7 +468,7 @@ function Pricing() {
         </div>
 
         <p className="text-center text-muted-foreground text-sm mt-8">
-          14-day free trial, credit card required, cancel anytime. Prefer to pay once?{" "}
+          Free forever. Pro includes a 7-day trial, Elite a 14-day trial. Cancel anytime. Prefer to pay once?{" "}
           <Link href="/signup" className="text-emerald-400 hover:text-emerald-300 underline underline-offset-4 transition-colors">
             Lifetime access from $399
           </Link>
@@ -477,7 +492,7 @@ const FAQS = [
   },
   {
     q: "How does the trial work?",
-    a: "You get 14 days of full access to your chosen plan (Pro or Elite). Credit card is required upfront. Cancel anytime during the trial and you won't be charged.",
+    a: "Pro comes with a 7-day trial, Elite with a 14-day trial — full access to everything in that tier. Credit card is required upfront. Cancel anytime during the trial and you won't be charged. Or start with the free plan, no card needed.",
   },
   {
     q: "What markets do you cover?",
@@ -534,7 +549,7 @@ function CTAStrip() {
           <h2 className="text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
             The market never closes. Your edge shouldn&apos;t either.
           </h2>
-          <p className="text-secondary-foreground mt-4">14-day trial. Signals around the clock from day one.</p>
+          <p className="text-secondary-foreground mt-4">Start free. Signals around the clock from day one.</p>
 
           <Link
             href="/signup"

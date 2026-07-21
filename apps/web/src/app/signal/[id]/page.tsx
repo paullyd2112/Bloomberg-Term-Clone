@@ -288,7 +288,7 @@ export default async function SharedSignalPage({
                 Log in
               </Link>
             </div>
-            <p className="text-zinc-600 text-xs">14-day trial · Credit card required</p>
+            <p className="text-zinc-600 text-xs">Free tier available · No credit card needed</p>
           </>
         )}
       </div>

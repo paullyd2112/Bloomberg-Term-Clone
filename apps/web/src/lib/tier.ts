@@ -2,14 +2,25 @@ export type Tier = "free" | "pro" | "elite";
 
 export const TRIAL_DAYS = 14;
 
+export const TRIAL_DAYS_BY_TIER: Record<Tier, number> = {
+  free:  0,
+  pro:   7,
+  elite: 14,
+};
+
 export const WATCHLIST_LIMIT: Record<Tier, number> = {
   free:  0,
   pro:   Infinity,
   elite: Infinity,
 };
 
-// free tier is not a marketed plan — it's the expired/unsubscribed state
-export const TIER_FEATURES: Record<"pro" | "elite", string[]> = {
+export const TIER_FEATURES: Record<Tier, string[]> = {
+  free: [
+    "3 delayed signals per day (4h delay)",
+    "Weekly Monday newsletter recap",
+    "Dashboard access (view-only)",
+    "Track record & accuracy stats",
+  ],
   pro: [
     "AI signals — crypto & predictions",
     "Customisable signal screener",

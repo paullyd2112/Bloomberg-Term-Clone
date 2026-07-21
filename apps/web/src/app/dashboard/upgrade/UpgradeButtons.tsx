@@ -72,7 +72,7 @@ export default function UpgradeButtons({ planTier }: { planTier: "pro" | "elite"
         disabled={loading}
         className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold text-sm py-3 rounded-xl transition-colors"
       >
-        {loading ? "Redirecting…" : "Start 14-day trial →"}
+        {loading ? "Redirecting…" : `Start ${planTier === "elite" ? "14" : "7"}-day trial →`}
       </button>
       <p className="text-center text-[11px] text-zinc-600">Credit card required. Cancel anytime.</p>
     </div>
