@@ -1437,12 +1437,13 @@ def score_stocks_event_only(subscription: str | None = None) -> str:
 
 CORE_CRYPTO   = {"BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "BNB", "AVAX", "LINK", "UNI"}
 TIER1_CRYPTO  = {
-    "SUI", "DOT", "ATOM",
+    "SUI", "DOT", "ATOM", "TON", "TRX",
     "LTC", "NEAR", "APT", "ARB", "OP", "FIL", "INJ", "SEI",
     "PEPE", "WIF", "SHIB", "TIA", "AAVE", "MKR", "RENDER", "FET",
     "MATIC", "HBAR", "VET", "ALGO", "XLM", "ICP", "SAND", "MANA",
     "AXS", "CRV", "SNX", "COMP", "BAL", "SUSHI", "IMX", "GRT",
     "STX", "RUNE", "JASMY", "FLOW", "GALA", "ENS", "LDO", "RPL",
+    "KAS", "TAO", "WLD", "JUP", "BONK", "ONDO", "ENA", "PENDLE",
 }
 CRYPTO_MOVER_THRESHOLD = 5.0          # legacy fallback (% change) if no ATR
 CRYPTO_ATR_EXPANSION_RATIO = 1.2      # qualify if current range > 1.2x ATR (volatility expanding)
