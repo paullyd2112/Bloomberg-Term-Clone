@@ -576,6 +576,7 @@ const FOOTER_COLS = [
       { label: "Pricing", href: "#pricing" },
       { label: "FAQ", href: "/faq" },
       { label: "Glossary", href: "/glossary" },
+      { label: "Prop trading", href: "/prop-trading" },
       { label: "Dashboard", href: "/dashboard" },
     ],
   },
