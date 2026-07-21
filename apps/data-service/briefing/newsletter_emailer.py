@@ -1,7 +1,14 @@
 """
-Newsletter emailer — sends daily newsletter via Resend at 7:15am ET weekdays.
+Newsletter emailer — sends newsletter via Resend based on subscriber frequency.
 Free subscribers get editorial + CTA.
 Pro/Elite subscribers get the same editorial + personalized signal data.
+
+Frequency options (stored on newsletter_subscribers.newsletter_frequency):
+  daily          — every day (default)
+  weekdays       — Monday–Friday only
+  every_other_day — odd day-of-year
+  weekly         — Monday only (week recap framing)
+  weekends       — Saturday & Sunday only
 """
 
 import html
@@ -46,7 +53,7 @@ def _get_subscribers() -> list[dict]:
     try:
         result = (
             supabase.table("newsletter_subscribers")
-            .select("email, user_id, tier")
+            .select("email, user_id, tier, newsletter_frequency")
             .eq("unsubscribed", False)
             .execute()
         )
@@ -55,6 +62,24 @@ def _get_subscribers() -> list[dict]:
         logger.error("newsletter_emailer: subscriber fetch failed — {}", e)
         sentry_sdk.capture_exception(e)
         return []
+
+
+def _should_send_today(frequency: str) -> bool:
+    """Check if a subscriber's frequency matches today's date."""
+    today = date.today()
+    dow = today.weekday()  # 0=Mon … 6=Sun
+
+    if frequency == "daily":
+        return True
+    if frequency == "weekdays":
+        return dow < 5
+    if frequency == "weekends":
+        return dow >= 5
+    if frequency == "weekly":
+        return dow == 0  # Monday
+    if frequency == "every_other_day":
+        return today.timetuple().tm_yday % 2 == 1
+    return True  # unknown frequency → send
 
 
 def _get_user_signals(user_id: str, top_signals: list[dict]) -> list[dict]:
@@ -242,7 +267,13 @@ def _options_html(options: list[dict]) -> str:
     return f'<div style="margin:16px 0;">{_card(inner)}</div>'
 
 
-def _render_html(briefing: dict, tier: str, user_id: str | None, prediction_titles: dict[str, str] | None = None) -> str:
+_FREQUENCY_LABELS: dict[str, str] = {
+    "weekly":   "Weekly recap",
+    "weekends": "Weekend edition",
+}
+
+
+def _render_html(briefing: dict, tier: str, user_id: str | None, prediction_titles: dict[str, str] | None = None, frequency: str = "daily") -> str:
     content      = briefing.get("content_json") or {}
     subject_line = html.escape(briefing.get("headline", ""))
     opening      = _md_to_html(content.get("opening_line", ""))
@@ -251,6 +282,10 @@ def _render_html(briefing: dict, tier: str, user_id: str | None, prediction_titl
     quick_hits   = content.get("quick_hits")
     today        = date.today().strftime("%A, %B %-d")
     is_paid      = tier in ("pro", "elite")
+
+    freq_label = _FREQUENCY_LABELS.get(frequency)
+    if freq_label:
+        opening = _md_to_html(f"Here's what happened since your last briefing. {content.get('opening_line', '')}")
 
     stories_html = "".join(_story_html(s) for s in stories)
 
@@ -327,7 +362,7 @@ def _render_html(briefing: dict, tier: str, user_id: str | None, prediction_titl
         <td style="font-size:20px;font-weight:800;color:#f4f4f5;letter-spacing:-0.01em;">
           plebs<span style="color:#22c55e;">.finance</span>
         </td>
-        <td style="text-align:right;font-size:11px;color:#71717a;font-weight:600;letter-spacing:.04em;">{today}</td>
+        <td style="text-align:right;font-size:11px;color:#71717a;font-weight:600;letter-spacing:.04em;">{(freq_label + ' · ' if freq_label else '') + today}</td>
       </tr>
     </table>
     <h1 style="color:#f4f4f5;font-size:22px;font-weight:700;margin:0 0 16px;line-height:1.35;">{subject_line}</h1>
@@ -439,6 +474,14 @@ def _record_send(email: str) -> None:
         logger.warning("newsletter_emailer: failed to record send for {}: {}", email, e)
 
 
+def _subject_for_frequency(base_subject: str, frequency: str) -> str:
+    if frequency == "weekly":
+        return f"This week on Plebs — {date.today().strftime('%b %-d')}"
+    if frequency == "weekends":
+        return f"Weekend briefing — {date.today().strftime('%b %-d')}"
+    return base_subject
+
+
 def send_newsletter() -> str:
     briefing = _get_todays_newsletter()
     if not briefing:
@@ -452,10 +495,10 @@ def send_newsletter() -> str:
         return "0 sent"
 
     already_sent = _already_sent_today()
-    subject   = briefing.get("headline", f"Plebs — {date.today().strftime('%b %-d')}")
+    base_subject = briefing.get("headline", f"Plebs — {date.today().strftime('%b %-d')}")
     text_body = _render_text(briefing)
     prediction_titles = _resolve_prediction_titles((briefing.get("content_json") or {}).get("top_signals", []))
-    sent, skipped, failed = 0, 0, 0
+    sent, skipped, freq_skipped, failed = 0, 0, 0, 0
     failed_emails: list[str] = []
     last_error: str = ""
 
@@ -463,6 +506,10 @@ def send_newsletter() -> str:
         email   = sub.get("email")
         tier    = sub.get("tier", "free")
         user_id = sub.get("user_id")
+        frequency = sub.get("newsletter_frequency", "daily")
+
+        if tier == "free":
+            frequency = "weekly"
 
         if not email:
             continue
@@ -471,8 +518,13 @@ def send_newsletter() -> str:
             skipped += 1
             continue
 
+        if not _should_send_today(frequency):
+            freq_skipped += 1
+            continue
+
         try:
-            html_body = _render_html(briefing, tier, user_id, prediction_titles)
+            subject = _subject_for_frequency(base_subject, frequency)
+            html_body = _render_html(briefing, tier, user_id, prediction_titles, frequency)
             _send_with_retry({
                 "from":    FROM_ADDRESS,
                 "to":      [email],
@@ -495,7 +547,7 @@ def send_newsletter() -> str:
             f"Failed addresses: {', '.join(failed_emails)}"
         )
 
-    summary = f"{sent} sent, {skipped} already sent, {failed} failed"
+    summary = f"{sent} sent, {skipped} already sent, {freq_skipped} frequency skipped, {failed} failed"
     if last_error:
         summary += f" | last_error: {last_error}"
     logger.info("newsletter_emailer complete: {}", summary)

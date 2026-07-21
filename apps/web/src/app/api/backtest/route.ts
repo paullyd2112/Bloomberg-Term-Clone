@@ -5,8 +5,8 @@ import { getUser, getUserTier } from "@/lib/user";
 import { isPaidTier } from "@/lib/tier";
 
 const BacktestBody = z.object({
-  asset_type:     z.enum(["all", "stock", "crypto"]),
-  direction:      z.enum(["all", "BUY", "SELL"]),
+  asset_type:     z.enum(["all", "stock", "crypto", "prediction"]),
+  direction:      z.enum(["all", "BUY", "SELL", "YES", "NO"]),
   horizon:        z.enum(["all", "intraday", "swing", "longterm"]),
   min_confidence: z.number().int().min(0).max(100),
   start_date:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -17,8 +17,8 @@ const BacktestBody = z.object({
 export const dynamic = "force-dynamic";
 
 export type BacktestParams = {
-  asset_type: "all" | "stock" | "crypto";
-  direction:  "all" | "BUY" | "SELL";
+  asset_type: "all" | "stock" | "crypto" | "prediction";
+  direction:  "all" | "BUY" | "SELL" | "YES" | "NO";
   horizon:    "all" | "intraday" | "swing" | "longterm";
   min_confidence: number;
   start_date: string;
@@ -27,6 +27,24 @@ export type BacktestParams = {
 };
 
 export type EquityPoint = { date: string; pnl: number };
+
+export type BreakdownEntry = {
+  trades: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  total_pnl: number;
+};
+
+export type TradeEntry = {
+  identifier: string;
+  asset_type: string;
+  direction:  string;
+  confidence: number;
+  pnl:        number;
+  outcome:    string;
+  date:       string;
+};
 
 export type BacktestResults = {
   total_trades:    number;
@@ -41,6 +59,9 @@ export type BacktestResults = {
   max_drawdown:    number;
   avg_confidence:  number;
   equity_curve:    EquityPoint[];
+  by_asset:        Record<string, BreakdownEntry>;
+  by_direction:    Record<string, BreakdownEntry>;
+  trades:          TradeEntry[];
 };
 
 type RawSignal = {
@@ -69,20 +90,19 @@ function tradePnl(sig: RawSignal, tradeSize: number): number | null {
 }
 
 function computeResults(signals: RawSignal[], tradeSize: number): BacktestResults {
-  if (signals.length === 0) {
-    return {
-      total_trades: 0, wins: 0, losses: 0, neutrals: 0,
-      win_rate: 0, total_pnl: 0, avg_pnl_per_trade: 0,
-      best_trade: 0, worst_trade: 0, max_drawdown: 0,
-      avg_confidence: 0, equity_curve: [],
-    };
-  }
+  const empty: BacktestResults = {
+    total_trades: 0, wins: 0, losses: 0, neutrals: 0,
+    win_rate: 0, total_pnl: 0, avg_pnl_per_trade: 0,
+    best_trade: 0, worst_trade: 0, max_drawdown: 0,
+    avg_confidence: 0, equity_curve: [],
+    by_asset: {}, by_direction: {}, trades: [],
+  };
+  if (signals.length === 0) return empty;
 
   const sorted = [...signals].sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   );
 
-  // Only include signals with valid entry prices in return calculations
   const pricedSignals = sorted.filter(
     (s) => s.price_at_signal && s.outcome_price && s.price_at_signal > 0,
   );
@@ -92,6 +112,10 @@ function computeResults(signals: RawSignal[], tradeSize: number): BacktestResult
   let bestTrade = -Infinity, worstTrade = Infinity;
   const equityCurve: EquityPoint[] = [];
   let confSum = 0;
+  const trades: TradeEntry[] = [];
+
+  const byAsset: Record<string, { trades: number; wins: number; losses: number; pnl: number }> = {};
+  const byDirection: Record<string, { trades: number; wins: number; losses: number; pnl: number }> = {};
 
   for (const sig of pricedSignals) {
     const pnl = tradePnl(sig, tradeSize) ?? 0;
@@ -109,9 +133,47 @@ function computeResults(signals: RawSignal[], tradeSize: number): BacktestResult
     confSum += sig.confidence ?? 0;
 
     equityCurve.push({ date: sig.created_at.slice(0, 10), pnl: Math.round(cumPnl * 100) / 100 });
+
+    trades.push({
+      identifier: sig.identifier,
+      asset_type: sig.asset_type,
+      direction:  sig.direction,
+      confidence: sig.confidence,
+      pnl:        Math.round(pnl * 100) / 100,
+      outcome:    sig.outcome,
+      date:       sig.created_at.slice(0, 10),
+    });
+
+    const at = byAsset[sig.asset_type] ??= { trades: 0, wins: 0, losses: 0, pnl: 0 };
+    at.trades++;
+    if (sig.outcome === "WIN") at.wins++;
+    else if (sig.outcome === "LOSS") at.losses++;
+    at.pnl += pnl;
+
+    const dt = byDirection[sig.direction] ??= { trades: 0, wins: 0, losses: 0, pnl: 0 };
+    dt.trades++;
+    if (sig.outcome === "WIN") dt.wins++;
+    else if (sig.outcome === "LOSS") dt.losses++;
+    dt.pnl += pnl;
   }
 
   const totalPriced = pricedSignals.length;
+
+  const toBreakdown = (b: Record<string, { trades: number; wins: number; losses: number; pnl: number }>): Record<string, BreakdownEntry> => {
+    const out: Record<string, BreakdownEntry> = {};
+    for (const [k, v] of Object.entries(b)) {
+      const decided = v.wins + v.losses;
+      out[k] = {
+        trades: v.trades,
+        wins: v.wins,
+        losses: v.losses,
+        win_rate: decided > 0 ? Math.round((v.wins / decided) * 1000) / 10 : 0,
+        total_pnl: Math.round(v.pnl * 100) / 100,
+      };
+    }
+    return out;
+  };
+
   return {
     total_trades:      totalPriced,
     wins,
@@ -125,6 +187,9 @@ function computeResults(signals: RawSignal[], tradeSize: number): BacktestResult
     max_drawdown:      Math.round(maxDrawdown * 10) / 10,
     avg_confidence:    totalPriced > 0 ? Math.round((confSum / totalPriced) * 10) / 10 : 0,
     equity_curve:      equityCurve,
+    by_asset:          toBreakdown(byAsset),
+    by_direction:      toBreakdown(byDirection),
+    trades,
   };
 }
 

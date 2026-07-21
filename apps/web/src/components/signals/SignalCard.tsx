@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { clsx } from "clsx";
 import ShareButton from "./ShareButton";
+import TradeButton from "./TradeButton";
 
 export type Signal = {
   id: number;
@@ -76,7 +77,7 @@ function confColors(c: number): { text: string; bar: string } {
   return { text: "text-zinc-500", bar: "bg-zinc-600" };
 }
 
-export default function SignalCard({ signal }: { signal: Signal }) {
+export default function SignalCard({ signal, hideTrade }: { signal: Signal; hideTrade?: boolean }) {
   const conf = confColors(signal.confidence);
   const horizon = HORIZON_SHORT[signal.time_horizon] ?? signal.time_horizon.slice(0, 5).toUpperCase();
   const typeLabel = TYPE_LABEL[signal.asset_type] ?? signal.asset_type;
@@ -163,6 +164,17 @@ export default function SignalCard({ signal }: { signal: Signal }) {
               <span className={clsx("font-mono font-semibold", signal.unrealized_pnl >= 0 ? "text-emerald-400" : "text-red-400")}>
                 {signal.unrealized_pnl >= 0 ? "+" : ""}{signal.unrealized_pnl.toFixed(1)}%
               </span>
+            </>
+          )}
+          {signal.outcome === "PENDING" && !hideTrade && (
+            <>
+              <span>·</span>
+              <TradeButton
+                assetType={signal.asset_type}
+                identifier={signal.identifier}
+                direction={signal.direction}
+                entryPrice={signal.price_at_signal}
+              />
             </>
           )}
         </div>
@@ -260,8 +272,16 @@ export default function SignalCard({ signal }: { signal: Signal }) {
           {timeAgo(signal.created_at)}
         </span>
 
-        {/* Share */}
-        <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 bg-background/80 pl-2 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        {/* Actions */}
+        <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 bg-background/80 pl-2 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover:opacity-100 flex items-center gap-1">
+          {signal.outcome === "PENDING" && !hideTrade && (
+            <TradeButton
+              assetType={signal.asset_type}
+              identifier={signal.identifier}
+              direction={signal.direction}
+              entryPrice={signal.price_at_signal}
+            />
+          )}
           <ShareButton
             signalId={signal.id}
             ticker={displayName}

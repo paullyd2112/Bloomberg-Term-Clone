@@ -2,9 +2,13 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
+import Link from "next/link";
+import PushToggle from "@/components/notifications/PushToggle";
+import TelegramConnect from "@/components/notifications/TelegramConnect";
 
 type Experience = "beginner" | "intermediate" | "advanced";
 type AssetPref  = "stocks" | "crypto" | "predictions";
+type NewsletterFreq = "daily" | "weekdays" | "every_other_day" | "weekly" | "weekends";
 
 const EXPERIENCE_OPTIONS: { value: Experience; label: string }[] = [
   { value: "beginner",     label: "Beginner" },
@@ -17,6 +21,14 @@ const ASSET_OPTIONS: { value: AssetPref; label: string }[] = [
   { value: "predictions",  label: "Predictions" },
 ];
 
+const FREQUENCY_OPTIONS: { value: NewsletterFreq; label: string; desc: string }[] = [
+  { value: "daily",          label: "Daily",           desc: "Every morning" },
+  { value: "weekdays",       label: "Weekdays",        desc: "Mon–Fri" },
+  { value: "every_other_day", label: "Every other day", desc: "Alternating days" },
+  { value: "weekly",         label: "Weekly",           desc: "Monday recap" },
+  { value: "weekends",       label: "Weekends",         desc: "Sat & Sun" },
+];
+
 type Props = {
   initialFullName:    string;
   initialPhone:       string;
@@ -24,6 +36,8 @@ type Props = {
   initialAssets:      AssetPref[];
   initialEmailAlerts: boolean;
   initialSmsAlerts:   boolean;
+  initialNewsletterFreq: NewsletterFreq;
+  tier?:              string;
 };
 
 export default function SettingsForm({
@@ -33,13 +47,17 @@ export default function SettingsForm({
   initialAssets,
   initialEmailAlerts,
   initialSmsAlerts,
+  initialNewsletterFreq,
+  tier = "free",
 }: Props) {
+  const isFree = tier === "free";
   const [fullName, setFullName]     = useState(initialFullName);
   const [phone, setPhone]           = useState(initialPhone);
   const [experience, setExperience] = useState<Experience | null>(initialExperience);
   const [assets, setAssets]         = useState<Set<AssetPref>>(new Set(initialAssets));
   const [emailAlerts, setEmailAlerts] = useState(initialEmailAlerts);
   const [smsAlerts, setSmsAlerts]     = useState(initialSmsAlerts);
+  const [newsletterFreq, setNewsletterFreq] = useState<NewsletterFreq>(initialNewsletterFreq);
   const [saving, setSaving]         = useState(false);
   const [status, setStatus]         = useState<"idle" | "saved" | "error">("idle");
 
@@ -56,19 +74,26 @@ export default function SettingsForm({
     setSaving(true);
     setStatus("idle");
     try {
-      const res = await fetch("/api/profile", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          full_name:          fullName.trim(),
-          phone_number:       phone.trim() || null,
-          trading_experience: experience ?? undefined,
-          asset_preferences:  assets.size > 0 ? Array.from(assets) : undefined,
-          email_alerts:       emailAlerts,
-          sms_alerts:         smsAlerts,
+      const [res, freqRes] = await Promise.all([
+        fetch("/api/profile", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({
+            full_name:          fullName.trim(),
+            phone_number:       phone.trim() || null,
+            trading_experience: experience ?? undefined,
+            asset_preferences:  assets.size > 0 ? Array.from(assets) : undefined,
+            email_alerts:       emailAlerts,
+            sms_alerts:         smsAlerts,
+          }),
         }),
-      });
-      if (!res.ok) throw new Error("Failed");
+        fetch("/api/newsletter/frequency", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ frequency: newsletterFreq }),
+        }),
+      ]);
+      if (!res.ok && !freqRes.ok) throw new Error("Failed");
       setStatus("saved");
     } catch {
       setStatus("error");
@@ -157,6 +182,49 @@ export default function SettingsForm({
         </div>
       </div>
 
+      {/* Newsletter frequency */}
+      <div>
+        <label className="block text-xs text-zinc-400 mb-1.5">Newsletter frequency</label>
+        {isFree ? (
+          <div className="space-y-2">
+            <div className="flex gap-2 flex-wrap">
+              <span className="px-3 py-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-white text-sm">
+                Weekly
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-500">
+              Free plan includes a Monday recap.{" "}
+              <Link href="/dashboard/upgrade" className="text-emerald-400 hover:underline">
+                Upgrade
+              </Link>{" "}
+              for daily or custom frequency.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-2 flex-wrap">
+              {FREQUENCY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setNewsletterFreq(opt.value); setStatus("idle"); }}
+                  className={`px-3 py-1.5 rounded-md border text-sm transition-colors ${
+                    newsletterFreq === opt.value
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-white"
+                      : "border-white/[0.1] bg-white/[0.03] text-zinc-400 hover:text-white"
+                  }`}
+                  title={opt.desc}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-zinc-600 mt-1.5">
+              How often you receive the morning brief. Weekly sends a Monday recap.
+            </p>
+          </>
+        )}
+      </div>
+
       {/* Notifications */}
       <div>
         <label className="block text-xs text-zinc-400 mb-1.5">Notifications</label>
@@ -188,6 +256,23 @@ export default function SettingsForm({
         <p className="text-[11px] text-zinc-600 mt-1.5">
           Requires a phone number above. Standard messaging rates may apply.
         </p>
+
+        <div className="mt-4 pt-4 border-t border-white/[0.06] space-y-4">
+          {isFree ? (
+            <div className="text-xs text-zinc-500">
+              Push notifications and Telegram alerts are available on{" "}
+              <Link href="/dashboard/upgrade" className="text-emerald-400 hover:underline">
+                Pro and Elite
+              </Link>{" "}
+              plans.
+            </div>
+          ) : (
+            <>
+              <PushToggle />
+              <TelegramConnect />
+            </>
+          )}
+        </div>
       </div>
 
       {/* Save */}

@@ -50,6 +50,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/screener",        label: "Screener",     icon: Search,     tier: "pro" },
       { href: "/dashboard/portfolio",       label: "Portfolio",    icon: Wallet,     tier: "pro" },
       { href: "/dashboard/performance",     label: "Performance",  icon: TrendingUp, tier: "pro" },
+      { href: "/dashboard/backtest",        label: "Backtest",     icon: ArrowUpRight, tier: "pro" },
       { href: "/dashboard/history",         label: "Pleby Trades", icon: Receipt,    tier: "pro" },
       { href: "/dashboard/alerts",          label: "Alerts",       icon: Bell,       tier: "pro" },
       { href: "/dashboard/prop-calculator", label: "Prop Sizing",  icon: Calculator, tier: "elite" },

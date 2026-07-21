@@ -1635,8 +1635,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Plebs Claude backtest")
     parser.add_argument("--diag", action="store_true",
                         help="Free data-source check only — no Claude calls, no cost")
+    parser.add_argument("--rules", action="store_true",
+                        help="Run deterministic rules-engine backtest ($0 cost, no Claude calls)")
     parser.add_argument("--stocks-only", action="store_true",
                         help="Backtest stocks only (skip crypto)")
+    parser.add_argument("--sparse", action="store_true",
+                        help="Use biweekly sampling instead of daily (rules backtest only)")
     parser.add_argument("--tickers", default="",
                         help="Comma-separated tickers to override the default sample")
     args = parser.parse_args()
@@ -1645,6 +1649,12 @@ if __name__ == "__main__":
 
     if args.diag:
         out = diagnose_stock_sources(override)
+    elif args.rules:
+        out = run_rules_backtest(
+            stocks=override or [],
+            crypto=[] if args.stocks_only else None,
+            dense=not args.sparse,
+        )
     else:
         out = run_claude_backtest(
             stocks=override,
@@ -1656,28 +1666,56 @@ if __name__ == "__main__":
 
 # ─── Rules-engine backtest ($0 cost — no Claude calls) ───────────────────────
 
+# Dense daily sampling: since rules backtest is $0, we sample every trading day
+# instead of biweekly. Start 50 days into DATE_FROM for indicator warmup, end
+# ~20 days before DATE_TO for longterm eval runway.
+def _generate_daily_sample_dates(start: str = DATE_FROM, end: str = DATE_TO,
+                                  warmup_days: int = 55, runway_days: int = 20) -> list[str]:
+    start_dt = pd.Timestamp(start) + pd.Timedelta(days=warmup_days)
+    end_dt = pd.Timestamp(end) - pd.Timedelta(days=runway_days)
+    dates = pd.bdate_range(start_dt, end_dt)
+    return [str(d.date()) for d in dates]
+
+
+def _get_prev_macd_hist(df: pd.DataFrame, row: pd.Series) -> float | None:
+    loc = df.index.get_loc(row.name)
+    loc_idx = loc if isinstance(loc, int) else (loc.start if isinstance(loc, slice) else int(np.argmax(loc)))
+    if loc_idx >= 1:
+        prev_row = df.iloc[loc_idx - 1]
+        if pd.notna(prev_row.get("_macd_hist")):
+            return round(float(prev_row["_macd_hist"]), 4)
+    return None
+
+
 def run_rules_backtest(
     stocks: list[str] | None = None,
     crypto: list[tuple[str, str]] | None = None,
     sample_dates: list[str] | None = None,
     output_dir: str | None = None,
+    dense: bool = True,
 ) -> dict:
     """Backtest the deterministic rules engine against historical data.
     Same data, same evaluation, same gates — but pattern-matching replaces Claude.
-    Cost: $0 (no API calls)."""
+    Cost: $0 (no API calls).
+
+    Args:
+        dense: Use daily sampling instead of biweekly. Default True since $0 cost.
+    """
     from scoring.rules_engine import _score_from_patterns
-    from scoring.validated_factors import classify_indicators
+    from scoring.validated_factors import classify_indicators, VALIDATED_PATTERNS
 
     stocks       = stocks if stocks is not None else []  # crypto-only pivot
     crypto       = CRYPTO_ASSETS if crypto is None else crypto
-    sample_dates = SAMPLE_DATES if sample_dates is None else sample_dates
+    if sample_dates is None:
+        sample_dates = _generate_daily_sample_dates() if dense else SAMPLE_DATES
     output_dir   = output_dir or "/tmp/rules_backtest"
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     results: list[ClaudeSignalResult] = []
+    pattern_tracker: dict[str, dict] = {}
 
-    logger.info("[rules_backtest] Starting — {} stocks, {} crypto, {} sample dates",
-                len(stocks), len(crypto), len(sample_dates))
+    logger.info("[rules_backtest] Starting — {} stocks, {} crypto, {} sample dates (dense={})",
+                len(stocks), len(crypto), len(sample_dates), dense)
 
     # ── Stocks ───────────────────────────────────────────────────────────────
     stock_data: dict[str, pd.DataFrame] = {}
@@ -1720,14 +1758,10 @@ def run_rules_backtest(
     rvol_filtered = 0
     high_beta_rvol_filtered = 0
     high_beta_sector_filtered = 0
-    spy_1h_filtered = 0
     daily_cap_filtered = 0
     breadth_filtered = 0
-
-    spy_sma5: pd.Series | None = None
-    spy_df = benchmark_data.get("SPY")
-    if spy_df is not None and "close" in spy_df.columns:
-        spy_sma5 = spy_df["close"].rolling(5).mean()
+    circuit_breaker_filtered = 0
+    conviction_filtered = 0
 
     STOCK_RVOL_MINIMUM = 1.5
     HIGH_BETA_RVOL_MINIMUM = 2.5
@@ -1755,26 +1789,48 @@ def run_rules_backtest(
                 row = df.iloc[idx]
                 context = _build_stock_context(ticker, row, df, _get_benchmarks_for_date(date_str))
                 meta = context["technical_indicators"]
+                # Fix: add prev_macd_hist for stock pattern matching (was missing)
+                if meta.get("prev_macd_hist") is None:
+                    prev_mh = _get_prev_macd_hist(df, row)
+                    if prev_mh is not None:
+                        meta["prev_macd_hist"] = prev_mh
                 benchmarks = _get_benchmarks_for_date(date_str)
                 entry_price = float(row["close"])
 
-                # SPY 1h SMA-20 gate REMOVED (was too aggressive)
-
-                # Score using rules engine
                 signal = _score_from_patterns(meta, "stock")
 
-                # Apply SPY regime gate
+                # Track matched patterns for analytics
+                for pid in signal.get("matched_buy", []) + signal.get("matched_sell", []):
+                    if pid not in pattern_tracker:
+                        pattern_tracker[pid] = {"signals": 0, "wins": 0, "losses": 0, "neutral": 0, "holds": 0, "returns": []}
+
+                # Conviction floor
+                if signal["direction"] != "HOLD" and signal["confidence"] < CONVICTION_FLOOR:
+                    signal["direction"] = "HOLD"
+                    conviction_filtered += 1
+
+                # Circuit breaker
+                change_1d = context.get("change_24h")
+                if change_1d is not None:
+                    try:
+                        cf = float(change_1d)
+                        if cf >= 8.0 and signal["direction"] == "SELL":
+                            signal["direction"] = "HOLD"
+                            circuit_breaker_filtered += 1
+                        elif cf <= -8.0 and signal["direction"] == "BUY":
+                            signal["direction"] = "HOLD"
+                            circuit_breaker_filtered += 1
+                    except (TypeError, ValueError):
+                        pass
+
+                # SPY regime gate
                 spy_vs_sma50 = benchmarks.get("SPY", {}).get("vs_sma50_pct")
                 if spy_vs_sma50 is not None:
                     if spy_vs_sma50 < -2 and signal["direction"] == "BUY":
                         signal["direction"] = "HOLD"
-                        signal["confidence"] = min(signal["confidence"], 45)
-                        signal["reasoning"] = f"[Regime gate] SPY {spy_vs_sma50:.1f}% below SMA-50. " + signal["reasoning"]
                         regime_filtered += 1
                     elif spy_vs_sma50 > 5 and signal["direction"] == "SELL":
                         signal["direction"] = "HOLD"
-                        signal["confidence"] = min(signal["confidence"], 45)
-                        signal["reasoning"] = f"[Regime gate] SPY {spy_vs_sma50:.1f}% above SMA-50. " + signal["reasoning"]
                         regime_filtered += 1
 
                 # RVOL gate
@@ -1784,7 +1840,6 @@ def run_rules_backtest(
                     vr = meta.get("volume_ratio")
                     if vr is not None and float(vr) < rvol_min:
                         signal["direction"] = "HOLD"
-                        signal["confidence"] = min(signal["confidence"], 40)
                         if is_hb:
                             high_beta_rvol_filtered += 1
                         else:
@@ -1795,7 +1850,6 @@ def run_rules_backtest(
                     qqq_chg = benchmarks.get("QQQ", {}).get("change_24h")
                     if qqq_chg is not None and float(qqq_chg) < 0:
                         signal["direction"] = "HOLD"
-                        signal["confidence"] = min(signal["confidence"], 35)
                         high_beta_sector_filtered += 1
 
                 # Breadth gate
@@ -1805,7 +1859,6 @@ def run_rules_backtest(
                         breadth_by_date[date_str] = breadth_by_date.get(date_str, 0) + 1
                         if breadth_by_date[date_str] > MAX_EXTENDED_BUYS_PER_RUN:
                             signal["direction"] = "HOLD"
-                            signal["confidence"] = min(signal["confidence"], 45)
                             breadth_filtered += 1
 
                 # Daily cap
@@ -1813,20 +1866,18 @@ def run_rules_backtest(
                     signals_by_date[date_str] = signals_by_date.get(date_str, 0) + 1
                     if signals_by_date[date_str] > MAX_STOCK_SIGNALS_PER_DAY:
                         signal["direction"] = "HOLD"
-                        signal["confidence"] = min(signal["confidence"], 40)
                         daily_cap_filtered += 1
 
-                # Circuit breaker
-                change_1d = meta.get("change_24h") or context.get("change_24h")
-                if change_1d is not None:
-                    try:
-                        cf = float(change_1d)
-                        if cf >= 8.0 and signal["direction"] == "SELL":
-                            signal["direction"] = "HOLD"
-                        elif cf <= -8.0 and signal["direction"] == "BUY":
-                            signal["direction"] = "HOLD"
-                    except (TypeError, ValueError):
-                        pass
+                # Position sizing
+                sl_tp = {"intraday": (3.0, 6.0), "swing": (7.0, 16.0), "longterm": (10.0, 25.0)}
+                sl_pct, tp_pct = sl_tp.get(signal.get("time_horizon", "swing"), (7.0, 16.0))
+                weight = 1.0
+                if signal["confidence"] >= 75:
+                    weight = 1.5
+                    tp_pct *= 1.5
+                    sl_pct *= 1.2
+                elif signal["confidence"] >= 68:
+                    weight = 1.25
 
                 stock_scored += 1
                 result = ClaudeSignalResult(
@@ -1838,12 +1889,32 @@ def run_rules_backtest(
                     time_horizon=signal.get("time_horizon", "swing"),
                     reasoning=signal["reasoning"],
                     entry_price=entry_price,
+                    stop_loss_pct=sl_pct,
+                    take_profit_pct=tp_pct,
+                    position_weight=weight,
                     rsi=float(meta.get("rsi_14")) if meta.get("rsi_14") is not None else None,
                     macd_hist=float(meta.get("macd_hist")) if meta.get("macd_hist") is not None else None,
                     volume_ratio=float(meta.get("volume_ratio")) if meta.get("volume_ratio") is not None else None,
+                    change_24h=float(context.get("change_24h")) if context.get("change_24h") is not None else None,
                 )
 
                 result = _evaluate_claude_signal(result, df, idx)
+
+                # Track pattern outcomes
+                for pid in signal.get("matched_buy", []) + signal.get("matched_sell", []):
+                    pt = pattern_tracker[pid]
+                    pt["signals"] += 1
+                    if result.outcome == "WIN":
+                        pt["wins"] += 1
+                    elif result.outcome == "LOSS":
+                        pt["losses"] += 1
+                    elif result.outcome == "NEUTRAL":
+                        pt["neutral"] += 1
+                    elif result.direction == "HOLD":
+                        pt["holds"] += 1
+                    if result.return_pct is not None and result.direction != "HOLD":
+                        pt["returns"].append(result.return_pct)
+
                 results.append(result)
                 stock_appended += 1
 
@@ -1863,7 +1934,7 @@ def run_rules_backtest(
     # ── Crypto ───────────────────────────────────────────────────────────────
     crypto_data: dict[str, pd.DataFrame] = {}
     crypto_hl: dict[str, pd.DataFrame] = {}
-    fg_history = _fetch_fear_greed_history()
+    fg_history = _fetch_fear_greed_history() if crypto else {}
 
     for sym, cg_id in crypto:
         logger.info("[rules_backtest] Fetching crypto data: {}", sym)
@@ -1883,6 +1954,10 @@ def run_rules_backtest(
 
     btc_df = crypto_data.get("BTC")
     btc_gated = 0
+    crypto_correlation_gated = 0
+    CRYPTO_MAJORS = {"BTC", "ETH"}
+    MAX_CONCURRENT_CRYPTO_BUYS = 2
+    open_crypto_buys_by_date: dict[str, list[str]] = {}
 
     for sym, cg_id in crypto:
         if sym not in crypto_data:
@@ -1900,33 +1975,74 @@ def run_rules_backtest(
                 fg = _lookup_fear_greed(fg_history, date_str)
                 context = _build_crypto_context(sym, row, fg)
                 meta = context["technical_indicators"]
-                # Add prev_macd_hist for pattern matching
-                loc = df.index.get_loc(row.name)
-                loc_idx = loc if isinstance(loc, int) else (loc.start if isinstance(loc, slice) else int(np.argmax(loc)))
-                if loc_idx >= 1:
-                    prev_row = df.iloc[loc_idx - 1]
-                    if pd.notna(prev_row.get("_macd_hist")):
-                        meta["prev_macd_hist"] = round(float(prev_row["_macd_hist"]), 4)
-                # Add price_vs_sma50_pct for pattern matching
+                prev_mh = _get_prev_macd_hist(df, row)
+                if prev_mh is not None:
+                    meta["prev_macd_hist"] = prev_mh
                 if pd.notna(row.get("price_vs_sma50")):
                     meta["price_vs_sma50_pct"] = round(float(row["price_vs_sma50"]), 2)
                 entry_price = float(row["close"])
 
-                # Score using rules engine
                 signal = _score_from_patterns(meta, "crypto")
 
+                for pid in signal.get("matched_buy", []) + signal.get("matched_sell", []):
+                    if pid not in pattern_tracker:
+                        pattern_tracker[pid] = {"signals": 0, "wins": 0, "losses": 0, "neutral": 0, "holds": 0, "returns": []}
+
+                # Conviction floor
+                if signal["direction"] != "HOLD" and signal["confidence"] < CONVICTION_FLOOR:
+                    signal["direction"] = "HOLD"
+                    conviction_filtered += 1
+
+                # Circuit breaker
+                change_1d = context.get("change_24h")
+                if change_1d is not None:
+                    try:
+                        cf = float(change_1d)
+                        if cf >= 8.0 and signal["direction"] == "SELL":
+                            signal["direction"] = "HOLD"
+                            circuit_breaker_filtered += 1
+                        elif cf <= -8.0 and signal["direction"] == "BUY":
+                            signal["direction"] = "HOLD"
+                            circuit_breaker_filtered += 1
+                    except (TypeError, ValueError):
+                        pass
+
                 # BTC regime gate
-                if sym != "BTC" and btc_df is not None:
+                if sym != "BTC" and btc_df is not None and signal["direction"] == "BUY":
                     btc_idx = btc_df.index.get_indexer([target], method="ffill")[0]
                     if btc_idx >= 1:
                         btc_hist = btc_df.iloc[btc_idx].get("_macd_hist")
                         btc_prev = btc_df.iloc[btc_idx - 1].get("_macd_hist")
                         if (pd.notna(btc_hist) and pd.notna(btc_prev)
-                                and float(btc_hist) < 0 and float(btc_hist) < float(btc_prev)
-                                and signal["direction"] == "BUY"):
+                                and float(btc_hist) < 0 and float(btc_hist) < float(btc_prev)):
                             signal["direction"] = "HOLD"
                             signal["confidence"] = min(signal["confidence"], 45)
                             btc_gated += 1
+
+                # Crypto correlation cap (max 2 concurrent buys, max 1 alt with major)
+                if signal["direction"] == "BUY":
+                    open_buys = open_crypto_buys_by_date.get(date_str, [])
+                    if len(open_buys) >= MAX_CONCURRENT_CRYPTO_BUYS:
+                        signal["direction"] = "HOLD"
+                        signal["confidence"] = min(signal["confidence"], 40)
+                        crypto_correlation_gated += 1
+                    elif sym not in CRYPTO_MAJORS and any(s in CRYPTO_MAJORS for s in open_buys):
+                        alt_count = sum(1 for s in open_buys if s not in CRYPTO_MAJORS)
+                        if alt_count >= 1:
+                            signal["direction"] = "HOLD"
+                            signal["confidence"] = min(signal["confidence"], 40)
+                            crypto_correlation_gated += 1
+
+                if signal["direction"] == "BUY":
+                    open_crypto_buys_by_date.setdefault(date_str, []).append(sym)
+
+                # Position sizing for crypto
+                sl_pct, tp_pct = 6.0, 12.0
+                weight = 1.0
+                if signal["confidence"] >= 75:
+                    weight = 1.5
+                elif signal["confidence"] >= 68:
+                    weight = 1.25
 
                 result = ClaudeSignalResult(
                     ticker=sym,
@@ -1937,11 +2053,31 @@ def run_rules_backtest(
                     time_horizon=signal.get("time_horizon", "swing"),
                     reasoning=signal["reasoning"],
                     entry_price=entry_price,
+                    stop_loss_pct=sl_pct,
+                    take_profit_pct=tp_pct,
+                    position_weight=weight,
                     rsi=float(meta.get("rsi_14")) if meta.get("rsi_14") is not None else None,
                     macd_hist=float(meta.get("macd_hist")) if meta.get("macd_hist") is not None else None,
+                    volume_ratio=float(meta.get("volume_ratio")) if meta.get("volume_ratio") is not None else None,
+                    change_24h=float(context.get("change_24h")) if context.get("change_24h") is not None else None,
                 )
 
                 result = _evaluate_claude_signal(result, df, idx, hl_df=hl_df)
+
+                for pid in signal.get("matched_buy", []) + signal.get("matched_sell", []):
+                    pt = pattern_tracker[pid]
+                    pt["signals"] += 1
+                    if result.outcome == "WIN":
+                        pt["wins"] += 1
+                    elif result.outcome == "LOSS":
+                        pt["losses"] += 1
+                    elif result.outcome == "NEUTRAL":
+                        pt["neutral"] += 1
+                    elif result.direction == "HOLD":
+                        pt["holds"] += 1
+                    if result.return_pct is not None and result.direction != "HOLD":
+                        pt["returns"].append(result.return_pct)
+
                 results.append(result)
 
             except Exception as e:
@@ -1952,6 +2088,64 @@ def run_rules_backtest(
     agg["backtest_type"] = "rules_engine"
     agg["model"] = "none (deterministic)"
     agg["api_cost_estimate"] = "$0.00"
+    agg["dense_sampling"] = dense
+    agg["sample_count"] = len(sample_dates)
+
+    # Per-pattern analytics
+    pattern_analytics = {}
+    for pid, pt in sorted(pattern_tracker.items(), key=lambda x: x[1]["signals"], reverse=True):
+        decided = pt["wins"] + pt["losses"]
+        win_rate = round(pt["wins"] / decided * 100, 1) if decided else None
+        avg_ret = round(float(np.mean(pt["returns"])), 2) if pt["returns"] else None
+        pattern_analytics[pid] = {
+            "signals": pt["signals"],
+            "wins": pt["wins"],
+            "losses": pt["losses"],
+            "neutral": pt["neutral"],
+            "holds": pt["holds"],
+            "win_rate": win_rate,
+            "avg_return_pct": avg_ret,
+            "decided": decided,
+        }
+    agg["pattern_analytics"] = pattern_analytics
+
+    # Per-coin breakdown
+    coin_analytics: dict[str, dict] = {}
+    for r in results:
+        if r.ticker not in coin_analytics:
+            coin_analytics[r.ticker] = {"signals": 0, "buys": 0, "sells": 0, "holds": 0,
+                                         "wins": 0, "losses": 0, "neutral": 0, "returns": []}
+        ca = coin_analytics[r.ticker]
+        ca["signals"] += 1
+        if r.direction == "BUY":
+            ca["buys"] += 1
+        elif r.direction == "SELL":
+            ca["sells"] += 1
+        else:
+            ca["holds"] += 1
+        if r.outcome == "WIN":
+            ca["wins"] += 1
+        elif r.outcome == "LOSS":
+            ca["losses"] += 1
+        elif r.outcome == "NEUTRAL":
+            ca["neutral"] += 1
+        if r.return_pct is not None and r.direction != "HOLD":
+            ca["returns"].append(r.return_pct)
+
+    per_coin = {}
+    for coin, ca in sorted(coin_analytics.items(), key=lambda x: x[1]["signals"], reverse=True):
+        decided = ca["wins"] + ca["losses"]
+        per_coin[coin] = {
+            "signals": ca["signals"],
+            "buys": ca["buys"],
+            "sells": ca["sells"],
+            "holds": ca["holds"],
+            "decided": decided,
+            "win_rate": round(ca["wins"] / decided * 100, 1) if decided else None,
+            "avg_return_pct": round(float(np.mean(ca["returns"])), 2) if ca["returns"] else None,
+        }
+    agg["per_coin"] = per_coin
+
     agg["stock_diagnostics"] = {
         "tickers_loaded": len(stock_data),
         "ticker_list": list(stock_data.keys()),
@@ -1961,14 +2155,20 @@ def run_rules_backtest(
         "error_samples": stock_error_samples,
     }
     agg["filters"] = {
+        "conviction_floor_suppressed": conviction_filtered,
+        "circuit_breaker_suppressed": circuit_breaker_filtered,
         "spy_regime_suppressed": regime_filtered,
-        "spy_1h_sma20_suppressed": spy_1h_filtered,
         "rvol_suppressed": rvol_filtered,
         "high_beta_rvol_suppressed": high_beta_rvol_filtered,
         "high_beta_sector_suppressed": high_beta_sector_filtered,
         "daily_cap_suppressed": daily_cap_filtered,
         "breadth_suppressed": breadth_filtered,
         "btc_regime_suppressed": btc_gated,
+        "crypto_correlation_suppressed": crypto_correlation_gated,
+    }
+    agg["crypto_real_candles"] = {
+        "symbols_with_real_ohlc": sorted(crypto_hl.keys()),
+        "count": len(crypto_hl),
     }
 
     json_path = str(Path(output_dir) / "rules_backtest_results.json")
@@ -1976,5 +2176,6 @@ def run_rules_backtest(
         json.dump(agg, f, indent=2, default=str)
     agg["json_path"] = json_path
 
-    logger.info("[rules_backtest] Complete — {} signals, $0 API cost", len(results))
+    logger.info("[rules_backtest] Complete — {} signals, {} sample dates, $0 API cost",
+                len(results), len(sample_dates))
     return agg

@@ -952,6 +952,81 @@ def send_newsletter_now():
     return jsonify({"status": "ok", "result": result})
 
 
+@app.route("/telegram/webhook", methods=["POST"])
+def telegram_webhook():
+    """Handle incoming Telegram bot messages (set via Bot API setWebhook)."""
+    from flask import request as flask_request
+    import secrets
+
+    data = flask_request.get_json(silent=True) or {}
+    message = data.get("message", {})
+    text = (message.get("text") or "").strip()
+    chat_id = str(message.get("chat", {}).get("id", ""))
+    username = message.get("from", {}).get("username", "")
+
+    if not chat_id:
+        return jsonify({"ok": True})
+
+    from notifications.telegram import _send_message
+
+    if text.startswith("/start"):
+        parts = text.split(maxsplit=1)
+        if len(parts) == 2:
+            link_code = parts[1].strip()
+            try:
+                result = (
+                    supabase.table("profiles")
+                    .select("id")
+                    .eq("telegram_link_code", link_code)
+                    .limit(1)
+                    .execute()
+                )
+                if result.data:
+                    supabase.table("profiles").update({
+                        "telegram_chat_id": chat_id,
+                        "telegram_link_code": None,
+                    }).eq("id", result.data[0]["id"]).execute()
+                    _send_message(chat_id, "✅ <b>Linked!</b> You'll now get instant signal alerts here.\n\nType /stop to unlink.")
+                else:
+                    _send_message(chat_id, "❌ Invalid or expired link code. Generate a new one from Settings on plebs.finance.")
+            except Exception as e:
+                logger.error("telegram webhook: link failed — {}", e)
+                _send_message(chat_id, "Something went wrong. Try again in a moment.")
+        else:
+            _send_message(chat_id, "👋 <b>Plebs.finance Signal Bot</b>\n\nTo link your account, go to Settings on plebs.finance and click \"Connect Telegram\". You'll get a link to tap that connects automatically.")
+        return jsonify({"ok": True})
+
+    if text == "/stop":
+        try:
+            supabase.table("profiles").update({
+                "telegram_chat_id": None,
+            }).eq("telegram_chat_id", chat_id).execute()
+            _send_message(chat_id, "🔕 Unlinked. You won't receive alerts here anymore.\n\nType /start to reconnect anytime.")
+        except Exception as e:
+            logger.error("telegram webhook: unlink failed — {}", e)
+        return jsonify({"ok": True})
+
+    if text == "/status":
+        try:
+            result = (
+                supabase.table("profiles")
+                .select("id")
+                .eq("telegram_chat_id", chat_id)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                _send_message(chat_id, "✅ Your Telegram is linked and active. Signals will arrive here instantly.")
+            else:
+                _send_message(chat_id, "❌ Not linked. Go to Settings on plebs.finance to connect.")
+        except Exception:
+            pass
+        return jsonify({"ok": True})
+
+    _send_message(chat_id, "Commands:\n/start — Link your Plebs account\n/stop — Unlink\n/status — Check connection")
+    return jsonify({"ok": True})
+
+
 @app.route("/health")
 def health():
     from supabase_client import supabase
@@ -1288,6 +1363,9 @@ def run_rules_backtest_endpoint():
     body = flask_request.get_json(silent=True) or {}
     output_dir = str(body.get("output_dir", "/tmp/rules_backtest"))
     stocks_only = bool(body.get("stocks_only", False)) or flask_request.args.get("stocks_only") == "true"
+    dense = body.get("dense", True)
+    if flask_request.args.get("sparse") == "true":
+        dense = False
 
     def _run():
         import traceback
@@ -1295,25 +1373,33 @@ def run_rules_backtest_endpoint():
             "status": "running",
             "started_at": datetime.now(timezone.utc).isoformat(),
             "mode": "stocks_only" if stocks_only else "full",
+            "dense": dense,
         }
         try:
             crypto_list = [] if stocks_only else None
-            agg = run_rules_backtest(output_dir=output_dir, crypto=crypto_list)
+            agg = run_rules_backtest(output_dir=output_dir, crypto=crypto_list, dense=dense)
             _job_state["rules_backtest"] = {
                 "last_run": datetime.now(timezone.utc).isoformat(),
                 "status": "ok",
                 "summary": {
-                    "total_signals": agg.get("total_signals", 0),
-                    "win_rate":      agg.get("win_rate", 0),
-                    "avg_return":    agg.get("avg_return_pct", 0),
-                    "profit_factor": agg.get("profit_factor", 0),
-                    "stocks":        agg.get("by_asset_class", {}).get("stocks", {}),
-                    "crypto":        agg.get("by_asset_class", {}).get("crypto", {}),
-                    "portfolio_sim": agg.get("portfolio_sim", {}),
-                    "filters":       agg.get("filters", {}),
-                    "api_cost":      "$0.00",
+                    "total_signals":    agg.get("total_signals", 0),
+                    "actionable":       agg.get("actionable", 0),
+                    "win_rate":         agg.get("win_rate", 0),
+                    "avg_return":       agg.get("avg_return_pct", 0),
+                    "profit_factor":    agg.get("profit_factor", 0),
+                    "avg_win_pct":      agg.get("avg_win_pct", 0),
+                    "avg_loss_pct":     agg.get("avg_loss_pct", 0),
+                    "dense_sampling":   agg.get("dense_sampling", False),
+                    "sample_count":     agg.get("sample_count", 0),
+                    "stocks":           agg.get("by_asset_class", {}).get("stocks", {}),
+                    "crypto":           agg.get("by_asset_class", {}).get("crypto", {}),
+                    "portfolio_sim":    agg.get("portfolio_sim", {}),
+                    "filters":          agg.get("filters", {}),
+                    "api_cost":         "$0.00",
                 },
-                "signals": agg.get("signals", []),
+                "pattern_analytics": agg.get("pattern_analytics", {}),
+                "per_coin":          agg.get("per_coin", {}),
+                "signals":           agg.get("signals", []),
                 "stock_diagnostics": agg.get("stock_diagnostics"),
             }
         except Exception as e:

@@ -74,7 +74,21 @@ function calcStats(positions: Position[]) {
   return { open: open.length, closed: closed.length, unrealized, realized, winCount, lossCount };
 }
 
-export default async function PortfolioPage() {
+export default async function PortfolioPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const tradeDefaults = params.asset_type
+    ? {
+        asset_type:  String(params.asset_type),
+        identifier:  String(params.identifier ?? ""),
+        direction:   String(params.direction ?? "LONG"),
+        entry_price: String(params.entry_price ?? ""),
+      }
+    : undefined;
+
   const user = await getUser();
   const tier = await getUserTier();
 
@@ -123,7 +137,7 @@ export default async function PortfolioPage() {
             <span className="tabular-nums text-zinc-300">{stats.closed}</span> closed
           </p>
         </div>
-        <AddPositionModal />
+        <AddPositionModal defaults={tradeDefaults} autoOpen={!!tradeDefaults} />
       </div>
 
       {/* Stats */}
