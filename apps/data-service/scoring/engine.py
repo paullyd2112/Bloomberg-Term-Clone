@@ -1117,30 +1117,18 @@ def score_asset(
     # behind it" bug as SPY above. The crypto prompt's HARD GATE tells the
     # model to check BTC's MACD, but nothing fetched BTC's indicators for
     # alt-coin scoring until now. Code-enforce it, don't just describe it.
-    if asset_type == "crypto" and identifier != "BTC" and btc_regime and signal.direction == "BUY":
-        if btc_regime.get("bearish"):
-            logger.warning(
-                "{}/{}: BTC regime gate (hard) — BTC MACD deeply bearish, downgrading BUY to HOLD",
-                asset_type, identifier,
-            )
-            signal.direction  = "HOLD"
-            signal.confidence = min(signal.confidence, 45)
-            signal.reasoning  = (
-                f"[BTC regime gate] BTC's MACD histogram is deeply negative and accelerating — alts follow BTC down. "
-                f"Suppressing a BUY on {identifier}-specific strength alone. "
-                + signal.reasoning
-            )
-        elif btc_regime.get("cautious"):
-            penalty = min(signal.confidence, signal.confidence - 5)
-            logger.info(
-                "{}/{}: BTC regime cautious — BTC MACD mildly bearish, -5 confidence ({} → {})",
-                asset_type, identifier, signal.confidence, penalty,
-            )
-            signal.confidence = penalty
-            signal.reasoning  = (
-                f"[BTC caution] BTC MACD mildly negative — slight headwind for alts. "
-                + signal.reasoning
-            )
+    if asset_type == "crypto" and identifier != "BTC" and btc_regime and btc_regime.get("bearish") and signal.direction == "BUY":
+        logger.warning(
+            "{}/{}: BTC regime gate — BTC MACD bearish/deepening, downgrading BUY to HOLD",
+            asset_type, identifier,
+        )
+        signal.direction  = "HOLD"
+        signal.confidence = min(signal.confidence, 45)
+        signal.reasoning  = (
+            f"[BTC regime gate] BTC's MACD histogram is negative and deepening — alts follow BTC down. "
+            f"Suppressing a BUY on {identifier}-specific strength alone. "
+            + signal.reasoning
+        )
 
     # Crypto concurrent-position + correlation cap — the portfolio-level guard
     # the stock breadth cap provides, ported to crypto (which needs it MORE:
@@ -1709,9 +1697,9 @@ def score_crypto(subscription: str | None = None) -> str:
     benchmarks   = _get_market_benchmark()
     macro_events = _get_upcoming_macro(days=2)
 
-    # BTC regime — computed once per run. "bearish" = hard block (histogram
-    # deeply negative AND accelerating). "cautious" = mild negative/deepening
-    # that downgrades confidence but doesn't block.
+    # BTC regime — computed once per run from the same rows already fetched
+    # above, so alt-coin scoring can actually see (and gate on) it instead
+    # of the prompt's HARD GATE checking data that was never provided.
     btc_regime: dict | None = None
     btc_row = next((r for r in rows if r["identifier"] == "BTC"), None)
     if btc_row:
@@ -1719,20 +1707,10 @@ def score_crypto(subscription: str | None = None) -> str:
         hist      = btc_meta.get("macd_hist")
         prev_hist = btc_meta.get("prev_macd_hist")
         try:
-            h, ph = float(hist), float(prev_hist)
-            negative_and_deepening = h < 0 and h < ph
-            bearish = negative_and_deepening and h < ph * 1.05  # accelerating, not just drifting
-            # Only hard-block on strong downtrends — histogram magnitude matters.
-            # Mild negative (> -50) with slight deepening is normal consolidation.
-            bearish = bearish and abs(h) > 50
+            bearish = hist is not None and prev_hist is not None and float(hist) < 0 and float(hist) < float(prev_hist)
         except (TypeError, ValueError):
             bearish = False
-            negative_and_deepening = False
-        btc_regime = {
-            "macd_hist": hist, "prev_macd_hist": prev_hist,
-            "bearish": bearish,
-            "cautious": negative_and_deepening and not bearish,
-        }
+        btc_regime = {"macd_hist": hist, "prev_macd_hist": prev_hist, "bearish": bearish}
 
     # Escalating daily cap — first CRYPTO_SOFT_CAP signals pass at the base
     # confidence floor (60%), then the bar rises progressively. Hard ceiling
