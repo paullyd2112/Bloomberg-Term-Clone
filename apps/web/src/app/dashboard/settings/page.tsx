@@ -116,6 +116,7 @@ export default async function SettingsPage() {
         initialEmailAlerts={emailAlerts}
         initialSmsAlerts={smsAlerts}
         initialNewsletterFreq={newsletterFreq}
+        tier={tier}
       />
 
       <p className="text-zinc-600 text-xs">

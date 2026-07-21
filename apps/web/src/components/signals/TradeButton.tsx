@@ -10,7 +10,12 @@ type Props = {
 };
 
 export default function TradeButton({ assetType, identifier, direction, entryPrice }: Props) {
-  const dir = direction === "BUY" || direction === "YES" ? "LONG" : "SHORT";
+  const isPrediction = assetType === "prediction";
+
+  const dir = isPrediction
+    ? direction === "YES" || direction === "BUY" ? "YES" : "NO"
+    : direction === "BUY" || direction === "YES" ? "LONG" : "SHORT";
+
   const params = new URLSearchParams({
     asset_type: assetType,
     identifier,
@@ -22,9 +27,9 @@ export default function TradeButton({ assetType, identifier, direction, entryPri
     <Link
       href={`/dashboard/portfolio?${params}`}
       className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded transition-colors"
-      title="Take this trade"
+      title={isPrediction ? `Take ${dir} position` : "Take this trade"}
     >
-      Trade
+      {isPrediction ? dir : "Trade"}
     </Link>
   );
 }

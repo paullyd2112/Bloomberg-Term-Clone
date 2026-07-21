@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
+import Link from "next/link";
 import PushToggle from "@/components/notifications/PushToggle";
 import TelegramConnect from "@/components/notifications/TelegramConnect";
 
@@ -36,6 +37,7 @@ type Props = {
   initialEmailAlerts: boolean;
   initialSmsAlerts:   boolean;
   initialNewsletterFreq: NewsletterFreq;
+  tier?:              string;
 };
 
 export default function SettingsForm({
@@ -46,7 +48,9 @@ export default function SettingsForm({
   initialEmailAlerts,
   initialSmsAlerts,
   initialNewsletterFreq,
+  tier = "free",
 }: Props) {
+  const isFree = tier === "free";
   const [fullName, setFullName]     = useState(initialFullName);
   const [phone, setPhone]           = useState(initialPhone);
   const [experience, setExperience] = useState<Experience | null>(initialExperience);
@@ -181,25 +185,44 @@ export default function SettingsForm({
       {/* Newsletter frequency */}
       <div>
         <label className="block text-xs text-zinc-400 mb-1.5">Newsletter frequency</label>
-        <div className="flex gap-2 flex-wrap">
-          {FREQUENCY_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => { setNewsletterFreq(opt.value); setStatus("idle"); }}
-              className={`px-3 py-1.5 rounded-md border text-sm transition-colors ${
-                newsletterFreq === opt.value
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-white"
-                  : "border-white/[0.1] bg-white/[0.03] text-zinc-400 hover:text-white"
-              }`}
-              title={opt.desc}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-        <p className="text-[11px] text-zinc-600 mt-1.5">
-          How often you receive the morning brief. Weekly sends a Monday recap.
-        </p>
+        {isFree ? (
+          <div className="space-y-2">
+            <div className="flex gap-2 flex-wrap">
+              <span className="px-3 py-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-white text-sm">
+                Weekly
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-500">
+              Free plan includes a Monday recap.{" "}
+              <Link href="/dashboard/upgrade" className="text-emerald-400 hover:underline">
+                Upgrade
+              </Link>{" "}
+              for daily or custom frequency.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-2 flex-wrap">
+              {FREQUENCY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setNewsletterFreq(opt.value); setStatus("idle"); }}
+                  className={`px-3 py-1.5 rounded-md border text-sm transition-colors ${
+                    newsletterFreq === opt.value
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-white"
+                      : "border-white/[0.1] bg-white/[0.03] text-zinc-400 hover:text-white"
+                  }`}
+                  title={opt.desc}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-zinc-600 mt-1.5">
+              How often you receive the morning brief. Weekly sends a Monday recap.
+            </p>
+          </>
+        )}
       </div>
 
       {/* Notifications */}
@@ -235,8 +258,20 @@ export default function SettingsForm({
         </p>
 
         <div className="mt-4 pt-4 border-t border-white/[0.06] space-y-4">
-          <PushToggle />
-          <TelegramConnect />
+          {isFree ? (
+            <div className="text-xs text-zinc-500">
+              Push notifications and Telegram alerts are available on{" "}
+              <Link href="/dashboard/upgrade" className="text-emerald-400 hover:underline">
+                Pro and Elite
+              </Link>{" "}
+              plans.
+            </div>
+          ) : (
+            <>
+              <PushToggle />
+              <TelegramConnect />
+            </>
+          )}
         </div>
       </div>
 

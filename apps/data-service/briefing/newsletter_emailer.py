@@ -508,6 +508,9 @@ def send_newsletter() -> str:
         user_id = sub.get("user_id")
         frequency = sub.get("newsletter_frequency", "daily")
 
+        if tier == "free":
+            frequency = "weekly"
+
         if not email:
             continue
 

@@ -3,9 +3,11 @@ import Link from "next/link";
 import { Activity, Clock, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUserTierAndProfile } from "@/lib/user";
+import { applyFreeDelay, applyFreeLimit, FREE_TIER_SIGNAL_LIMIT, FREE_TIER_DELAY_HOURS } from "@/lib/tier";
 import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
 import SubscribeGate from "@/components/ui/SubscribeGate";
+import FreeSignalGate from "@/components/ui/FreeSignalGate";
 import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
 import WhaleSentinel from "@/components/WhaleSentinel";
 import SectionHeader from "@/components/ui/SectionHeader";
@@ -292,7 +294,18 @@ export default async function DashboardPage() {
       {/* Signal feed — the product, front and center */}
       <section>
         <SectionHeader primary divider className="mb-4">Latest Signals</SectionHeader>
-        <SignalFeed signals={signals} />
+        {tier === "free" ? (
+          <>
+            <SignalFeed signals={applyFreeLimit(applyFreeDelay(signals) as Signal[])} hideTrade />
+            <FreeSignalGate
+              delayHours={FREE_TIER_DELAY_HOURS}
+              dailyLimit={FREE_TIER_SIGNAL_LIMIT}
+              totalAvailable={signals.length}
+            />
+          </>
+        ) : (
+          <SignalFeed signals={signals} />
+        )}
       </section>
 
       {/* Market Pulse — movers, whales, reddit in a tabbed container */}
