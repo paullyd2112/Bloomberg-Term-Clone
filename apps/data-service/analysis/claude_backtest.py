@@ -746,8 +746,8 @@ def _spy_regime_bullish(benchmark_data: dict, date_str: str) -> bool:
 
 
 def _btc_regime_bearish(crypto_data: dict, date_str: str) -> bool:
-    """Return True if BTC MACD histogram is negative and deepening — bearish regime.
-    Used to gate alt-crypto longs."""
+    """Return True only for STRONG BTC downtrends — histogram deeply negative
+    (abs > 50) and accelerating. Mild negative/deepening is 'cautious', not blocking."""
     btc_df = crypto_data.get("BTC")
     if btc_df is None:
         return False
@@ -761,7 +761,8 @@ def _btc_regime_bearish(crypto_data: dict, date_str: str) -> bool:
     prev_hist = prev.get("_macd_hist")
     if pd.isna(hist) or pd.isna(prev_hist):
         return False
-    return float(hist) < 0 and float(hist) < float(prev_hist)
+    h, ph = float(hist), float(prev_hist)
+    return h < 0 and h < ph * 1.05 and abs(h) > 50
 
 
 # ─── Core: call Claude on a historical data point ───────────────────────────
