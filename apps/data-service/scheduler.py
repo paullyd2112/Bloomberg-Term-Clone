@@ -830,7 +830,20 @@ def diag_crypto_indicators():
             "rows_5d_with_indicators": ind_count,
         }
     fg = _get_fear_greed()
-    return jsonify({"fear_greed": fg, "indicators": results})
+
+    ohlcv_test = {}
+    try:
+        from ingestion.crypto import _fetch_ohlcv
+        for sym in ("BTC", "ETH"):
+            df = _fetch_ohlcv(sym)
+            if df is None:
+                ohlcv_test[sym] = "ALL SOURCES FAILED"
+            else:
+                ohlcv_test[sym] = f"{len(df)} rows, cols={list(df.columns)}, range={df.index.min()} to {df.index.max()}"
+    except Exception as e:
+        ohlcv_test["error"] = str(e)
+
+    return jsonify({"fear_greed": fg, "indicators": results, "ohlcv_live_test": ohlcv_test})
 
 
 @app.route("/resolve-now", methods=["GET", "POST"])
