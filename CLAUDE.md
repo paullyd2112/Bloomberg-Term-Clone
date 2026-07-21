@@ -134,7 +134,7 @@ Multi-profile prop-firm-modeled position sizing:
 - `SIGNAL_COOLDOWN_H = 4` — skip if signal generated within 4 hours
 - `CRYPTO_SIGNAL_COOLDOWN_H = 1` — shorter cooldown for 24/7 crypto markets
 - `MAX_STOCK_SIGNALS_PER_DAY = 3` — hard cap on stock signals per calendar day
-- `CRYPTO_SOFT_CAP = 6` — after 6 signals/day, confidence threshold escalates (70%+ for 7-10, 80%+ for 11-15)
+- `CRYPTO_SOFT_CAP = 8` — after 8 signals/day, confidence threshold escalates (70%+ for 9-12, 80%+ for 13-15)
 - `CRYPTO_HARD_CAP = 15` — absolute ceiling on crypto signals per UTC day
 - `MAX_CONCURRENT_CRYPTO_BUYS = 2` — max simultaneous open crypto longs
 - `CRYPTO_MAJORS = {BTC, ETH}` — correlated majors; ≤1 alt allowed alongside an open major

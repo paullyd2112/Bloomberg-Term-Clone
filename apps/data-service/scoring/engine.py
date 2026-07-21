@@ -1454,11 +1454,11 @@ CRYPTO_ATR_EXPANSION_RATIO = 1.2      # qualify if current range > 1.2x ATR (vol
 # port the stock breadth/daily-cap guards to crypto (tighter, because of that
 # correlation) so a bullish run can't stack a basket that all stops out
 # together when BTC rolls over — the exact cluster that blew the stock sims.
-CRYPTO_SOFT_CAP = 6              # after this many signals/day, escalate confidence threshold
+CRYPTO_SOFT_CAP = 8              # after this many signals/day, escalate confidence threshold
 CRYPTO_HARD_CAP = 15             # absolute ceiling to bound API cost
 CRYPTO_ESCALATION_TIERS = [
-    (6,  70),   # signals 7-10: need 70%+ confidence
-    (10, 80),   # signals 11-15: need 80%+ confidence
+    (8,  70),   # signals 9-12: need 70%+ confidence
+    (12, 80),   # signals 13-15: need 80%+ confidence
 ]
 MIN_CRYPTO_SIGNALS_PER_DAY = 3   # target floor — ease thresholds if 0 signals by 4 PM EST
 MAX_CONCURRENT_CRYPTO_BUYS = 2   # max simultaneous open crypto longs
