@@ -47,12 +47,11 @@
       EXCEPT in deep uptrends where it's a buyable pause; RSI 30-45 with positive MACD bleeds.
       Signals contradicting validated patterns get downgraded to HOLD (`[Evidence gate]`); aligned ones
       annotated (`[Validated pattern: ...]`) so /accuracy can compare later.
-- [ ] **Backtest status (pre-data-fix numbers, rerun after a week of clean live data):** best run 61.5%
-      win rate / profit factor 1.59 / +18.4% sim (202 calls); larger 342-call run regressed to 48.5% /
-      0.99 — BUT all these ran against backtest-computed indicators, on prompts whose live inputs were
-      broken, so treat them as measuring the prompt, not the product. Crypto was consistently strong
-      across both runs (94.1%, 88.9% — small n=17/18, don't oversell). BUY-side edge still unproven
-      (31-37% in backtests). ~$5.50 of the $6 backtest budget spent.
+- [ ] **Backtest status:** engine updated to Sonnet 5, crypto-only (13 coins), conviction floor 60%,
+      date range 2026-03-01 to 2026-07-21. Previous runs (Sonnet 4.6, stocks+crypto) are invalidated
+      by data pipeline fixes and model change — treat as baseline only. Prior crypto numbers were
+      consistently strong (88-94% win rate, small n=17/18). Backtest ready to run via
+      `POST /backtest/claude`; needs API budget to execute.
 - [ ] **Risk management not yet recalibrated:** every portfolio sim tripped its 15% drawdown circuit
       breaker (15.1-16.1% max DD). Position sizing / stop discipline is a separate, unaddressed workstream
       — signal quality fixes alone don't solve it. Prop-firm-style limits would have failed all sims.
@@ -170,7 +169,7 @@ sims can't recur on a more-correlated asset class:
 - `scoring/resolver.py` — signal outcome resolution (WIN/LOSS/EXPIRED)
 - `scoring/alert_evaluator.py` — price alert evaluation
 - `analysis/factor_discovery.py` — the empirical study that produced validated_factors
-- `analysis/claude_backtest.py` — backtesting engine (on Sonnet 4.6, not actively used)
+- `analysis/claude_backtest.py` — backtesting engine (Sonnet 5, crypto-only by default, conviction floor 60%)
 
 # CRYPTO-ONLY PIVOT (July 2026)
 Platform pivoted from stocks+crypto to **crypto-only** to focus on what's working and reduce costs.
@@ -200,8 +199,9 @@ All Claude API calls (scoring, briefings, newsletter, elite briefing) switched f
 to `claude-sonnet-5`. Haiku prescreen stays on `claude-haiku-4-5-20251001` (unchanged).
 
 **Files changed:** `scoring/engine.py`, `briefing/generator.py`, `briefing/newsletter.py`,
-`briefing/elite_briefing.py`. Backtest engine (`analysis/claude_backtest.py`) left on Sonnet 4.6
-deliberately — not actively used, update separately if rerunning backtests.
+`briefing/elite_briefing.py`, `analysis/claude_backtest.py`. All on Sonnet 5. Backtest also updated
+to crypto-only default (13 coins: 5 CORE + 8 TIER1), conviction floor 60%, date range 2026-03-01 to
+2026-07-21, 6 sample dates post-indicator-fix.
 
 **Cost impact (crypto-only, Sonnet 5 introductory pricing through Aug 31 2026):**
 - Introductory: $2/M input, $10/M output (vs Sonnet 4.6 standard $3/$15)

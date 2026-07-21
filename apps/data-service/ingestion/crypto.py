@@ -283,7 +283,7 @@ def _fetch_ohlcv_coingecko(symbol: str) -> pd.DataFrame | None:
             return None
         df = pd.DataFrame(data, columns=["timestamp", "open", "high", "low", "close"])
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-        df["volume"] = 0.0
+        df["volume"] = float("nan")
         df = df.set_index("timestamp").sort_index().astype(float)
         return df
     except Exception as e:
@@ -358,9 +358,11 @@ def _compute_crypto_indicators(df: pd.DataFrame) -> dict:
     # Computed on the same (1h) candles the rest of these indicators use.
     df.ta.atr(length=14, append=True)
 
-    # Volume anomaly — ratio vs 7-day (168h) average
-    volume_avg = df["volume"].mean()
-    latest_vol = float(df["volume"].iloc[-1])
+    # Volume anomaly — ratio vs 7-day (168h) average.
+    # CoinGecko OHLC has no volume (NaN) — drop those before computing.
+    vol_series = df["volume"].dropna()
+    volume_avg = vol_series.mean() if len(vol_series) > 0 else 0
+    latest_vol = float(vol_series.iloc[-1]) if len(vol_series) > 0 else 0
     volume_ratio = round(latest_vol / volume_avg, 2) if volume_avg else None
 
     latest = df.iloc[-1]

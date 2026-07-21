@@ -39,7 +39,7 @@ from ingestion.alpaca_client import fetch_stock_bars, fetch_crypto_bars
 
 load_dotenv()
 
-MODEL      = "claude-sonnet-4-6"
+MODEL      = "claude-sonnet-5"
 MAX_TOKENS = 1024
 
 FMP_KEY     = os.environ.get("FMP_API_KEY", "")
@@ -53,16 +53,13 @@ MASSIVE_BASE   = "https://api.massive.com"
 FINNHUB_CANDLE = "https://finnhub.io/api/v1/stock/candle"
 AV_URL         = "https://www.alphavantage.co/query"
 
-DATE_FROM = "2025-09-01"
-DATE_TO   = "2026-07-02"
+DATE_FROM = "2026-03-01"
+DATE_TO   = "2026-07-21"
 
-# Post-March 2026 only — earlier dates predate the indicator pipeline fix
-# (#57/#59, July 4) and test a broken data path that no longer exists.
-# Biweekly cadence, DATE_FROM still provides 50-day warmup, last sample
-# sits 3 weeks before DATE_TO for longterm eval runway.
-SAMPLE_DATES = ["2026-03-09", "2026-03-23",
-                "2026-04-06", "2026-04-20", "2026-05-04", "2026-05-18",
-                "2026-06-01", "2026-06-12"]
+# Post-indicator-fix only. Biweekly cadence with 50-day warmup from DATE_FROM,
+# last sample sits ~2 weeks before DATE_TO for longterm eval runway.
+SAMPLE_DATES = ["2026-05-01", "2026-05-15",
+                "2026-05-29", "2026-06-12", "2026-06-26", "2026-07-07"]
 
 SAMPLE_STOCKS = ["AAPL", "NVDA", "TSLA", "PLTR", "AMD",
                  "META", "GOOGL", "COIN", "SOFI", "HOOD",
@@ -73,11 +70,21 @@ SAMPLE_STOCKS = ["AAPL", "NVDA", "TSLA", "PLTR", "AMD",
                  "SHOP", "MRNA", "RIVN", "DDOG", "NET"]
 
 CRYPTO_ASSETS = [
+    # CORE_CRYPTO — scored directly with Sonnet in production
     ("BTC", "bitcoin"),
     ("ETH", "ethereum"),
     ("SOL", "solana"),
     ("XRP", "ripple"),
     ("ADA", "cardano"),
+    # TIER1 sample — prescreened with Haiku in production
+    ("DOGE", "dogecoin"),
+    ("AVAX", "avalanche-2"),
+    ("LINK", "chainlink"),
+    ("DOT", "polkadot"),
+    ("UNI", "uniswap"),
+    ("NEAR", "near"),
+    ("SUI", "sui"),
+    ("APT", "aptos"),
 ]
 
 EVAL_WINDOWS = {
@@ -838,7 +845,7 @@ CRYPTO_WINDOWS = {"intraday": 1, "swing": 6, "longterm": 14}
 CRYPTO_DEAD_ZONE = 0.015
 
 # ─── Win-rate levers ───────────────────────────────────────────────────────
-CONVICTION_FLOOR = 68  # Ignore signals below this confidence
+CONVICTION_FLOOR = 60  # Matches production CONFIDENCE_MINIMUM
 
 # Extended windows for high-conviction longterm calls ("let winners run")
 EXTENDED_STOCK_LONGTERM = 30   # was 20
@@ -1048,7 +1055,7 @@ def run_claude_backtest(
     sample_dates: list[str] | None = None,
     output_dir: str | None = None,
 ) -> dict:
-    stocks       = SAMPLE_STOCKS if stocks is None else stocks
+    stocks       = stocks if stocks is not None else []  # crypto-only pivot; pass SAMPLE_STOCKS to include stocks
     crypto       = CRYPTO_ASSETS if crypto is None else crypto
     sample_dates = SAMPLE_DATES if sample_dates is None else sample_dates
     output_dir   = output_dir or "/tmp/claude_backtest"
@@ -1654,7 +1661,7 @@ def run_rules_backtest(
     from scoring.rules_engine import _score_from_patterns
     from scoring.validated_factors import classify_indicators
 
-    stocks       = SAMPLE_STOCKS if stocks is None else stocks
+    stocks       = stocks if stocks is not None else []  # crypto-only pivot
     crypto       = CRYPTO_ASSETS if crypto is None else crypto
     sample_dates = SAMPLE_DATES if sample_dates is None else sample_dates
     output_dir   = output_dir or "/tmp/rules_backtest"
