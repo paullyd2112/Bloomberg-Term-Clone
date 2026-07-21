@@ -1435,9 +1435,9 @@ def score_stocks_event_only(subscription: str | None = None) -> str:
             f"scanned {len(scan_results)} stocks, {haiku_calls} Haiku, {sonnet_calls} Sonnet{cap_note}")
 
 
-CORE_CRYPTO   = {"BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "BNB", "AVAX", "LINK", "UNI", "SUI"}
+CORE_CRYPTO   = {"BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "BNB", "AVAX", "LINK", "UNI"}
 TIER1_CRYPTO  = {
-    "DOT", "ATOM",
+    "SUI", "DOT", "ATOM",
     "LTC", "NEAR", "APT", "ARB", "OP", "FIL", "INJ", "SEI",
     "PEPE", "WIF", "SHIB", "TIA", "AAVE", "MKR", "RENDER", "FET",
     "MATIC", "HBAR", "VET", "ALGO", "XLM", "ICP", "SAND", "MANA",
