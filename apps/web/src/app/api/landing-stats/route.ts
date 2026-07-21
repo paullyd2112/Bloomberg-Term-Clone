@@ -11,7 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const revalidate = 300;
 
-const ENGINE_CUTOFF = "2026-07-04T11:00:00Z";
+const ENGINE_CUTOFF = "2026-07-15T00:00:00Z";
 
 type LandingStats = {
   wins: number | null;

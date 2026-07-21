@@ -32,7 +32,7 @@ from scoring.validated_factors import (
 
 SIGNAL_COOLDOWN_H        = 4   # default cooldown (stocks)
 CRYPTO_SIGNAL_COOLDOWN_H = 2   # shorter cooldown for 24/7 crypto markets
-ENGINE_CUTOFF = "2026-07-04T11:00:00Z"
+ENGINE_CUTOFF = "2026-07-15T00:00:00Z"
 
 STOCK_RVOL_MINIMUM = 1.5
 HIGH_BETA_VOLATILITY_WATCHLIST = frozenset({"AMD", "NVDA", "COIN", "SMCI", "AVGO"})
