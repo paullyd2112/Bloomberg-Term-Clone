@@ -26,7 +26,7 @@ MODEL              = "claude-sonnet-5"
 SIGNAL_COOLDOWN_H        = 4   # default cooldown (stocks, predictions)
 CRYPTO_SIGNAL_COOLDOWN_H = 1   # shorter cooldown for 24/7 crypto markets
 MAX_TOKENS         = 1024
-ENGINE_CUTOFF      = "2026-07-04T11:00:00Z"  # signals before this date are unreliable
+ENGINE_CUTOFF      = "2026-07-15T00:00:00Z"  # signals before this date are unreliable
 
 # Emergency launch tuning — stricter stock BUY filters (July 2026)
 STOCK_RVOL_MINIMUM        = 2.5   # minimum relative volume for equity signals
