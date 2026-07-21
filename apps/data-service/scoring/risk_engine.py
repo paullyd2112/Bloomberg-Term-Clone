@@ -449,7 +449,7 @@ def check_zero_unit_rejection(units: float, contracts: int | None, asset_class: 
     return None
 
 
-CONFIDENCE_MINIMUM = 60
+CONFIDENCE_MINIMUM = 64
 
 
 def check_confidence_gate(confidence_score: int) -> str | None:

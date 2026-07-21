@@ -47,8 +47,9 @@
       EXCEPT in deep uptrends where it's a buyable pause; RSI 30-45 with positive MACD bleeds.
       Signals contradicting validated patterns get downgraded to HOLD (`[Evidence gate]`); aligned ones
       annotated (`[Validated pattern: ...]`) so /accuracy can compare later.
-- [x] **Backtest status:** executed on Sonnet 5, crypto-only (13 coins), conviction floor 60%,
-      date range 2026-03-01 to 2026-07-21.
+- [x] **Backtest status:** executed on Sonnet 5, crypto-only (13 coins), conviction floor 64%,
+      date range 2026-03-01 to 2026-07-21. Floor raised from 60→64 based on backtest analysis:
+      conf 60-63 signals had 31.8% win rate (PF 0.71, net negative); conf 64+ had 68.8% WR, PF 3.23.
 - [x] **Risk management recalibrated:** position sizing, stop discipline, and prop-firm-style
       limits addressed. Drawdown circuit breaker no longer tripping.
 - [x] Newsletter generation silent-failure gap: added `_alert_generation_failure()` email alert (mirrors
@@ -66,7 +67,7 @@ Every signal Claude produces passes through these gates **in order**, any of whi
 a BUY/SELL to HOLD (saving the signal write + preventing bad calls). Gates are code-enforced —
 they override the model regardless of what the prompt says.
 
-1. **Confidence gate** (`risk_engine.CONFIDENCE_MINIMUM = 60`): BUY/SELL below 60% → HOLD
+1. **Confidence gate** (`risk_engine.CONFIDENCE_MINIMUM = 64`): BUY/SELL below 64% → HOLD
 2. **Circuit breaker** (±8% change_24h): no SELLs after >8% gap up, no BUYs after >8% gap down
 3. **SPY regime gate** (stocks only): SPY below SMA-50 → no BUYs; SPY >5% above SMA-50 → no SELLs
 4. **SPY 1h SMA-20 gate** (stocks only): SPY below 20-period SMA on 1h candles → no BUYs
@@ -165,7 +166,7 @@ sims can't recur on a more-correlated asset class:
 - `scoring/resolver.py` — signal outcome resolution (WIN/LOSS/EXPIRED)
 - `scoring/alert_evaluator.py` — price alert evaluation
 - `analysis/factor_discovery.py` — the empirical study that produced validated_factors
-- `analysis/claude_backtest.py` — backtesting engine (Sonnet 5, crypto-only by default, conviction floor 60%)
+- `analysis/claude_backtest.py` — backtesting engine (Sonnet 5, crypto-only by default, conviction floor 64%)
 
 # CRYPTO-ONLY PIVOT (July 2026)
 Platform pivoted from stocks+crypto to **crypto-only** to focus on what's working and reduce costs.
@@ -196,7 +197,7 @@ to `claude-sonnet-5`. Haiku prescreen stays on `claude-haiku-4-5-20251001` (unch
 
 **Files changed:** `scoring/engine.py`, `briefing/generator.py`, `briefing/newsletter.py`,
 `briefing/elite_briefing.py`, `analysis/claude_backtest.py`. All on Sonnet 5. Backtest also updated
-to crypto-only default (13 coins: 5 CORE + 8 TIER1), conviction floor 60%, date range 2026-03-01 to
+to crypto-only default (13 coins: 5 CORE + 8 TIER1), conviction floor 64%, date range 2026-03-01 to
 2026-07-21, 6 sample dates post-indicator-fix.
 
 **Cost impact (crypto-only, Sonnet 5 introductory pricing through Aug 31 2026):**
@@ -235,7 +236,7 @@ Prediction resolver (`scoring/resolver.py`): settlement-based, queries Polymarke
 changes needed — distinct from price-based stock/crypto resolution.
 
 Constants: `MAX_PREDICTION_SIGNALS_PER_DAY = 10`, `PREDICTION_CANDIDATE_LIMIT = 30`,
-`ADAPTIVE_HAIKU_BASE_THRESHOLD = 65`, `ADAPTIVE_HAIKU_TIGHT_THRESHOLD = 80`.
+`ADAPTIVE_HAIKU_BASE_THRESHOLD = 64`, `ADAPTIVE_HAIKU_TIGHT_THRESHOLD = 80`.
 
 # NEWSLETTER & BRIEFING (July 2026 overhaul)
 Newsletter shifted from stock-heavy finance recap to a **full world morning brief**:

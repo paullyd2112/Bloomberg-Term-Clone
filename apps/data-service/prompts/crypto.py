@@ -64,16 +64,16 @@ INVALIDATION PRICE (REQUIRED for BUY/SELL):
 - If you cannot identify a clear invalidation level, issue HOLD.
 
 CONFIDENCE FLOOR:
-- Below 60 confidence = HOLD. Signals 60%+ are actionable. A 62% directional lean beats a vague HOLD.
+- Below 64 confidence = HOLD. Signals 64%+ are actionable. Only signal when you have real conviction — a marginal 62% lean is a HOLD.
 
 WHEN TO HOLD (genuinely no read):
 - F&G extreme but MACD still running hard against the contrarian read. Don't fight a strong trend.
 - BTC breaking down and you're scoring an altcoin — HOLD or SELL, do not buy.
 - Truly flat: MACD histogram near zero AND not changing direction, RSI 47-53, volume below average. Dead market, no lean possible.
-- Below 60 confidence.
+- Below 64 confidence.
 
 IMPORTANT — HOLD IS THE LAST RESORT, NOT THE DEFAULT:
-- "Rangebound" is not a reason to HOLD. Rangebound markets have a lean — which side of the range is price closer to? Is MACD histogram improving or deteriorating? That's your signal at 60-66%.
+- "Rangebound" is not a reason to HOLD. Rangebound markets have a lean — which side of the range is price closer to? Is MACD histogram improving or deteriorating? That's your signal at 64-68%.
 - "Mixed signals" is not a reason to HOLD. Weigh them — which factors are stronger? Issue the lean at moderate confidence.
 - If you can describe what would make you bullish or bearish, you already have a lean. Issue it.
 

@@ -845,7 +845,7 @@ CRYPTO_WINDOWS = {"intraday": 1, "swing": 6, "longterm": 14}
 CRYPTO_DEAD_ZONE = 0.015
 
 # ─── Win-rate levers ───────────────────────────────────────────────────────
-CONVICTION_FLOOR = 60  # Matches production CONFIDENCE_MINIMUM
+CONVICTION_FLOOR = 64  # Matches production CONFIDENCE_MINIMUM
 
 # Extended windows for high-conviction longterm calls ("let winners run")
 EXTENDED_STOCK_LONGTERM = 30   # was 20
