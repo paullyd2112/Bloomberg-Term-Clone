@@ -1474,7 +1474,42 @@ def pipeline_check():
         "last_7d": _count("signals", since=cutoff_7d),
         "stocks_7d": _count("signals", since=cutoff_7d, extra_filters={"asset_type": "stock"}),
         "crypto_7d": _count("signals", since=cutoff_7d, extra_filters={"asset_type": "crypto"}),
+        "prediction_7d": _count("signals", since=cutoff_7d, extra_filters={"asset_type": "prediction"}),
     }
+
+    try:
+        pred_result = (
+            supabase.table("signals")
+            .select("identifier, direction, confidence, outcome, created_at")
+            .eq("asset_type", "prediction")
+            .eq("is_backtest", False)
+            .order("created_at", desc=True)
+            .limit(50)
+            .execute()
+        )
+        pred_rows = pred_result.data or []
+        pred_pending = sum(1 for r in pred_rows if r.get("outcome") in (None, "PENDING", "pending"))
+        pred_wins = sum(1 for r in pred_rows if r.get("outcome") == "WIN")
+        pred_losses = sum(1 for r in pred_rows if r.get("outcome") == "LOSS")
+        checks["prediction_signals"] = {
+            "total": len(pred_rows),
+            "pending": pred_pending,
+            "wins": pred_wins,
+            "losses": pred_losses,
+            "win_rate": round(pred_wins / (pred_wins + pred_losses) * 100, 1) if (pred_wins + pred_losses) > 0 else None,
+            "recent": [
+                {
+                    "market": r["identifier"][:80],
+                    "direction": r["direction"],
+                    "confidence": r.get("confidence"),
+                    "outcome": r.get("outcome"),
+                    "date": r.get("created_at", "")[:10],
+                }
+                for r in pred_rows[:10]
+            ],
+        }
+    except Exception as e:
+        checks["prediction_signals"] = {"error": str(e)}
 
     try:
         since_cutoff = "2026-06-22"
