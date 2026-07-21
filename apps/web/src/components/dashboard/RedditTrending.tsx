@@ -48,25 +48,12 @@ function rankDelta(row: SentimentRow): number | null {
   return row.rank_24h_ago - row.rank;
 }
 
-export default async function RedditTrending() {
+export default async function RedditTrending({ bare = false }: { bare?: boolean }) {
   const rows = await fetchRedditTrending();
   if (rows.length === 0) return null;
 
-  return (
-    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
-        <div className="flex items-center gap-2">
-          <MessageCircle className="h-3.5 w-3.5 text-orange-400" />
-          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-400">
-            Reddit Trending
-          </span>
-        </div>
-        <span className="text-[10px] text-zinc-600">via ApeWisdom</span>
-      </div>
-
-      {/* Table */}
-      <div className="overflow-x-auto">
+  const table = (
+    <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-white/[0.04]">
@@ -152,6 +139,22 @@ export default async function RedditTrending() {
           </tbody>
         </table>
       </div>
+  );
+
+  if (bare) return table;
+
+  return (
+    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+        <div className="flex items-center gap-2">
+          <MessageCircle className="h-3.5 w-3.5 text-orange-400" />
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-400">
+            Reddit Trending
+          </span>
+        </div>
+        <span className="text-[10px] text-zinc-600">via ApeWisdom</span>
+      </div>
+      {table}
     </div>
   );
 }

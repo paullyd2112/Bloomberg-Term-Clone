@@ -29,7 +29,7 @@ function formatUsd(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
-export default function WhaleSentinel({ limit = 10 }: { limit?: number }) {
+export default function WhaleSentinel({ limit = 10, bare = false }: { limit?: number; bare?: boolean }) {
   const [alerts, setAlerts] = useState<WhaleAlert[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -52,52 +52,46 @@ export default function WhaleSentinel({ limit = 10 }: { limit?: number }) {
   }, [load]);
 
   if (loading) {
+    const inner = (
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-16 bg-white/[0.03] rounded-lg animate-pulse" />
+        ))}
+      </div>
+    );
+    if (bare) return inner;
     return (
       <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5">
         <div className="flex items-center gap-2.5 font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em] mb-4">
           <span className="text-emerald-400 text-[10px] leading-none">●</span>
           Whale Sentinel
         </div>
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-16 bg-white/[0.03] rounded-lg animate-pulse" />
-          ))}
-        </div>
+        {inner}
       </div>
     );
   }
 
   if (alerts.length === 0) {
+    const inner = (
+      <p className="text-zinc-500 text-sm text-center py-6">
+        No whale trades detected yet. Monitoring Polymarket for trades above $5K.
+      </p>
+    );
+    if (bare) return inner;
     return (
       <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5">
         <div className="flex items-center gap-2.5 font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em] mb-4">
           <span className="text-emerald-400 text-[10px] leading-none">●</span>
           Whale Sentinel
         </div>
-        <p className="text-zinc-500 text-sm text-center py-6">
-          No whale trades detected yet. Monitoring Polymarket for trades above $5K.
-        </p>
+        {inner}
       </div>
     );
   }
 
-  return (
-    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2.5 font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em]">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-          </span>
-          Whale Sentinel
-        </div>
-        <span className="font-mono text-[10px] text-zinc-600 uppercase tracking-wider">
-          Polymarket CLOB
-        </span>
-      </div>
-
-      <div className="space-y-2">
-        {alerts.map((alert, i) => (
+  const alertList = (
+    <div className="space-y-2">
+      {alerts.map((alert, i) => (
           <div
             key={alert.id}
             className={clsx(
@@ -149,7 +143,26 @@ export default function WhaleSentinel({ limit = 10 }: { limit?: number }) {
             </div>
           </div>
         ))}
+    </div>
+  );
+
+  if (bare) return alertList;
+
+  return (
+    <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5 font-mono text-[11px] font-semibold text-zinc-500 uppercase tracking-[0.18em]">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+          </span>
+          Whale Sentinel
+        </div>
+        <span className="font-mono text-[10px] text-zinc-600 uppercase tracking-wider">
+          Polymarket CLOB
+        </span>
       </div>
+      {alertList}
     </div>
   );
 }

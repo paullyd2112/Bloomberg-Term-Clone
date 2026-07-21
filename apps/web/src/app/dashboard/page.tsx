@@ -12,6 +12,8 @@ import SectionHeader from "@/components/ui/SectionHeader";
 import SkipTrialBanner from "@/components/SkipTrialBanner";
 import SystemSafeguards from "@/components/dashboard/SystemSafeguards";
 import RedditTrending from "@/components/dashboard/RedditTrending";
+import MarketPulse from "@/components/dashboard/MarketPulse";
+import TrackRecord from "@/components/dashboard/TrackRecord";
 
 export const revalidate = 60;
 
@@ -254,7 +256,7 @@ export default async function DashboardPage() {
   const allPending = resolved === 0 && pending > 0;
 
   return (
-    <div className="p-5 md:p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-5 md:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Page header */}
       <header className="flex flex-col gap-1">
         <div className="flex items-center gap-2.5">
@@ -289,150 +291,88 @@ export default async function DashboardPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard label="Total signals" value={signals.length} icon={Activity} />
-          <StatCard label="Pending" value={pending} icon={Clock} />
-          <StatCard label="Wins" value={winCount} color="green" icon={TrendingUp} />
-          <StatCard label="Losses" value={lossCount} color="red" icon={TrendingDown} />
+        <div>
+          {/* Compact summary bar on mobile, full cards on sm+ */}
+          <div className="sm:hidden flex items-center bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden divide-x divide-white/[0.06]">
+            <MiniStat label="Signals" value={signals.length} />
+            <MiniStat label="Pending" value={pending} />
+            <MiniStat label="Wins" value={winCount} color="green" />
+            <MiniStat label="Losses" value={lossCount} color="red" />
+          </div>
+          <div className="hidden sm:grid grid-cols-4 gap-3">
+            <StatCard label="Total signals" value={signals.length} icon={Activity} />
+            <StatCard label="Pending" value={pending} icon={Clock} />
+            <StatCard label="Wins" value={winCount} color="green" icon={TrendingUp} />
+            <StatCard label="Losses" value={lossCount} color="red" icon={TrendingDown} />
+          </div>
         </div>
       )}
 
-      {/* Platform accuracy */}
+      {/* Signal feed — the product, front and center */}
+      <section>
+        <SectionHeader primary divider className="mb-4">Latest Signals</SectionHeader>
+        <SignalFeed signals={signals} />
+      </section>
+
+      {/* Market Pulse — movers, whales, reddit in a tabbed container */}
+      <MarketPulse
+        moversContent={
+          movers.length > 0 ? (
+            <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+              {movers.map((m) => {
+                const up = (m.change_24h ?? 0) >= 0;
+                return (
+                  <Link
+                    key={`${m.asset_type}:${m.identifier}`}
+                    href={`/dashboard/asset/${m.asset_type}/${m.identifier}`}
+                    className="group flex-shrink-0 bg-white/[0.04] border border-white/[0.08] rounded-lg px-4 py-3 flex flex-col gap-1.5 min-w-[120px] hover:bg-white/[0.07] hover:border-white/[0.12] transition-all"
+                  >
+                    <span className="font-mono text-xs font-semibold text-white truncate">
+                      {m.identifier}
+                    </span>
+                    <span
+                      className={`flex items-center gap-1 text-sm font-semibold tabular-nums ${
+                        up ? "text-emerald-400" : "text-red-400"
+                      }`}
+                    >
+                      {up ? (
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      ) : (
+                        <ArrowDownRight className="h-3.5 w-3.5" />
+                      )}
+                      {up ? "+" : ""}
+                      {Number(m.change_24h).toFixed(2)}%
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-zinc-500 text-sm text-center py-6">No movers right now.</p>
+          )
+        }
+        whalesContent={<WhaleSentinel bare />}
+        redditContent={
+          <Suspense
+            fallback={
+              <div className="h-40 bg-white/[0.02] rounded-lg animate-pulse" />
+            }
+          >
+            <RedditTrending bare />
+          </Suspense>
+        }
+      />
+
+      {/* Platform accuracy — consolidated single card */}
       {accuracy && (
         <section>
           <SectionHeader divider className="mb-4">Signal track record</SectionHeader>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {/* Overall */}
-            <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4">
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Overall</div>
-              <div className="flex items-baseline gap-2">
-                <span className={`text-2xl font-bold tabular-nums ${rateColor(accuracy.overallWinRate)}`}>
-                  {(accuracy.overallWinRate * 100).toFixed(1)}%
-                </span>
-                <span className="text-xs text-zinc-500">win rate · {accuracy.totalResolved} signals</span>
-              </div>
-              <div className="text-xs text-zinc-500 mt-1">
-                {accuracy.totalWins}W – {accuracy.totalLosses}L
-              </div>
-            </div>
-
-            {/* Yesterday */}
-            {accuracy.yesterday && (
-              <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4">
-                <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Yesterday</div>
-                <div className="flex items-baseline gap-2">
-                  <span className={`text-2xl font-bold tabular-nums ${rateColor(accuracy.yesterday.winRate)}`}>
-                    {(accuracy.yesterday.winRate * 100).toFixed(0)}%
-                  </span>
-                  <span className="text-xs text-zinc-500">win rate · {accuracy.yesterday.resolved} signals</span>
-                </div>
-                <div className="text-xs text-zinc-500 mt-1">
-                  {accuracy.yesterday.wins}W – {accuracy.yesterday.losses}L
-                </div>
-              </div>
-            )}
-
-            {/* By asset class */}
-            <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4">
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">By asset</div>
-              <div className="space-y-1.5">
-                {accuracy.byAssetClass.map((a) => (
-                  <div key={a.asset_type} className="flex items-baseline justify-between">
-                    <span className="text-xs text-zinc-400 capitalize">{a.asset_type}</span>
-                    <div className="flex items-baseline gap-1.5">
-                      <span className={`text-sm font-semibold tabular-nums ${rateColor(a.winRate)}`}>
-                        {(a.winRate * 100).toFixed(1)}%
-                      </span>
-                      <span className="text-[10px] text-zinc-600">({a.resolved} signal{a.resolved === 1 ? "" : "s"})</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Month over month */}
-            {accuracy.byMonth.length > 0 && (
-              <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4 sm:col-span-2 lg:col-span-3">
-                <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Month over month</div>
-                <div className="flex gap-4 overflow-x-auto scrollbar-none">
-                  {accuracy.byMonth.map((m) => {
-                    const monthResolved = m.wins + m.losses;
-                    return (
-                      <div key={m.month} className="flex-shrink-0 min-w-[80px]">
-                        <div className="text-xs text-zinc-400 font-mono">{m.month}</div>
-                        <div className={`text-lg font-bold tabular-nums ${rateColor(m.winRate)}`}>
-                          {(m.winRate * 100).toFixed(0)}%
-                        </div>
-                        <div className="text-[10px] text-zinc-600">{m.wins}W – {m.losses}L · {monthResolved} signals</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+          <TrackRecord accuracy={accuracy} />
         </section>
       )}
-
-      {/* Top movers */}
-      {movers.length > 0 && (
-        <section>
-          <SectionHeader divider className="mb-4">Top movers (24h)</SectionHeader>
-          <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-            {movers.map((m) => {
-              const up = (m.change_24h ?? 0) >= 0;
-              return (
-                <Link
-                  key={`${m.asset_type}:${m.identifier}`}
-                  href={`/dashboard/asset/${m.asset_type}/${m.identifier}`}
-                  className="group flex-shrink-0 bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-4 py-3 flex flex-col gap-1.5 min-w-[120px] hover:bg-white/[0.05] hover:border-white/[0.1] transition-all"
-                >
-                  <span className="font-mono text-xs font-semibold text-white truncate">
-                    {m.identifier}
-                  </span>
-                  <span
-                    className={`flex items-center gap-1 text-sm font-semibold tabular-nums ${
-                      up ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    {up ? (
-                      <ArrowUpRight className="h-3.5 w-3.5" />
-                    ) : (
-                      <ArrowDownRight className="h-3.5 w-3.5" />
-                    )}
-                    {up ? "+" : ""}
-                    {Number(m.change_24h).toFixed(2)}%
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Whale Sentinel — live large Polymarket trades */}
-      <WhaleSentinel />
-
-      {/* Reddit trending */}
-      <section>
-        <SectionHeader divider className="mb-4">Reddit trending</SectionHeader>
-        <Suspense
-          fallback={
-            <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-6 h-40 animate-pulse" />
-          }
-        >
-          <RedditTrending />
-        </Suspense>
-      </section>
 
       {/* System safeguards */}
       <SystemSafeguards />
-
-      {/* Signal feed — the product, surfaced above supporting analytics */}
-      <section>
-        <SectionHeader divider className="mb-4">Latest signals</SectionHeader>
-        <SignalFeed signals={signals} />
-      </section>
 
       {/* Crypto-only pivot (July 2026): SectorHeatmap aggregates stock
           signals by sector and renders empty with stock scoring off.
@@ -449,10 +389,28 @@ export default async function DashboardPage() {
   );
 }
 
-function rateColor(rate: number): string {
-  if (rate >= 0.55) return "text-emerald-400";
-  if (rate >= 0.45) return "text-amber-400";
-  return "text-red-400";
+function MiniStat({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: number;
+  color?: "green" | "red";
+}) {
+  const valueColor =
+    color === "green"
+      ? "text-emerald-400"
+      : color === "red"
+      ? "text-red-400"
+      : "text-white";
+
+  return (
+    <div className="flex-1 flex flex-col items-center py-3 gap-0.5">
+      <span className={`text-lg font-bold tabular-nums ${valueColor}`}>{value}</span>
+      <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{label}</span>
+    </div>
+  );
 }
 
 function StatCard({
