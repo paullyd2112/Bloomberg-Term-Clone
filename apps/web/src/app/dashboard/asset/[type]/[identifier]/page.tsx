@@ -12,6 +12,7 @@ import PriceHeader from "@/components/asset/PriceHeader";
 import PriceChart, { type PricePoint } from "@/components/asset/PriceChart";
 import OnDemandScore from "@/components/asset/OnDemandScore";
 import SectionHeader from "@/components/ui/SectionHeader";
+import PricePerformance from "@/components/asset/PricePerformance";
 
 export const revalidate = 60;
 
@@ -231,6 +232,11 @@ export default async function AssetPage({ params }: PageProps) {
           metadata={price.metadata as Record<string, unknown> | null}
           change24h={price.change_24h}
         />
+      )}
+
+      {/* Price performance across timeframes */}
+      {(type === "stock" || type === "crypto") && (
+        <PricePerformance identifier={identifier} assetType={type} />
       )}
 
       {/* Price chart */}
