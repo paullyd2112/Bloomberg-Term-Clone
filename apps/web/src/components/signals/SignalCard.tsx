@@ -2,6 +2,7 @@ import Link from "next/link";
 import { clsx } from "clsx";
 import ShareButton from "./ShareButton";
 import TradeButton from "./TradeButton";
+import { PricePerformanceCompact } from "@/components/asset/PricePerformance";
 
 export type Signal = {
   id: number;
@@ -142,6 +143,13 @@ export default function SignalCard({ signal, hideTrade }: { signal: Signal; hide
         <p className="relative z-10 text-[12px] leading-snug text-zinc-400 line-clamp-2 mb-1.5">
           {signal.reasoning}
         </p>
+
+        {/* Row 2.5: price performance pills */}
+        {!isPrediction && (
+          <div className="relative z-10 mb-1.5">
+            <PricePerformanceCompact identifier={signal.identifier} assetType={signal.asset_type} />
+          </div>
+        )}
 
         {/* Row 3: meta chips */}
         <div className="relative z-10 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-zinc-600">
