@@ -109,7 +109,7 @@ export async function POST(req: Request) {
   if (!isLifetime) {
     const isUpgrade = currentTier !== "free" && existingSubId;
     sessionConfig.subscription_data = {
-      ...(hasTrial && !isUpgrade ? { trial_period_days: 14 } : {}),
+      ...(hasTrial && !isUpgrade ? { trial_period_days: plan.startsWith("elite") ? 14 : 7 } : {}),
       metadata: baseMetadata,
     };
   } else {

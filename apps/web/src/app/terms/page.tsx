@@ -57,7 +57,8 @@ export default function TermsOfService() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-white mb-3">4. Subscriptions & Payments</h2>
         <ul className="list-disc pl-5 space-y-2">
-          <li><strong>Trial:</strong> New accounts receive a 14-day trial with full access on monthly plans. A valid payment method is required to start the trial. No charge during the trial period.</li>
+          <li><strong>Free tier:</strong> A free tier is available with limited access (delayed signals, weekly recap). No credit card required.</li>
+          <li><strong>Trial:</strong> Pro monthly plans include a 7-day trial; Elite monthly plans include a 14-day trial. A valid payment method is required to start the trial. No charge during the trial period.</li>
           <li><strong>Billing:</strong> After the trial, your selected plan is billed automatically via Stripe on a monthly or quarterly basis depending on your selection.</li>
           <li><strong>Lifetime access:</strong> Lifetime Pro purchases are one-time payments that grant perpetual access to Pro features as they exist at time of purchase. We reserve the right to add new features to higher tiers.</li>
           <li><strong>Price changes:</strong> We may change subscription prices with 30 days notice. Existing subscribers on locked-in rates will not be affected.</li>

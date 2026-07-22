@@ -2,6 +2,12 @@ export type Tier = "free" | "pro" | "elite";
 
 export const TRIAL_DAYS = 14;
 
+export const TRIAL_DAYS_BY_TIER: Record<Tier, number> = {
+  free:  0,
+  pro:   7,
+  elite: 14,
+};
+
 export const WATCHLIST_LIMIT: Record<Tier, number> = {
   free:  0,
   pro:   Infinity,
