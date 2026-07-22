@@ -1413,8 +1413,47 @@ def run_claude_backtest(
         json.dump(agg, f, indent=2, default=str)
     agg["json_path"] = json_path
 
+    agg["_results"] = results
+
     logger.info("[claude_backtest] Complete — {} signals, {} API calls", len(results), api_calls)
     return agg
+
+
+def write_backtest_signals_to_db(results: list[ClaudeSignalResult]) -> int:
+    """Insert resolved backtest signals into the signals table."""
+    from supabase import create_client
+    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+
+    rows = [
+        {
+            "asset_type":      r.asset_class,
+            "identifier":      r.ticker,
+            "direction":       r.direction,
+            "confidence":      r.confidence,
+            "reasoning":       r.reasoning[:500],
+            "time_horizon":    r.time_horizon,
+            "price_at_signal": r.entry_price,
+            "outcome_price":   r.exit_price,
+            "is_backtest":     True,
+            "outcome":         r.outcome,
+            "created_at":      f"{r.sample_date}T12:00:00Z",
+            "news_context":    [],
+        }
+        for r in results
+        if r.direction != "HOLD" and r.outcome in ("WIN", "LOSS", "NEUTRAL")
+    ]
+
+    inserted = 0
+    for i in range(0, len(rows), 100):
+        batch = rows[i : i + 100]
+        try:
+            sb.table("signals").insert(batch).execute()
+            inserted += len(batch)
+        except Exception as e:
+            logger.error("[claude_backtest] DB write failed: {}", e)
+
+    logger.info("[claude_backtest] Wrote {} backtest signals to DB", inserted)
+    return inserted
 
 
 def _aggregate_claude_results(
@@ -2175,6 +2214,8 @@ def run_rules_backtest(
     with open(json_path, "w") as f:
         json.dump(agg, f, indent=2, default=str)
     agg["json_path"] = json_path
+
+    agg["_results"] = results
 
     logger.info("[rules_backtest] Complete — {} signals, {} sample dates, $0 API cost",
                 len(results), len(sample_dates))

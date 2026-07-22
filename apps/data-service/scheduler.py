@@ -1287,12 +1287,13 @@ def run_claude_backtest_endpoint():
     POST /backtest/claude
     """
     from flask import request as flask_request
-    from analysis.claude_backtest import run_claude_backtest
+    from analysis.claude_backtest import run_claude_backtest, write_backtest_signals_to_db
     import threading
 
     body        = flask_request.get_json(silent=True) or {}
     output_dir  = str(body.get("output_dir", "/tmp/claude_backtest"))
     stocks_only = bool(body.get("stocks_only", False)) or flask_request.args.get("stocks_only") == "true"
+    write_db    = bool(body.get("write_db", True))
 
     def _run():
         import traceback
@@ -1304,9 +1305,15 @@ def run_claude_backtest_endpoint():
         try:
             crypto_list = [] if stocks_only else None
             agg = run_claude_backtest(output_dir=output_dir, crypto=crypto_list)
+
+            db_written = 0
+            if write_db and agg.get("_results"):
+                db_written = write_backtest_signals_to_db(agg["_results"])
+
             _job_state["claude_backtest"] = {
                 "last_run": datetime.now(timezone.utc).isoformat(),
                 "status": "ok",
+                "db_signals_written": db_written,
                 "summary": {
                     "total_signals": agg.get("total_signals", 0),
                     "win_rate":      agg.get("win_rate", 0),
