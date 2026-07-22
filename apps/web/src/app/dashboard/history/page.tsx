@@ -125,7 +125,7 @@ export default async function HistoryPage({
     )
     .in("asset_type", ["crypto", "prediction"])
     .neq("outcome", "PENDING")
-    .gte("created_at", ENGINE_CUTOFF)
+    .or(`created_at.gte.${ENGINE_CUTOFF},is_backtest.eq.true`)
     .gte("confidence", 60)
     .order("created_at", { ascending: false })
     .limit(1000);
