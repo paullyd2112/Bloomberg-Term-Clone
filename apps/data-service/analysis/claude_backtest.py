@@ -1422,7 +1422,8 @@ def run_claude_backtest(
 def write_backtest_signals_to_db(results: list[ClaudeSignalResult]) -> int:
     """Insert resolved backtest signals into the signals table."""
     from supabase import create_client
-    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY_", "")
+    sb = create_client(os.environ["SUPABASE_URL"], key)
 
     rows = [
         {
