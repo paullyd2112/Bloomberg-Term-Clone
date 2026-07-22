@@ -100,22 +100,24 @@ EVAL_WINDOWS = {
     "longterm": 15,
 }
 
+# Aligned with live resolver (scoring/resolver.py RESOLUTION_CONFIG) —
+# symmetric thresholds so backtest win rates match production.
 LOSS_THRESHOLDS = {
-    ("stock", "intraday"):  0.015,
-    ("stock", "swing"):     0.05,
-    ("stock", "longterm"):  0.10,
-    ("crypto", "intraday"): 0.03,
-    ("crypto", "swing"):    0.10,
-    ("crypto", "longterm"): 0.20,
+    ("stock", "intraday"):  0.008,
+    ("stock", "swing"):     0.0175,
+    ("stock", "longterm"):  0.05,
+    ("crypto", "intraday"): 0.02,
+    ("crypto", "swing"):    0.03,
+    ("crypto", "longterm"): 0.08,
 }
 
 WIN_THRESHOLDS = {
-    ("stock", "intraday"):  0.005,
-    ("stock", "swing"):     0.02,
+    ("stock", "intraday"):  0.008,
+    ("stock", "swing"):     0.0175,
     ("stock", "longterm"):  0.05,
-    ("crypto", "intraday"): 0.015,
-    ("crypto", "swing"):    0.05,
-    ("crypto", "longterm"): 0.10,
+    ("crypto", "intraday"): 0.02,
+    ("crypto", "swing"):    0.03,
+    ("crypto", "longterm"): 0.08,
 }
 
 
@@ -843,13 +845,17 @@ CATASTROPHIC_STOP = {
 # Stocks: real OHLC from FMP/Massive — supports intraday high/low stop checks.
 STOCK_WINDOWS = {"intraday": 2, "swing": 8, "longterm": 20}
 
-# Crypto: daily closes + volume come from market_chart/range (close-only). Real
-# high/low ranges come separately from the /ohlc endpoint (4-day candles on the
-# free tier) and are used ONLY for catastrophic-stop checks. Crypto trades 24/7
-# and moves fast, so windows are shorter and the win/loss dead zone is wider
-# (1.5% vs 0.5%) to ignore noise.
-CRYPTO_WINDOWS = {"intraday": 1, "swing": 6, "longterm": 14}
-CRYPTO_DEAD_ZONE = 0.015
+# Crypto eval windows. With Alpaca as primary data source (real OHLC),
+# windows can be wider to let trades play out, matching live resolver timing.
+CRYPTO_WINDOWS = {"intraday": 2, "swing": 8, "longterm": 20}
+# Per-horizon dead zones aligned with live resolver symmetric thresholds.
+# Replaces the old flat 1.5% dead zone that was too tight for swing/longterm.
+CRYPTO_DEAD_ZONES: dict[str, float] = {
+    "intraday": 0.02,   # 2% — matches resolver
+    "swing":    0.03,   # 3% — matches resolver
+    "longterm": 0.08,   # 8% — matches resolver
+}
+CRYPTO_DEAD_ZONE_DEFAULT = 0.03  # fallback
 
 # ─── Win-rate levers ───────────────────────────────────────────────────────
 CONVICTION_FLOOR = 64  # Matches production CONFIDENCE_MINIMUM
@@ -1042,9 +1048,10 @@ def _evaluate_crypto_signal(
         suffix = "_realhl" if (hl_df is not None and not hl_df.empty) else ""
         signal.exit_reason = f"window_{max_days}d_close{suffix}"
 
-        if pnl > CRYPTO_DEAD_ZONE:
+        dz = CRYPTO_DEAD_ZONES.get(signal.time_horizon, CRYPTO_DEAD_ZONE_DEFAULT)
+        if pnl > dz:
             signal.outcome = "WIN"
-        elif pnl < -CRYPTO_DEAD_ZONE:
+        elif pnl < -dz:
             signal.outcome = "LOSS"
         else:
             signal.outcome = "NEUTRAL"
@@ -1287,36 +1294,64 @@ def run_claude_backtest(
     # ── Crypto ───────────────────────────────────────────────────────────────
     crypto_data: dict[str, pd.DataFrame] = {}
     crypto_hl: dict[str, pd.DataFrame] = {}
+    alpaca_only_count = 0
+    cg_fallback_count = 0
     for symbol, cg_id in crypto:
         logger.info("[claude_backtest] Fetching crypto data: {}", symbol)
-        df = _crypto_alpaca(symbol)
-        used_alpaca = df is not None and len(df) >= MIN_ROWS_FOR_SOLE_SOURCE
-        if not used_alpaca:
+        alpaca_df = _crypto_alpaca(symbol)
+        used_alpaca = alpaca_df is not None and len(alpaca_df) >= MIN_ROWS_FOR_SOLE_SOURCE
+
+        if used_alpaca:
+            df = alpaca_df
+            alpaca_only_count += 1
+        else:
+            alpaca_rows = len(alpaca_df) if alpaca_df is not None else 0
             logger.warning(
-                "[claude_backtest] {} — Alpaca insufficient ({} rows), falling back to CoinGecko",
-                symbol, len(df) if df is not None else 0,
+                "[claude_backtest] {} — Alpaca insufficient ({} rows), merging with CoinGecko",
+                symbol, alpaca_rows,
             )
-            df = _fetch_crypto_ohlcv_coingecko(cg_id)
+            cg_df = _fetch_crypto_ohlcv_coingecko(cg_id)
+            if alpaca_df is not None and not alpaca_df.empty and cg_df is not None and not cg_df.empty:
+                # Alpaca dates take priority (real OHLC); CoinGecko fills gaps
+                new_dates = cg_df.index.difference(alpaca_df.index)
+                if len(new_dates) > 0:
+                    df = pd.concat([alpaca_df, cg_df.loc[new_dates]]).sort_index()
+                    df = df[~df.index.duplicated(keep="first")]
+                else:
+                    df = alpaca_df
+                logger.info("[claude_backtest] {} — merged Alpaca ({}) + CoinGecko gap-fill → {} rows",
+                            symbol, alpaca_rows, len(df))
+            elif alpaca_df is not None and not alpaca_df.empty:
+                df = alpaca_df
+            else:
+                df = cg_df
+            cg_fallback_count += 1
 
         if df is not None and not df.empty:
             crypto_data[symbol] = _compute_indicators(df)
             if used_alpaca:
-                # Alpaca bars are genuine daily OHLC — use directly as the hl
-                # overlay instead of CoinGecko's coarser 4-day /ohlc candles.
                 crypto_hl[symbol] = df[["open", "high", "low", "close"]]
                 logger.info("[claude_backtest] {} — Alpaca real OHLC ({} rows) used as hl overlay", symbol, len(df))
+            elif alpaca_df is not None and not alpaca_df.empty:
+                # Use Alpaca partial data as hl overlay where available
+                crypto_hl[symbol] = alpaca_df[["open", "high", "low", "close"]]
+                logger.info("[claude_backtest] {} — Alpaca partial hl overlay ({} rows)", symbol, len(alpaca_df))
             else:
                 hl = _fetch_crypto_ohlc_candles(cg_id)
                 if hl is not None and not hl.empty:
                     crypto_hl[symbol] = hl
-                    logger.info("[claude_backtest] {} — real OHLC candles: {} rows ({} to {})",
-                                symbol, len(hl), hl.index[0].date(), hl.index[-1].date())
+                    logger.info("[claude_backtest] {} — CoinGecko OHLC candles: {} rows", symbol, len(hl))
                 else:
-                    logger.info("[claude_backtest] {} — no real OHLC candles (using close-only fallback)", symbol)
+                    logger.info("[claude_backtest] {} — no real OHLC candles (close-only fallback)", symbol)
 
     fg_history = _fetch_fear_greed_history() if crypto_data else {}
 
     btc_gated = 0
+    circuit_breaker_crypto = 0
+    crypto_correlation_gated = 0
+    CRYPTO_MAJORS = {"BTC", "ETH"}
+    MAX_CONCURRENT_CRYPTO_BUYS = 2
+    open_crypto_buys_by_date: dict[str, list[str]] = {}
 
     for symbol, df in crypto_data.items():
         for date_str in sample_dates:
@@ -1346,12 +1381,41 @@ def run_claude_backtest(
                                 symbol, actual_date, signal.confidence, CONVICTION_FLOOR)
                     continue
 
+                # ── Circuit breaker: no SELLs after >8% gap up, no BUYs after >8% gap down ──
+                change_1d = context.get("change_24h")
+                if change_1d is not None:
+                    try:
+                        cf = float(change_1d)
+                        if cf >= 8.0 and signal.direction == "SELL":
+                            signal.direction = "HOLD"
+                            circuit_breaker_crypto += 1
+                        elif cf <= -8.0 and signal.direction == "BUY":
+                            signal.direction = "HOLD"
+                            circuit_breaker_crypto += 1
+                    except (TypeError, ValueError):
+                        pass
+
                 # ── BTC regime gate: suppress alt BUYs when BTC is breaking down ──
                 if symbol != "BTC" and signal.direction == "BUY" and _btc_regime_bearish(crypto_data, actual_date):
                     btc_gated += 1
                     logger.info("[claude_backtest] {} {} BUY suppressed: BTC bearish regime",
                                 symbol, actual_date)
                     signal.direction = "HOLD"
+
+                # ── Crypto correlation cap: max 2 concurrent buys, max 1 alt with major ──
+                if signal.direction == "BUY":
+                    open_buys = open_crypto_buys_by_date.get(actual_date, [])
+                    if len(open_buys) >= MAX_CONCURRENT_CRYPTO_BUYS:
+                        signal.direction = "HOLD"
+                        crypto_correlation_gated += 1
+                    elif symbol not in CRYPTO_MAJORS and any(s in CRYPTO_MAJORS for s in open_buys):
+                        alt_count = sum(1 for s in open_buys if s not in CRYPTO_MAJORS)
+                        if alt_count >= 1:
+                            signal.direction = "HOLD"
+                            crypto_correlation_gated += 1
+
+                if signal.direction == "BUY":
+                    open_crypto_buys_by_date.setdefault(actual_date, []).append(symbol)
 
                 weight = 1.0
                 if signal.confidence >= 75:
@@ -1400,10 +1464,14 @@ def run_claude_backtest(
         "daily_cap_suppressed": daily_cap_filtered,
         "btc_regime_suppressed": btc_gated,
         "breadth_suppressed": breadth_filtered,
+        "circuit_breaker_crypto_suppressed": circuit_breaker_crypto,
+        "crypto_correlation_suppressed": crypto_correlation_gated,
     }
-    agg["crypto_real_candles"] = {
+    agg["crypto_data_sources"] = {
+        "alpaca_only": alpaca_only_count,
+        "coingecko_fallback": cg_fallback_count,
         "symbols_with_real_ohlc": sorted(crypto_hl.keys()),
-        "count": len(crypto_hl),
+        "real_ohlc_count": len(crypto_hl),
     }
     if _recent_errors:
         agg["error_samples"] = list(_recent_errors)
@@ -1938,14 +2006,26 @@ def run_rules_backtest(
 
     for sym, cg_id in crypto:
         logger.info("[rules_backtest] Fetching crypto data: {}", sym)
-        df = _crypto_alpaca(sym)
-        used_alpaca = df is not None and len(df) >= MIN_ROWS_FOR_SOLE_SOURCE
-        if not used_alpaca:
-            df = _fetch_crypto_ohlcv_coingecko(cg_id)
+        alpaca_df = _crypto_alpaca(sym)
+        used_alpaca = alpaca_df is not None and len(alpaca_df) >= MIN_ROWS_FOR_SOLE_SOURCE
+        if used_alpaca:
+            df = alpaca_df
+        else:
+            cg_df = _fetch_crypto_ohlcv_coingecko(cg_id)
+            if alpaca_df is not None and not alpaca_df.empty and cg_df is not None and not cg_df.empty:
+                new_dates = cg_df.index.difference(alpaca_df.index)
+                df = pd.concat([alpaca_df, cg_df.loc[new_dates]]).sort_index() if len(new_dates) > 0 else alpaca_df
+                df = df[~df.index.duplicated(keep="first")]
+            elif alpaca_df is not None and not alpaca_df.empty:
+                df = alpaca_df
+            else:
+                df = cg_df
         if df is not None and not df.empty:
             crypto_data[sym] = _compute_indicators(df)
             if used_alpaca:
                 crypto_hl[sym] = df[["open", "high", "low", "close"]]
+            elif alpaca_df is not None and not alpaca_df.empty:
+                crypto_hl[sym] = alpaca_df[["open", "high", "low", "close"]]
             else:
                 hl = _fetch_crypto_ohlc_candles(cg_id)
                 if hl is not None and not hl.empty:
