@@ -130,7 +130,7 @@ Multi-profile prop-firm-modeled position sizing:
 - Stock prescreen: core 9 tickers always Sonnet, rest Haiku-first
 
 ## Key constants
-- `ENGINE_CUTOFF = "2026-07-04T11:00:00Z"` — signals before this are unreliable (data bugs)
+- `ENGINE_CUTOFF = "2026-07-15T00:00:00Z"` — v2 engine launch; signals before this are from a fundamentally different product
 - `SIGNAL_COOLDOWN_H = 4` — skip if signal generated within 4 hours
 - `CRYPTO_SIGNAL_COOLDOWN_H = 1` — shorter cooldown for 24/7 crypto markets
 - `MAX_STOCK_SIGNALS_PER_DAY = 3` — hard cap on stock signals per calendar day

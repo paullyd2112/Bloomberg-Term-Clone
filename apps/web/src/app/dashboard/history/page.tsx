@@ -9,7 +9,7 @@ import HistoryFilters from "./HistoryFilters";
 export const revalidate = 60;
 
 // Keep in sync with apps/data-service/scoring/engine.py's ENGINE_CUTOFF.
-const ENGINE_CUTOFF = "2026-07-04T11:00:00Z";
+const ENGINE_CUTOFF = "2026-07-15T00:00:00Z";
 
 type ResolvedSignal = {
   id: number;
@@ -121,8 +121,9 @@ export default async function HistoryPage({
   let query = supabase
     .from("signals")
     .select(
-      "id, asset_type, identifier, direction, confidence, time_horizon, price_at_signal, outcome_price, outcome, created_at, is_backtest",
+      "id, asset_type, identifier, direction, confidence, time_horizon, price_at_signal, outcome_price, outcome, created_at, is_backtest, market_title",
     )
+    .in("asset_type", ["crypto", "prediction"])
     .neq("outcome", "PENDING")
     .gte("created_at", ENGINE_CUTOFF)
     .gte("confidence", 60)
@@ -219,7 +220,7 @@ export default async function HistoryPage({
             <h1 className="text-xl font-semibold tracking-tight text-white">Pleby Trade History</h1>
           </div>
           <p className="text-sm text-zinc-500">
-            Full signal track record. Live trades and backtests since engine v2 launch.
+            Crypto &amp; prediction signal track record — live trades and backtests.
           </p>
         </div>
         <Link

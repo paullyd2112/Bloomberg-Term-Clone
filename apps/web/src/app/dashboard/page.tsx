@@ -20,7 +20,7 @@ import TrackRecord from "@/components/dashboard/TrackRecord";
 export const revalidate = 60;
 
 // Keep in sync with apps/data-service/scoring/engine.py's ENGINE_CUTOFF.
-const ENGINE_CUTOFF = "2026-07-04T11:00:00Z";
+const ENGINE_CUTOFF = "2026-07-15T00:00:00Z";
 
 type MonthBucket = { month: string; wins: number; losses: number; winRate: number };
 
