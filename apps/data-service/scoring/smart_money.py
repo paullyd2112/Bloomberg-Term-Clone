@@ -108,7 +108,24 @@ def get_smart_money_consensus(condition_id: str) -> dict | None:
         consensus_dir = "SPLIT"
         strength = 0.5
 
-    return {
+    wallet_styles: dict[str, int] = {}
+    try:
+        style_result = (
+            supabase.table("wallet_profiles")
+            .select("address, trading_patterns")
+            .in_("address", list(wallet_positions.keys()))
+            .execute()
+        )
+        for row in style_result.data or []:
+            patterns = row.get("trading_patterns")
+            if patterns and isinstance(patterns, dict):
+                style = patterns.get("primary_style", "unknown")
+                if style != "unknown":
+                    wallet_styles[style] = wallet_styles.get(style, 0) + 1
+    except Exception:
+        pass
+
+    result = {
         "consensus_direction": consensus_dir,
         "consensus_strength": round(strength, 2),
         "wallet_count": len(wallet_positions),
@@ -116,6 +133,9 @@ def get_smart_money_consensus(condition_id: str) -> dict | None:
         "top_wallet_pnl": round(top_pnl, 2),
         "breakdown": {"YES": yes_count, "NO": no_count},
     }
+    if wallet_styles:
+        result["wallet_styles"] = wallet_styles
+    return result
 
 
 def persist_smart_money(condition_id: str, consensus: dict) -> None:
@@ -140,8 +160,12 @@ def persist_smart_money(condition_id: str, consensus: dict) -> None:
 
 
 def format_smart_money_context(consensus: dict) -> str:
-    """Format consensus data into a string for the scoring prompt."""
-    return (
+    """Format consensus data into a string for the scoring prompt.
+
+    Includes wallet trading style annotations when pattern data is available,
+    so the model can weigh contrarian vs momentum traders differently.
+    """
+    base = (
         f"SMART MONEY: {consensus['wallet_count']} top wallets "
         f"(>{MIN_WIN_RATE * 100:.0f}% win rate, profitable) — "
         f"{consensus['breakdown']['YES']} YES / {consensus['breakdown']['NO']} NO, "
@@ -149,3 +173,12 @@ def format_smart_money_context(consensus: dict) -> str:
         f"${consensus['total_volume_usd']:,.0f} total volume. "
         f"Top wallet: ${consensus['top_wallet_pnl']:,.0f} cumulative PnL."
     )
+
+    styles = consensus.get("wallet_styles")
+    if styles:
+        style_parts = []
+        for style, count in styles.items():
+            style_parts.append(f"{count} {style}")
+        base += f" Styles: {', '.join(style_parts)}."
+
+    return base

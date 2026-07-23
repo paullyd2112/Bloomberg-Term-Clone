@@ -66,6 +66,9 @@ def build_user_prompt(context: dict) -> str:
         "Smart money consensus is a supporting factor, not a primary signal.",
         "Strong consensus (>80%, 5+ wallets) with matching model conviction = conviction boost.",
         "Strong consensus opposing model view = flag for extra scrutiny, do not auto-override.",
+        "Contrarian wallets opposing momentum wallets on the same market = interesting divergence signal.",
+        "Price momentum (24h drift) is a supporting factor — strong drift may indicate the market is repricing toward fair value or overshooting.",
+        "Near-expiry markets (< 48h) with skewed pricing deserve extra scrutiny — time decay can create edge.",
         "If no edge, return HOLD with low confidence — that is the honest answer.",
     ]
 

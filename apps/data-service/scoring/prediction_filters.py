@@ -26,8 +26,8 @@ SPORTS_CATEGORIES = frozenset({
     "esports", "olympics",
 })
 
-MIN_ENTRY_PRICE = 0.10
-MAX_ENTRY_PRICE = 0.90
+MIN_ENTRY_PRICE = 0.08
+MAX_ENTRY_PRICE = 0.92
 
 MIN_24H_VOLUME_USD = 10_000
 
