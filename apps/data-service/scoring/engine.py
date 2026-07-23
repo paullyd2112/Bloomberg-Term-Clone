@@ -919,6 +919,15 @@ def score_asset(
                 logger.info("prediction/{}: guardrail rejected — {}", identifier, pred_reason)
                 return None
 
+            smart_money_ctx = None
+            try:
+                from scoring.smart_money import get_smart_money_consensus, format_smart_money_context
+                consensus = get_smart_money_consensus(identifier)
+                if consensus:
+                    smart_money_ctx = format_smart_money_context(consensus)
+            except Exception as e:
+                logger.debug("prediction/{}: smart money lookup failed — {}", identifier, e)
+
             context = {
                 "identifier":    identifier,
                 "current_price": current_price,
@@ -927,6 +936,7 @@ def score_asset(
                 "metadata":      meta,
                 "close_time":    meta.get("close_time") or meta.get("end_date"),
                 "news_headlines": news,
+                "smart_money":   smart_money_ctx,
             }
 
             macro_ctx = _build_macro_context_dict(benchmarks)

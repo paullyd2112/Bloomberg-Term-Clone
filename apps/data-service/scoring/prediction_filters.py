@@ -299,17 +299,36 @@ def check_clob_liquidity(
     )
 
 
+def _fetch_cross_platform_refs(condition_id: str) -> dict[str, float]:
+    """Query prediction_cross_platform for reference probabilities."""
+    try:
+        from supabase_client import supabase
+        result = (
+            supabase.table("prediction_cross_platform")
+            .select("platform, external_prob")
+            .eq("polymarket_condition_id", condition_id)
+            .execute()
+        )
+        refs = {}
+        for row in result.data or []:
+            if row.get("external_prob") is not None:
+                refs[row["platform"]] = float(row["external_prob"])
+        return refs
+    except Exception:
+        return {}
+
+
 def check_ground_truth_mismatch(
     yes_price: float | None,
     metadata: dict | None = None,
+    condition_id: str | None = None,
 ) -> tuple[bool, str]:
     """Verify the signal has a mathematically verified pricing mismatch
     of >= 7% against ground-truth reference platforms.
 
-    Ground-truth sources checked (from metadata if available):
-    - Kalshi implied probability
-    - PredictIt implied probability
-    - CME FedWatch futures-implied probability
+    Ground-truth sources (checked in order):
+    1. Cross-platform DB table (Metaculus, Manifold — populated by prediction_reference.py)
+    2. Metadata fields (Kalshi, PredictIt, CME FedWatch — from ingestion)
 
     Returns (has_edge, reason).
     """
@@ -317,11 +336,17 @@ def check_ground_truth_mismatch(
         return False, "[Ground truth] No YES price to compare"
 
     meta = metadata or {}
-    ground_truth_refs = {
+
+    ground_truth_refs: dict[str, float | None] = {
         "kalshi_implied_prob": meta.get("kalshi_implied_prob"),
         "predictit_implied_prob": meta.get("predictit_implied_prob"),
         "cme_fedwatch_prob": meta.get("cme_fedwatch_prob"),
     }
+
+    if condition_id:
+        cross_platform = _fetch_cross_platform_refs(condition_id)
+        for platform, prob in cross_platform.items():
+            ground_truth_refs[platform] = prob
 
     found_any = False
     max_mismatch = 0.0
@@ -393,7 +418,7 @@ def run_prediction_guardrails(
         except (TypeError, ValueError):
             pass
 
-    gt_ok, gt_reason = check_ground_truth_mismatch(yes_price, meta)
+    gt_ok, gt_reason = check_ground_truth_mismatch(yes_price, meta, condition_id=identifier)
     if not gt_ok:
         return False, gt_reason
 

@@ -56,10 +56,16 @@ def build_user_prompt(context: dict) -> str:
         for h in context["news_headlines"]:
             lines.append(f"  - {h}")
 
+    if context.get("smart_money"):
+        lines += ["", context["smart_money"]]
+
     lines += [
         "",
         "Assess whether this market is correctly priced.",
         "If you find edge, explain the specific mispricing.",
+        "Smart money consensus is a supporting factor, not a primary signal.",
+        "Strong consensus (>80%, 5+ wallets) with matching model conviction = conviction boost.",
+        "Strong consensus opposing model view = flag for extra scrutiny, do not auto-override.",
         "If no edge, return HOLD with low confidence — that is the honest answer.",
     ]
 

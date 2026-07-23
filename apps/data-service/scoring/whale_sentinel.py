@@ -87,6 +87,9 @@ def _parse_whale_trades(trades: list[dict]) -> list[dict]:
 
             tx_hash = trade.get("transaction_hash", trade.get("id", None))
 
+            maker = trade.get("maker", None)
+            taker = trade.get("taker", None)
+
             whales.append({
                 "market_title": market_title[:500],
                 "asset_id": str(asset_id)[:200],
@@ -95,6 +98,8 @@ def _parse_whale_trades(trades: list[dict]) -> list[dict]:
                 "size": round(size, 4),
                 "usd_value": round(usd_value, 2),
                 "tx_hash": str(tx_hash)[:200] if tx_hash else None,
+                "maker_address": str(maker)[:200] if maker else None,
+                "taker_address": str(taker)[:200] if taker else None,
             })
         except (ValueError, TypeError, KeyError) as e:
             logger.debug("whale_sentinel: skipping malformed trade — {}", e)
