@@ -33,6 +33,8 @@ from briefing.newsletter import generate_newsletter
 from briefing.newsletter_emailer import send_newsletter
 from briefing.elite_briefing import send_elite_briefings
 from briefing.welcome_emails import send_welcome_sequence
+from ingestion.polymarket_wallets import ingest_wallet_profiles
+from ingestion.prediction_reference import ingest_prediction_references
 
 load_dotenv()
 
@@ -179,6 +181,12 @@ def job_refresh_asset_accuracy():
 
 def job_evaluate_alerts():
     return evaluate_alerts()
+
+def job_ingest_wallet_profiles():
+    return ingest_wallet_profiles()
+
+def job_ingest_prediction_references():
+    return ingest_prediction_references()
 
 
 _uptime_fail_count = 0
@@ -331,6 +339,14 @@ scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
 # Whale Sentinel — poll Polymarket CLOB for large trades every 5 min
 scheduler.add_job(lambda: _run_job("ingest_whale_alerts", job_ingest_whale_alerts),
                   IntervalTrigger(minutes=5), id="ingest_whale_alerts")
+
+# Wallet Profiling — daily at 4:00 AM ET, backfill wallet trade history + compute stats
+scheduler.add_job(lambda: _run_job("ingest_wallet_profiles", job_ingest_wallet_profiles),
+                  CronTrigger(hour=4, minute=0), id="ingest_wallet_profiles")
+
+# Cross-platform ground truth — daily at 5:00 AM ET, fetch Metaculus/Manifold reference probs
+scheduler.add_job(lambda: _run_job("ingest_prediction_references", job_ingest_prediction_references),
+                  CronTrigger(hour=5, minute=0), id="ingest_prediction_references")
 
 # Crypto momentum screener — every 2 hours, catches pumps/breakouts outside watchlist
 scheduler.add_job(lambda: _run_job("crypto_momentum", job_crypto_momentum),
@@ -651,6 +667,8 @@ def run_job_manual(job_name: str):
         "send_elite_briefings": job_send_elite_briefings,
         "ingest_whale_alerts": job_ingest_whale_alerts,
         "cleanup_stale_predictions": job_cleanup_stale_prediction_signals,
+        "ingest_wallet_profiles": job_ingest_wallet_profiles,
+        "ingest_prediction_references": job_ingest_prediction_references,
     }
 
     fn = job_map.get(job_name)

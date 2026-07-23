@@ -260,6 +260,10 @@ async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
                 raw_category = _first(m, "category") or ""
                 inferred = raw_category or infer_category(title, event_slug)
 
+                clob_token_ids = _first(m, "clobTokenIds") or []
+                if isinstance(clob_token_ids, str):
+                    clob_token_ids = _parse_json_list(clob_token_ids)
+
                 static_meta = {
                     "source":              "polymarket",
                     "title":               title,
@@ -267,6 +271,7 @@ async def _fetch_polymarket(client: httpx.AsyncClient) -> list[dict]:
                     "category":            inferred,
                     "event_slug":          event_slug,
                     "context_description": context_description,
+                    "clobTokenIds":        clob_token_ids,
                     "raw":                 m,
                 }
                 _metadata_cache[identifier] = static_meta

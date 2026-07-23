@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("whale_alerts")
-    .select("id, market_title, asset_id, outcome, price, size, usd_value, tx_hash, created_at")
+    .select("id, market_title, asset_id, outcome, price, size, usd_value, tx_hash, maker_address, created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
 

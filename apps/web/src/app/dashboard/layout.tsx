@@ -4,6 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import BottomNav from "@/components/BottomNav";
 import TickerBar from "@/components/TickerBar";
+import WalletProvider from "@/providers/WalletProvider";
 
 export default async function DashboardLayout({
   children,
@@ -34,7 +35,9 @@ export default async function DashboardLayout({
             For informational purposes only. Not financial advice. Past performance is not indicative of future results.
           </p>
         </div>
-        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">{children}</main>
+        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">
+          <WalletProvider>{children}</WalletProvider>
+        </main>
       </div>
 
       {/* Bottom nav — mobile only */}

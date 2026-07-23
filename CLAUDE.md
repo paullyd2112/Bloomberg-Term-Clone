@@ -338,3 +338,751 @@ volume caps) stop being acceptable at that point.
       order book and price updates. Current v1 uses 30-min Gamma API polling which is fine for discovery,
       but live-updating probabilities would make the predictions tab feel more alive. Not needed at
       launch; add once user engagement with the tab justifies the connection management complexity.
+
+# POLYMARKET SMART MONEY, TRADING INTELLIGENCE & NON-CUSTODIAL EXECUTION (must-have, target: July 24 2026)
+
+Ten features that add wallet intelligence, strategy refinement, cross-platform data, and
+non-custodial Polymarket trading to the prediction markets pipeline. Inspired by open-source
+Polymarket trading tools; implemented as native features within Plebs, not external bots.
+Zero ongoing API cost — all data sources are free/public.
+
+**Product thesis:** Signal → conviction → execution in one interface. Users currently see
+"AI YES 78%" and have to context-switch to Polymarket to act on it. With non-custodial
+trading, the signal and the trade are one click apart. Smart money data (#1-3) enriches
+the trade modal so users aren't just trading on AI alone — they see what the best wallets
+are doing alongside the AI recommendation.
+
+**Critical path:** Three independent Day 1 roots: #1 (wallet profiling, backend), #5
+(cross-platform ground truth, backend), and #8 (wallet connection, frontend/web3). The main
+chain is #1 → #2 → #3, which merges with #8 at #7 (unified frontend: smart money UI + trade
+modal). #9 and #10 extend trading after wallet connection is live. #4 and #6 slot in anywhere.
+
+## Feature #1: Wallet Profiling (`ingestion/polymarket_wallets.py`)
+**Priority: HIGHEST — foundation for #2, #3, #7**
+**Sessions: 3-4 | Cost: $0/month**
+
+Scrape trading history for top Polymarket wallets, compute per-wallet stats (PnL, win rate, ROI,
+avg size, category specialization), store in a `wallet_profiles` table.
+
+### Data source
+Polymarket CLOB API `GET /trades` supports filtering by `maker` (wallet address). No auth required.
+Rate limits undocumented — use 1-2 req/sec with exponential backoff on 429s.
+
+### Wallet discovery
+Seed from existing `whale_alerts` table — extract unique wallet addresses from trades already
+captured by `whale_sentinel.py`. The CLOB `/trades` endpoint returns `maker` and `taker` addresses
+on each trade. Currently `whale_sentinel.py` does NOT store wallet addresses (only `tx_hash`,
+`asset_id`, `market_title`). **Step 1 is extending whale_sentinel to capture `maker`/`taker`.**
+
+### DB schema (migration `015_wallet_profiles.sql`)
+```sql
+CREATE TABLE wallet_profiles (
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    address         text NOT NULL UNIQUE,
+    display_name    text,              -- optional human label
+    total_trades    integer DEFAULT 0,
+    total_volume_usd numeric(14,2) DEFAULT 0,
+    realized_pnl_usd numeric(14,2) DEFAULT 0,
+    win_rate        numeric(5,4),       -- 0.0000-1.0000
+    avg_trade_size  numeric(12,2),
+    top_categories  jsonb DEFAULT '[]', -- [{category, count, win_rate}]
+    first_seen_at   timestamptz,
+    last_active_at  timestamptz,
+    stats_updated_at timestamptz DEFAULT now(),
+    created_at      timestamptz DEFAULT now()
+);
+
+CREATE INDEX idx_wallet_profiles_pnl ON wallet_profiles (realized_pnl_usd DESC);
+CREATE INDEX idx_wallet_profiles_win_rate ON wallet_profiles (win_rate DESC)
+    WHERE total_trades >= 20;
+
+-- Trade-level history for pattern analysis (#6)
+CREATE TABLE wallet_trades (
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    wallet_address  text NOT NULL REFERENCES wallet_profiles(address),
+    condition_id    text NOT NULL,
+    market_title    text,
+    direction       text,              -- YES/NO
+    price           numeric(8,4),
+    size            numeric(14,4),
+    usd_value       numeric(14,2),
+    tx_hash         text UNIQUE,
+    traded_at       timestamptz,
+    created_at      timestamptz DEFAULT now()
+);
+
+CREATE INDEX idx_wallet_trades_wallet ON wallet_trades (wallet_address, traded_at DESC);
+CREATE INDEX idx_wallet_trades_market ON wallet_trades (condition_id, traded_at DESC);
+
+-- RLS + grants (follow the rls_auto_enable pattern, but explicit here)
+ALTER TABLE wallet_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE wallet_trades ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON wallet_profiles TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON wallet_trades TO service_role;
+GRANT SELECT ON wallet_profiles TO authenticated;
+GRANT SELECT ON wallet_trades TO authenticated;
+```
+
+### Implementation plan
+**File: `apps/data-service/ingestion/polymarket_wallets.py`**
+
+1. `discover_wallets()` — query `whale_alerts` for distinct wallet addresses (requires
+   whale_sentinel extension first), deduplicate, insert into `wallet_profiles` with address only.
+2. `backfill_wallet_history(address)` — paginate CLOB `/trades?maker={address}` (100 per page),
+   store in `wallet_trades`, deduplicate by `tx_hash`.
+3. `compute_wallet_stats(address)` — aggregate `wallet_trades` for the wallet: total trades,
+   volume, PnL (requires matching against settlement outcomes from `signals` or CLOB settlement
+   API), win rate, avg size, top categories (join market titles against `infer_category()`).
+4. `ingest_wallet_profiles()` — orchestrator: discover new wallets, backfill any with
+   `stats_updated_at` older than 24h, recompute stats. Return summary string.
+
+**Scheduler registration:**
+- Job: `job_ingest_wallet_profiles` — daily at 4:00 AM ET (off-peak, before any scoring)
+- Manual trigger: add to `job_map` as `"ingest_wallet_profiles"`
+- Initial backfill: run manually via `POST /run-job/ingest_wallet_profiles` — first run will
+  take longer (hours) as it paginates history for all discovered wallets. Subsequent runs
+  are incremental (only new trades since last check).
+
+**whale_sentinel.py changes:**
+- Add `maker_address` and `taker_address` columns to whale alert inserts (CLOB `/trades`
+  already returns these fields — they're just not being captured today).
+- Migration: `ALTER TABLE whale_alerts ADD COLUMN maker_address text, ADD COLUMN taker_address text;`
+  (or include in `015_wallet_profiles.sql`).
+
+### Risk & mitigations
+- **CLOB API reliability**: the CLOB's `/book` endpoint returned garbage data (reason CLOB
+  liquidity check is disabled). The `/trades` endpoint may be more reliable since it returns
+  historical facts, not live state — but test with a single wallet first before building the
+  full pipeline. If `/trades` is also unreliable, fall back to Polygonscan/Dune Analytics
+  on-chain queries (free tier, slower).
+- **Rate limiting**: start at 1 req/sec. If 429s appear, back off to 0.5 req/sec. The initial
+  backfill for ~50-100 wallets with ~500 trades each is ~500 requests — at 1/sec that's
+  ~8 minutes, very manageable.
+- **PnL computation**: requires knowing whether a position was ultimately profitable. Two
+  approaches: (a) match `wallet_trades` against CLOB settlement API outcomes (same API the
+  resolver uses), or (b) compute from trade pairs (buy at X, sell at Y). Approach (a) is
+  simpler and uses existing code.
+
+---
+
+## Feature #2: Smart Money Consensus Signal (`scoring/smart_money.py`)
+**Priority: HIGHEST — the actual alpha**
+**Sessions: 2 | Cost: $0/month | Depends on: #1**
+
+For each market being scored, compute what the best wallets are doing — a weighted consensus
+metric passed to Claude as a new context section in the prediction scoring prompt.
+
+### Implementation plan
+**File: `apps/data-service/scoring/smart_money.py`**
+
+1. `get_smart_money_consensus(condition_id) -> dict | None`
+   - Query `wallet_profiles` for wallets with `win_rate >= 0.55` AND `total_trades >= 20`
+     AND `realized_pnl_usd > 0` (profitable, experienced wallets).
+   - Query `wallet_trades` for those wallets' recent trades on this `condition_id`
+     (last 72 hours).
+   - Compute weighted consensus: each wallet's position (YES/NO) weighted by their
+     `realized_pnl_usd` (richer wallets = more weight). Return:
+     ```python
+     {
+         "consensus_direction": "YES" | "NO" | "SPLIT",
+         "consensus_strength": 0.0-1.0,  # 1.0 = all smart money on same side
+         "wallet_count": 5,
+         "total_volume_usd": 45000,
+         "top_wallet_pnl": 120000,  # best wallet's PnL for credibility
+         "breakdown": {"YES": 3, "NO": 2},
+     }
+     ```
+   - Return `None` if fewer than 2 qualifying wallets have traded this market (insufficient signal).
+
+2. **Scoring prompt integration** — modify `score_prediction_markets()` in `engine.py`:
+   - After guardrail pass, before Haiku prescreen, call `get_smart_money_consensus(condition_id)`.
+   - If consensus data exists, append to the market context passed to both Haiku and Sonnet:
+     ```
+     SMART MONEY: 5 top wallets (>55% win rate, >$10K PnL) — 3 YES / 2 NO,
+     consensus 65% YES, $45K total volume. Top wallet: $120K cumulative PnL.
+     ```
+   - ~50-80 extra tokens per market — negligible cost impact.
+
+3. **Prompt update** — add guidance to `prompts/prediction_markets.py`:
+   - Smart money consensus is a supporting factor, not a primary signal.
+   - Strong consensus (>80%, 5+ wallets) with matching model conviction = conviction boost.
+   - Strong consensus opposing model view = flag for extra scrutiny, do not auto-override.
+   - Absence of smart money data = neutral (no penalty).
+
+### New deterministic gate (optional, evaluate after 2 weeks of data)
+**Smart money contradiction gate**: if smart money consensus is >80% on one side and the model
+wants to signal the opposite side, downgrade to HOLD. Only enable after confirming smart money
+consensus has predictive value from the forward-tracked signals. NOT an initial launch gate —
+add it as an evidence-gate-style annotation first (`[Smart money aligned]` / `[Smart money
+opposing]`), then promote to a hard gate if the data supports it.
+
+---
+
+## Feature #3: Whale Alert Enhancement (`scoring/whale_sentinel.py`)
+**Priority: MEDIUM-HIGH**
+**Sessions: 1-2 | Cost: $0/month | Depends on: #1**
+
+Upgrade whale_sentinel from a passive log to an active signal input by detecting whale clusters
+and enriching with wallet profile data.
+
+### Implementation plan
+**Changes to `scoring/whale_sentinel.py`:**
+
+1. **Wallet enrichment** — after `_parse_whale_trades()`, join each whale trade against
+   `wallet_profiles` to attach win rate and PnL to the alert row. New columns on `whale_alerts`:
+   `maker_win_rate numeric(5,4)`, `maker_pnl_usd numeric(14,2)`.
+
+2. **Cluster detection** — new function `detect_whale_clusters()`:
+   - Query `whale_alerts` for the last 4 hours, grouped by `condition_id` + `outcome`.
+   - A "cluster" = 3+ whale trades on the same side of the same market within 4 hours.
+   - Store clusters in a new `whale_clusters` table or as a Supabase view:
+     ```sql
+     CREATE VIEW whale_clusters AS
+     SELECT
+         asset_id,
+         market_title,
+         outcome,
+         count(*) as whale_count,
+         sum(usd_value) as total_usd,
+         avg(maker_win_rate) as avg_whale_win_rate,
+         max(created_at) as latest_trade
+     FROM whale_alerts
+     WHERE created_at > now() - interval '4 hours'
+         AND maker_win_rate IS NOT NULL
+     GROUP BY asset_id, market_title, outcome
+     HAVING count(*) >= 3;
+     ```
+
+3. **Scoring integration** — pass whale cluster data alongside smart money consensus in the
+   prediction scoring prompt:
+   ```
+   WHALE ACTIVITY: 4 whale trades (>$5K each) on YES side in last 4h,
+   total $82K, avg whale win rate 62%.
+   ```
+
+4. **Scheduler**: `detect_whale_clusters()` runs inline with `ingest_whale_alerts()` (every 5 min)
+   — the view is live, no separate job needed.
+
+---
+
+## Feature #4: Strategy Catalog Mining (research + implementation)
+**Priority: MEDIUM**
+**Sessions: 2-3 | Cost: $0/month | Depends on: nothing**
+
+Research CloddsBot's 118 strategies (github.com/alsk1992/CloddsBot), extract 3-5 patterns that
+map to the existing guardrail/scoring architecture.
+
+### Target strategies to evaluate
+1. **Penny Clipper** — refines the pricing bracket gate. Current gate blocks YES/NO outside
+   $0.10-$0.90. Penny Clipper likely has a more nuanced approach to near-zero/near-one
+   contracts that sometimes have edge (e.g., $0.03 NO on a market that's about to expire
+   unfavorably). Evaluate whether the $0.10 floor is too aggressive.
+
+2. **Expiry Fade** — time-decay pattern near market close. Markets approaching expiry with
+   probabilities stuck at 50-60% often resolve sharply. Could become a new guardrail:
+   "markets within 48h of close with YES 0.40-0.60 = elevated priority for scoring."
+   Modify `score_prediction_markets()` to boost priority for near-expiry markets in the
+   candidate ranking (currently pure volume sort).
+
+3. **Momentum** — extends the price-drift resolver concept into a scoring factor. If YES price
+   has moved >10pp in 24h in one direction, that's momentum signal. Already have
+   `prediction_price_history` data for this — compute 24h price delta and pass to scoring prompt.
+
+4. **Binance-Polymarket latency** — cross-asset arbitrage when crypto spot moves before the
+   prediction market reprices. The `prediction_market_decoupling.py` strategy already does
+   a version of this. Evaluate whether CloddsBot's implementation catches cases the existing
+   code misses.
+
+5. **DCA / Smart Routing** — position management strategies. Now directly relevant with
+   non-custodial trading (#8-10) — could inform order sizing and limit order placement.
+
+### Implementation
+For each strategy that proves valuable:
+- If it maps to a guardrail: add to `scoring/prediction_filters.py`
+- If it maps to a scoring factor: add context to `prompts/prediction_markets.py`
+- If it maps to candidate ranking: modify the sort in `score_prediction_markets()`
+- If it maps to trade execution: integrate into order placement logic (#9)
+- Document findings in this section after research is complete
+
+### What to look for in the CloddsBot repo
+- `strategies/` directory — read each strategy's docstring and core logic
+- Focus on the decision rules (when to enter, when to exit), not the execution code
+- Note any hardcoded thresholds (they've been tuned on real data)
+- Check if any strategy uses wallet/flow data — those pair with #1-3
+
+---
+
+## Feature #5: Cross-Platform Ground Truth (`ingestion/prediction_reference.py`)
+**Priority: MEDIUM**
+**Sessions: 2-3 | Cost: $0/month | Depends on: nothing**
+
+Improve `check_ground_truth_mismatch()` in `prediction_filters.py`, which currently fails open
+100% of the time because no reference data is ever populated. Add Metaculus, Manifold Markets,
+and (optionally) PredictIt as reference probability sources.
+
+### Data sources (all free, public, no auth)
+1. **Metaculus API** — `https://www.metaculus.com/api2/questions/` — returns community median
+   probability. Good for politics, science, geopolitics. JSON API, no auth.
+2. **Manifold Markets API** — `https://api.manifold.markets/v0/markets` — returns probability
+   based on automated market maker. Good for tech, crypto, politics. JSON API, no auth.
+3. **PredictIt** — `https://www.predictit.org/api/marketdata/all/` — returns YES/NO prices.
+   Politics-focused. JSON API, no auth. May sunset — check availability.
+
+### The hard problem: market matching
+Matching "Will Biden run in 2028?" on Polymarket to the equivalent question on Metaculus is
+fuzzy text matching. Approaches, in order of reliability:
+
+1. **Embedding similarity** — use a small embedding model to encode market titles, cosine
+   similarity > 0.85 = probable match. Could use Haiku for this (~$0.001/comparison) or a
+   free local model if available.
+2. **Keyword extraction + overlap** — extract named entities and key terms, compute Jaccard
+   similarity. Free, no API cost, less accurate.
+3. **Manual mapping table** — for the ~30 markets that actually get scored, maintain a mapping
+   of Polymarket condition_id → Metaculus question_id. Highest accuracy, doesn't scale, but
+   at 30 markets it's fine.
+4. **Hybrid** — start with keyword overlap for automated discovery, confirm with Haiku for
+   borderline cases, build manual mapping for high-volume markets.
+
+**Recommendation**: Start with approach 3 (manual mapping) for the MVP — you only score 30
+markets per run, so a manually curated mapping table of ~50-100 cross-platform pairs covers
+the most important markets. Automate with approach 4 later.
+
+### DB schema (add to `015_wallet_profiles.sql` or separate `016_cross_platform.sql`)
+```sql
+CREATE TABLE prediction_cross_platform (
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    polymarket_condition_id text NOT NULL,
+    platform        text NOT NULL,      -- 'metaculus', 'manifold', 'predictit'
+    external_id     text NOT NULL,      -- platform-specific question/market ID
+    external_prob   numeric(5,4),       -- 0.0000-1.0000
+    external_volume numeric(14,2),
+    last_fetched_at timestamptz DEFAULT now(),
+    created_at      timestamptz DEFAULT now(),
+    UNIQUE (polymarket_condition_id, platform)
+);
+
+CREATE INDEX idx_cross_platform_lookup
+    ON prediction_cross_platform (polymarket_condition_id);
+```
+
+### Implementation plan
+**File: `apps/data-service/ingestion/prediction_reference.py`**
+
+1. `fetch_metaculus_probabilities()` — paginate Metaculus API for open questions, store in
+   `prediction_cross_platform`.
+2. `fetch_manifold_probabilities()` — same pattern for Manifold Markets.
+3. `match_to_polymarket(external_title, external_id, platform)` — fuzzy match against
+   `raw_prices` prediction markets. Start with keyword overlap, graduate to embeddings.
+4. `ingest_prediction_references()` — orchestrator, runs all sources, matches, stores.
+
+**Scheduler**: daily at 5:00 AM ET (before ingestion + scoring windows).
+**Manual trigger**: `POST /run-job/ingest_prediction_references`.
+
+**Guardrail integration** — modify `check_ground_truth_mismatch()` in `prediction_filters.py`:
+- Query `prediction_cross_platform` for the market's `condition_id`.
+- Compare Polymarket YES price against each platform's probability.
+- If any platform shows >= 7% mismatch, return `(True, "verified edge")`.
+- If all platforms agree within 7%, return `(False, "insufficient edge")`.
+- If no cross-platform data, continue failing open (current behavior).
+
+---
+
+## Feature #6: Trader Behavior Patterns (`analysis/wallet_patterns.py`)
+**Priority: LOW-MEDIUM**
+**Sessions: 2 | Cost: $0/month | Depends on: #1**
+
+Beyond raw wallet stats, detect behavioral patterns in `wallet_trades` data: momentum fading,
+dip buying, scale-in/out, time-of-day preferences, category specialization.
+
+### Implementation plan
+**File: `apps/data-service/analysis/wallet_patterns.py`**
+
+All analysis is deterministic (no Claude API cost). Compute from `wallet_trades` table:
+
+1. **Trading style classification** — for each wallet in `wallet_profiles`:
+   - `momentum_trader`: >60% of trades follow 24h price direction
+   - `contrarian`: >60% of trades oppose 24h price direction
+   - `scalper`: avg hold time < 4 hours
+   - `swing_trader`: avg hold time > 48 hours
+   - `category_specialist`: >70% of trades in one category
+
+2. **Timing patterns**:
+   - Preferred trading hours (UTC buckets)
+   - Day-of-week distribution
+   - Trades-before-expiry pattern (do they trade close to market close?)
+
+3. **Position sizing patterns**:
+   - Fixed size vs. conviction-scaled (variance in trade sizes)
+   - Avg size by category
+   - Size vs. outcome correlation (do bigger bets win more?)
+
+4. Store computed patterns in `wallet_profiles.trading_patterns jsonb` column (add via ALTER).
+
+### How this feeds the scoring pipeline
+- The `trading_style` classification enriches the smart money consensus (#2):
+  ```
+  SMART MONEY: 5 wallets — 3 YES (2 momentum traders, 1 contrarian) / 2 NO (both swing traders)
+  ```
+- Contrarian wallets opposing momentum wallets on the same market = interesting signal.
+- Category specialists' opinions weighted higher for markets in their specialty.
+
+### Not a launch priority
+This is a "nice to have" refinement on top of #1-2. Build it after #1-2 are live and
+generating data. The wallet_trades table needs at least 2 weeks of data before pattern
+analysis is meaningful.
+
+---
+
+## Feature #7: Frontend — Smart Money UI + Trade Modal (unified)
+**Priority: HIGH (convergence point for intelligence + execution)**
+**Sessions: 3-4 | Cost: $0/month | Depends on: #1, #2, #3, #8**
+
+Single frontend pass: smart money badges, whale indicators, AND the trade modal on
+PredictionCard. Building these together avoids touching the same components twice.
+
+### PredictionCard.tsx changes
+
+1. Extend `PredictionMarket` type:
+   ```typescript
+   smart_money?: {
+       consensus_direction: "YES" | "NO" | "SPLIT";
+       consensus_strength: number;   // 0-1
+       wallet_count: number;
+       total_volume_usd: number;
+   } | null;
+   whale_activity?: {
+       whale_count: number;
+       total_usd: number;
+       direction: "YES" | "NO" | "MIXED";
+   } | null;
+   ```
+
+2. **Smart money badge** — display below the AI signal badge when `smart_money` is present
+   and `consensus_strength >= 0.6`:
+   - Color: blue theme (distinct from green AI signal)
+   - Format: `SMART MONEY: 73% YES (5 wallets)`
+   - Only show when wallet_count >= 3 (below that it's not meaningful)
+
+3. **Whale activity indicator** — subtle icon + tooltip when `whale_activity` is present:
+   - Small whale icon with USD volume
+   - Tooltip: "4 whale trades ($82K) on YES in last 4h"
+
+4. **Trade button** — appears when wallet is connected (#8). Opens trade modal (see below).
+
+### Trade modal (`components/predictions/TradeModal.tsx`)
+Full-context trade dialog showing everything the user needs to decide and execute:
+```
+┌─────────────────────────────────────────────┐
+│ Buy YES — "Will Fed cut rates in Sept?"     │
+│                                             │
+│ AI Signal: YES 78% confidence               │
+│ Smart Money: 5 wallets — 4 YES / 1 NO      │
+│ Whale Activity: $82K on YES in last 4h      │
+│                                             │
+│ Current YES price:  $0.43                   │
+│ Implied edge:       35pp vs AI conviction   │
+│                                             │
+│ Amount:  [____] USDC                        │
+│ Type:    ○ Market  ○ Limit                  │
+│ Price:   [____] (limit only)                │
+│                                             │
+│ Est. payout:  $X.XX if YES resolves         │
+│ Max loss:     $X.XX (your cost basis)       │
+│                                             │
+│        [ Cancel ]    [ Confirm Trade ]      │
+└─────────────────────────────────────────────┘
+```
+
+The trade modal calls the CLOB API via the user's EIP-712 derived credentials (#8).
+All signing happens client-side — Plebs backend never touches the user's wallet.
+
+### predictions/page.tsx changes
+1. **New sort option**: `{ value: "smart_money", label: "Smart Money" }` — sort by
+   `consensus_strength * wallet_count` descending.
+2. **New stat in stats row**: "Smart Money Active" — count of markets with smart money data.
+3. **Data fetching**: add a 4th Supabase query for smart money data. Use pre-computed
+   `prediction_smart_money` table populated during scoring (approach b — faster reads).
+4. **Wallet connection status** — show connected wallet address + USDC balance in header
+   when wallet is connected. "Connect Wallet" button when not.
+
+---
+
+## Feature #8: Wallet Connection & CLOB Auth
+**Priority: HIGH — Day 1 parallel start (frontend/web3, no backend dependencies)**
+**Sessions: 2-3 | Cost: $0/month**
+
+Connect the user's Polygon wallet and derive Polymarket CLOB API credentials. This is the
+foundation for all trading features (#9, #10) and feeds user context back to the intelligence
+features (user's own wallet address for personalized stats).
+
+### Architecture
+Plebs is a **non-custodial interface**. The user's wallet (MetaMask, WalletConnect, Coinbase
+Wallet, etc.) holds their funds. Polymarket's smart contracts on Polygon hold collateral when
+trading. Plebs is the UI layer — it never touches private keys or holds funds.
+
+### Implementation plan
+
+**New dependencies** (`apps/web/package.json`):
+```
+wagmi ^2.x          — React hooks for Ethereum wallet connection
+viem ^2.x           — TypeScript Ethereum library (wagmi's transport layer)
+@rainbow-me/rainbowkit ^2.x  — polished wallet connection modal (optional, can use wagmi's
+                                built-in connectors instead for a lighter bundle)
+```
+
+**wagmi config** (`apps/web/src/lib/wagmi.ts`):
+```typescript
+import { createConfig, http } from "wagmi";
+import { polygon } from "wagmi/chains";
+
+export const wagmiConfig = createConfig({
+    chains: [polygon],
+    transports: { [polygon.id]: http() },  // uses public Polygon RPC by default
+    connectors: [
+        injected(),           // MetaMask, Brave, etc.
+        walletConnect({ projectId: "..." }),  // WalletConnect v2
+        coinbaseWallet({ appName: "Plebs" }),
+    ],
+});
+```
+
+**CLOB credential derivation** (`apps/web/src/lib/polymarket/auth.ts`):
+- Polymarket uses EIP-712 typed data signatures to derive API credentials.
+- Flow: user connects wallet → Plebs prompts a signature (no transaction, no gas) →
+  signature is sent to CLOB API to get an API key + secret bound to that wallet address.
+- The CLOB credentials are stored in memory (session-only) or encrypted in localStorage.
+- The backend NEVER sees these credentials — all CLOB API calls happen from the browser.
+
+**Wallet context provider** (`apps/web/src/providers/WalletProvider.tsx`):
+- Wraps the app with wagmi's `WagmiProvider` + `QueryClientProvider`.
+- Provides `useAccount()`, `useBalance()`, `useSignTypedData()` hooks to child components.
+- Add to `apps/web/src/app/layout.tsx` (wrap existing providers).
+
+**USDC balance display**:
+- Query USDC balance on Polygon for the connected wallet address.
+- USDC on Polygon: contract `0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359` (bridged USDC).
+- Show in predictions page header and trade modal.
+
+### What this unlocks
+- **Trade modal** (#7): the "Confirm Trade" button calls CLOB `POST /order` with the
+  user's credentials. Signing happens in the browser via the wallet extension.
+- **User's own stats**: connected wallet address can be looked up in `wallet_profiles`
+  to show "Your stats: 23 trades, 68% win rate, $4.2K volume" — personalization for free.
+- **Position tracking** (#10): query CLOB API for the user's open positions.
+
+### Risk & mitigations
+- **Public Polygon RPC reliability**: the default public RPC is fine for balance queries
+  and read calls. If it becomes flaky, add Alchemy/Infura free tier as fallback
+  (both offer 100M+ compute units/month free — more than enough).
+- **CLOB credential security**: credentials derived from wallet signature should be
+  session-scoped (cleared on tab close). Never persist API secrets in plain localStorage.
+  Consider encrypting with the wallet's public key or using `sessionStorage`.
+- **wagmi bundle size**: wagmi + viem add ~100-150KB gzipped. Acceptable for a trading app.
+  If needed, code-split and lazy-load the wallet provider only on predictions pages.
+
+---
+
+## Feature #9: Order Placement via CLOB API
+**Priority: HIGH**
+**Sessions: 3-4 | Cost: $0/month | Depends on: #8**
+
+Place limit and market orders on Polymarket through the CLOB API using the user's
+wallet-derived credentials. All execution happens client-side — Plebs is the interface.
+
+### Polymarket CLOB order flow
+1. User selects YES/NO and amount in the trade modal (#7).
+2. Frontend builds an order object: `{tokenID, price, size, side, feeRateBps, nonce, expiration}`.
+3. Order is signed with the user's wallet (EIP-712 typed data).
+4. Signed order is submitted to CLOB `POST /order`.
+5. CLOB matches it against the order book. If limit order, it sits until filled or cancelled.
+
+### Implementation plan
+
+**CLOB client** (`apps/web/src/lib/polymarket/clob.ts`):
+```typescript
+export class PolymarketCLOB {
+    constructor(private apiKey: string, private apiSecret: string, private funder: string) {}
+
+    async createOrder(params: {
+        tokenId: string;
+        side: "BUY" | "SELL";
+        price: number;      // 0-1
+        size: number;        // in outcome tokens
+        orderType: "GTC" | "FOK" | "GTD";
+    }): Promise<OrderResult> { ... }
+
+    async cancelOrder(orderId: string): Promise<void> { ... }
+    async cancelAll(): Promise<void> { ... }
+    async getOpenOrders(): Promise<Order[]> { ... }
+    async getTradeHistory(limit?: number): Promise<Trade[]> { ... }
+}
+```
+
+**Token ID resolution**: Polymarket markets have two tokens (YES and NO), each with a unique
+`clobTokenId`. These are available from the Gamma API response we already fetch — add
+`clobTokenIds` to the `raw_prices.metadata` field during ingestion in `prediction_markets.py`.
+Migration: no schema change needed, just store additional fields in the existing JSONB metadata.
+
+**Risk controls** (`apps/web/src/lib/polymarket/risk.ts`):
+- **Max position size**: configurable per-user cap (default: $500 per market). Enforced
+  client-side before order submission.
+- **Slippage protection**: for market orders, estimate fill price from order book depth
+  (query CLOB `/book`). Warn if slippage > 2%.
+- **Confirmation dialog**: always require explicit confirmation. No one-click trading on
+  first use — add a "skip confirmation" toggle after 5+ successful trades.
+- **Daily loss limit**: track cumulative daily loss in sessionStorage. Warn at $100, hard
+  block at $500 (configurable). Reset at midnight UTC.
+
+**Order status tracking**: after placing an order, poll CLOB `GET /orders?id=...` every 5s
+for fill status. Show real-time status in a toast/notification: "Order placed → Partially
+filled (40/100) → Filled". Use `setInterval` with cleanup, not WebSocket (simpler, and
+order status changes aren't high-frequency).
+
+### Monetization opportunity
+Consider a small spread markup on orders placed through Plebs (0.5-1% on top of CLOB price).
+This is how most non-custodial frontends monetize. Completely transparent — show the markup
+in the trade modal. Alternative: subscription-only feature (Elite tier gets trading).
+
+---
+
+## Feature #10: Position Tracking & P&L
+**Priority: MEDIUM-HIGH**
+**Sessions: 2-3 | Cost: $0/month | Depends on: #8, #9**
+
+Live portfolio view showing the user's open Polymarket positions, unrealized P&L,
+trade history, and performance stats.
+
+### Implementation plan
+
+**New page**: `apps/web/src/app/dashboard/positions/page.tsx`
+- Query CLOB API for connected wallet's open positions (`GET /positions`).
+- For each position: show market title, direction (YES/NO), entry price, current price,
+  unrealized P&L, quantity, and time held.
+- Color-code by P&L (green/red).
+- Allow closing positions directly (creates a SELL order via #9).
+
+**Position data shape** (from CLOB API):
+```typescript
+type Position = {
+    asset_id: string;        // token ID
+    condition_id: string;    // links to PredictionMarket
+    size: number;
+    avg_price: number;
+    current_price: number;   // from raw_prices
+    unrealized_pnl: number;  // computed
+    direction: "YES" | "NO";
+    market_title: string;    // joined from metadata
+};
+```
+
+**Performance stats** (computed client-side from trade history):
+- Total realized P&L
+- Win rate (settled positions)
+- Average hold time
+- Best/worst trade
+- Performance by category
+
+**Integration with existing Plebs features**:
+- The user's Polymarket wallet address feeds into `wallet_profiles` (#1) — if the user
+  is a top wallet, their own stats show up in the smart money data.
+- Position page can show AI signals for markets where the user has open positions:
+  "You're holding YES at $0.43 — AI now says 78% YES" (conviction reinforcement or
+  "AI disagrees with your position" warning).
+
+**Supabase integration** (optional, for persistence across sessions):
+- Store trade history in a `user_trades` table linked to the user's Supabase profile.
+- This lets the user see historical performance even after clearing browser storage.
+- Migration: `016_user_trades.sql` with RLS policy `auth.uid() = user_id`.
+
+---
+
+## Dependency Graph (integrated)
+
+```
+                     BACKEND (data-service)                          FRONTEND (Next.js/web3)
+                     ─────────────────────                          ──────────────────────────
+
+Pass 1:  #1 Wallet Profiling ──────────────────┐                   #8 Wallet Connection ────────┐
+         #5 Cross-Platform GT ─────────┐       │                                                │
+                                       │       │                                                │
+Pass 2:  #2 Smart Money Consensus ◄────┼───────┤                                                │
+         #3 Whale Enhancement ◄────────┘       │                                                │
+                                               │                                                │
+Pass 3:                                        └──────► #7 Smart Money UI + Trade Modal ◄───────┘
+                                                                        │
+Pass 4:  #4 Strategy Mining ──────────────────────────────►            │
+                                                        #9 Order Placement ◄────────────────────┘
+                                                                        │
+Pass 5:                                                 #10 Position Tracking & P&L
+                                                                        │
+Deferred: #6 Trader Behavior (needs 2+ weeks of wallet data)
+```
+
+## Execution Order (target: July 24 2026)
+
+**Pass 1** (three parallel starts — Day 1):
+- #1 Wallet Profiling — whale_sentinel extension → DB migration → ingestion pipeline
+- #5 Cross-Platform Ground Truth — Metaculus/Manifold fetchers → market matching → guardrail integration
+- #8 Wallet Connection — wagmi/viem setup → wallet provider → CLOB credential derivation
+
+**Pass 2** (depends on #1):
+- #2 Smart Money Consensus — scoring prompt integration
+- #3 Whale Alert Enhancement — cluster detection + wallet enrichment
+
+**Pass 3** (convergence — depends on #2, #3, #8):
+- #7 Frontend: Smart Money UI + Trade Modal (single pass, both features on PredictionCard)
+
+**Pass 4** (depends on #8):
+- #9 Order Placement — CLOB order flow, risk controls, order status tracking
+- #4 Strategy Catalog Mining — research CloddsBot, implement findings in guardrails + execution
+
+**Pass 5** (depends on #9):
+- #10 Position Tracking & P&L — portfolio page, performance stats
+
+**Deferred** (needs 2+ weeks of wallet data):
+- #6 Trader Behavior Patterns
+
+## Summary table
+
+| # | Feature | Sessions | Cost | Depends on | Signal value |
+|---|---------|----------|------|------------|-------------|
+| 1 | Wallet Profiling | 3-4 | $0/mo | — | Foundation |
+| 2 | Smart Money Consensus | 2 | $0/mo | #1 | **Highest** — new alpha |
+| 3 | Whale Alert Enhancement | 1-2 | $0/mo | #1 | Medium-high |
+| 4 | Strategy Catalog Mining | 2-3 | $0/mo | — | Medium |
+| 5 | Cross-Platform Ground Truth | 2-3 | $0/mo | — | Medium |
+| 6 | Trader Behavior Patterns | 2 | $0/mo | #1 | Low-medium (deferred) |
+| 7 | Smart Money UI + Trade Modal | 3-4 | $0/mo | #1-3, #8 | **Highest** — UX convergence |
+| 8 | Wallet Connection & CLOB Auth | 2-3 | $0/mo | — | Foundation |
+| 9 | Order Placement | 3-4 | $0/mo | #8 | **High** — execution |
+| 10 | Position Tracking & P&L | 2-3 | $0/mo | #8, #9 | High — retention |
+
+**Total: ~22-30 sessions. Ongoing cost: $0/month.** All APIs are free/public. New frontend
+dependencies (wagmi, viem) are open source. Polygon gas fees for trading are negligible
+(fractions of a cent per transaction).
+
+## Verification checklist
+- [ ] `POST /run-job/ingest_wallet_profiles` returns wallet count + trade count
+- [ ] `wallet_profiles` table has wallets with computed win_rate and PnL
+- [ ] `wallet_trades` table populating with historical trades
+- [ ] `score_prediction_markets()` includes smart money context in Claude prompt
+- [ ] Signal reasoning mentions smart money data when present
+- [ ] `whale_alerts` now includes `maker_address` and wallet stats
+- [ ] Whale clusters detected and surfaced in scoring prompt
+- [ ] `prediction_cross_platform` table populated from Metaculus/Manifold
+- [ ] `check_ground_truth_mismatch()` no longer fails open 100% of the time
+- [ ] Wallet connects via MetaMask/WalletConnect on predictions page
+- [ ] CLOB API credentials derived from wallet signature (no backend involvement)
+- [ ] USDC balance displayed for connected wallet
+- [ ] Trade modal shows AI signal + smart money + whale activity + order form
+- [ ] Limit and market orders execute through CLOB API
+- [ ] Order status updates in real-time (polling)
+- [ ] Risk controls enforced: max position, slippage warning, daily loss limit
+- [ ] Positions page shows open positions with unrealized P&L
+- [ ] Trade history with performance stats (win rate, total P&L)
+- [ ] PredictionCard shows smart money badge + whale indicator + trade button
+- [ ] "Smart Money" sort option works on predictions page
+- [ ] CloddsBot strategy research documented with findings
+- [ ] All new tables have RLS enabled + service_role grants
+- [ ] All new scheduler jobs have manual trigger entries in job_map
+- [ ] `/pipeline-check` includes smart money and cross-platform diagnostics

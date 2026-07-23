@@ -18,6 +18,7 @@ import {
   ArrowUpRight,
   Calculator,
   BarChart3,
+  Layers,
   Lock,
   type LucideIcon,
 } from "lucide-react";
@@ -41,6 +42,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/dashboard",             label: "Signals",     icon: Zap },
       { href: "/dashboard/predictions", label: "Predictions", icon: BarChart3 },
+      { href: "/dashboard/positions",   label: "Positions",   icon: Layers },
       { href: "/dashboard/watchlist",   label: "Watchlist",   icon: Star },
     ],
   },

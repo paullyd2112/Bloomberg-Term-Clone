@@ -4,7 +4,8 @@ import { useEffect, useState, useMemo } from "react";
 import { BarChart3, Search, ChevronDown } from "lucide-react";
 import { clsx } from "clsx";
 import { createClient } from "@/lib/supabase/client";
-import PredictionCard, { type PredictionMarket } from "@/components/predictions/PredictionCard";
+import PredictionCard, { type PredictionMarket, type SmartMoneyData, type WhaleActivityData } from "@/components/predictions/PredictionCard";
+import ConnectWalletButton from "@/components/predictions/ConnectWalletButton";
 
 const SPORTS_KEYWORDS = [
   "f1", "formula 1", "nfl", "nba", "mlb", "nhl", "mls",
@@ -45,14 +46,15 @@ const CATEGORY_TABS = [
 
 type CategoryTab = (typeof CATEGORY_TABS)[number]["id"];
 
-type SortKey = "volume" | "prob_high" | "prob_low" | "newest" | "ai_first";
+type SortKey = "volume" | "prob_high" | "prob_low" | "newest" | "ai_first" | "smart_money";
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: "volume",    label: "Volume" },
-  { value: "ai_first",  label: "AI Scored" },
-  { value: "prob_high", label: "Prob: High → Low" },
-  { value: "prob_low",  label: "Prob: Low → High" },
-  { value: "newest",    label: "Newest" },
+  { value: "volume",      label: "Volume" },
+  { value: "ai_first",    label: "AI Scored" },
+  { value: "smart_money",  label: "Smart Money" },
+  { value: "prob_high",   label: "Prob: High → Low" },
+  { value: "prob_low",    label: "Prob: Low → High" },
+  { value: "newest",      label: "Newest" },
 ];
 
 export default function PredictionsPage() {
@@ -123,7 +125,53 @@ export default function PredictionsPage() {
         sparklineByCondition.set(h.condition_id, arr);
       }
 
-      // 4. Assemble PredictionMarket objects
+      // 4. Fetch smart money consensus
+      const { data: smartMoneyRows } = await supabase
+        .from("prediction_smart_money")
+        .select("condition_id, consensus_direction, consensus_strength, wallet_count, total_volume_usd, top_wallet_pnl, breakdown_yes, breakdown_no")
+        .in("condition_id", conditionIds);
+
+      const smartMoneyByCondition = new Map<string, SmartMoneyData>();
+      for (const sm of smartMoneyRows ?? []) {
+        smartMoneyByCondition.set(sm.condition_id, {
+          consensus_direction: sm.consensus_direction as "YES" | "NO" | "SPLIT",
+          consensus_strength: Number(sm.consensus_strength),
+          wallet_count: Number(sm.wallet_count),
+          total_volume_usd: Number(sm.total_volume_usd),
+        });
+      }
+
+      // 5. Fetch whale cluster data (last 4h)
+      const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+      const { data: whaleRows } = await supabase
+        .from("whale_alerts")
+        .select("asset_id, outcome, usd_value")
+        .gte("created_at", fourHoursAgo);
+
+      const whaleByMarket = new Map<string, WhaleActivityData>();
+      if (whaleRows) {
+        const grouped = new Map<string, { yes: number; no: number; count: number; total: number }>();
+        for (const w of whaleRows) {
+          const key = w.asset_id;
+          const g = grouped.get(key) ?? { yes: 0, no: 0, count: 0, total: 0 };
+          g.count++;
+          g.total += Number(w.usd_value || 0);
+          if (w.outcome === "YES") g.yes++;
+          else g.no++;
+          grouped.set(key, g);
+        }
+        for (const [assetId, g] of Array.from(grouped.entries())) {
+          if (g.count >= 2) {
+            whaleByMarket.set(assetId, {
+              whale_count: g.count,
+              total_usd: g.total,
+              direction: g.yes > g.no ? "YES" : g.no > g.yes ? "NO" : "MIXED",
+            });
+          }
+        }
+      }
+
+      // 5. Assemble PredictionMarket objects
       const assembled: PredictionMarket[] = uniqueRows
         .filter((r) => {
           const meta = (r.metadata as Record<string, unknown>) ?? {};
@@ -141,7 +189,9 @@ export default function PredictionsPage() {
           const rawCategory = String(meta.category ?? "");
           const title = String(meta.title ?? "");
           const eventSlug = String(meta.event_slug ?? "");
-          const category = rawCategory || inferCategory(title, eventSlug);
+          const cat = rawCategory || inferCategory(title, eventSlug);
+
+          const clobTokenIds = meta.clobTokenIds as string[] | undefined;
 
           return {
             condition_id: r.identifier,
@@ -149,11 +199,15 @@ export default function PredictionsPage() {
             yes_price: yesPrice,
             no_price: noPrice,
             volume: Number(r.volume ?? 0),
-            category,
+            category: cat,
             end_date: meta.end_date ? String(meta.end_date) : null,
             captured_at: r.captured_at,
             sparkline,
+            yes_token_id: clobTokenIds?.[0],
+            no_token_id: clobTokenIds?.[1],
             signal: signalByCondition.get(r.identifier) ?? null,
+            smart_money: smartMoneyByCondition.get(r.identifier) ?? null,
+            whale_activity: whaleByMarket.get(r.identifier) ?? null,
           };
         });
 
@@ -167,7 +221,6 @@ export default function PredictionsPage() {
   const filtered = useMemo(() => {
     let result = markets;
 
-    // Category filter
     if (category !== "all") {
       result = result.filter((m) => {
         const cat = m.category.toLowerCase();
@@ -175,13 +228,11 @@ export default function PredictionsPage() {
       });
     }
 
-    // Search filter
     if (search) {
       const q = search.toLowerCase();
       result = result.filter((m) => m.title.toLowerCase().includes(q));
     }
 
-    // Sort
     result = [...result].sort((a, b) => {
       switch (sort) {
         case "volume":
@@ -198,6 +249,12 @@ export default function PredictionsPage() {
           if (bScore !== aScore) return bScore - aScore;
           return b.volume - a.volume;
         }
+        case "smart_money": {
+          const aS = a.smart_money ? a.smart_money.consensus_strength * a.smart_money.wallet_count : 0;
+          const bS = b.smart_money ? b.smart_money.consensus_strength * b.smart_money.wallet_count : 0;
+          if (bS !== aS) return bS - aS;
+          return b.volume - a.volume;
+        }
         default:
           return 0;
       }
@@ -207,16 +264,20 @@ export default function PredictionsPage() {
   }, [markets, category, sort, search]);
 
   const aiScoredCount = markets.filter((m) => m.signal && m.signal.direction !== "HOLD").length;
+  const smartMoneyCount = markets.filter((m) => m.smart_money && m.smart_money.wallet_count >= 3).length;
 
   return (
     <div className="p-5 md:p-8 max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2.5">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
-            <BarChart3 className="h-4 w-4" />
-          </span>
-          <h1 className="text-xl font-semibold tracking-tight text-white">Prediction Markets</h1>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
+              <BarChart3 className="h-4 w-4" />
+            </span>
+            <h1 className="text-xl font-semibold tracking-tight text-white">Prediction Markets</h1>
+          </div>
+          <ConnectWalletButton />
         </div>
         <p className="text-zinc-500 text-sm">
           Live Polymarket probabilities with AI-scored edge detection.
@@ -224,10 +285,11 @@ export default function PredictionsPage() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
         {[
           { label: "Markets tracked", value: markets.length, cls: "text-white" },
           { label: "AI scored", value: aiScoredCount, cls: "text-emerald-400" },
+          { label: "Smart Money", value: smartMoneyCount, cls: "text-blue-400" },
           { label: "Categories", value: new Set(markets.map((m) => m.category).filter(Boolean)).size, cls: "text-zinc-400" },
         ].map(({ label, value, cls }) => (
           <div key={label} className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all">
@@ -239,7 +301,6 @@ export default function PredictionsPage() {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        {/* Search */}
         <div className="relative w-full sm:w-56">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
           <input
@@ -251,7 +312,6 @@ export default function PredictionsPage() {
           />
         </div>
 
-        {/* Sort */}
         <div className="relative flex-shrink-0">
           <select
             value={sort}
