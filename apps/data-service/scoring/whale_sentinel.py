@@ -149,6 +149,64 @@ def ingest_whale_alerts() -> str:
     return f"{len(trades)} trades checked, {len(whales)} whales found, {inserted} new alerts stored"
 
 
+def get_whale_cluster(condition_id: str, hours: int = 4) -> dict | None:
+    """Check for whale trade clusters on a specific market in the last N hours.
+
+    Returns cluster data if 3+ whale trades on the same side, else None.
+    """
+    try:
+        from datetime import datetime, timedelta, timezone as tz
+        cutoff = (datetime.now(tz.utc) - timedelta(hours=hours)).isoformat()
+        result = (
+            supabase.table("whale_alerts")
+            .select("outcome, usd_value, maker_win_rate")
+            .eq("asset_id", condition_id)
+            .gte("created_at", cutoff)
+            .execute()
+        )
+        if not result.data or len(result.data) < 3:
+            return None
+
+        yes_count = 0
+        no_count = 0
+        total_usd = 0.0
+        win_rates = []
+        for row in result.data:
+            total_usd += float(row.get("usd_value", 0))
+            if row.get("maker_win_rate"):
+                win_rates.append(float(row["maker_win_rate"]))
+            if row["outcome"] == "YES":
+                yes_count += 1
+            else:
+                no_count += 1
+
+        dominant = "YES" if yes_count > no_count else "NO" if no_count > yes_count else "MIXED"
+        dominant_count = max(yes_count, no_count)
+        if dominant_count < 3:
+            return None
+
+        return {
+            "direction": dominant,
+            "whale_count": len(result.data),
+            "total_usd": round(total_usd, 2),
+            "avg_win_rate": round(sum(win_rates) / len(win_rates), 4) if win_rates else None,
+            "breakdown": {"YES": yes_count, "NO": no_count},
+        }
+    except Exception as e:
+        logger.debug("whale_sentinel: cluster check failed for {} — {}", condition_id, e)
+        return None
+
+
+def format_whale_cluster_context(cluster: dict) -> str:
+    """Format whale cluster data for the scoring prompt."""
+    wr_part = f", avg whale win rate {cluster['avg_win_rate']:.0%}" if cluster.get("avg_win_rate") else ""
+    return (
+        f"WHALE ACTIVITY: {cluster['whale_count']} whale trades (>${MIN_USD_VALUE:,} each) "
+        f"on {cluster['direction']} side in last 4h, "
+        f"total ${cluster['total_usd']:,.0f}{wr_part}."
+    )
+
+
 def get_recent_whale_alerts(limit: int = 20) -> list[dict]:
     """Fetch recent whale alerts for the API endpoint."""
     try:
