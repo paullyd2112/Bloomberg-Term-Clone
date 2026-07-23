@@ -6,6 +6,18 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  webpack: (config) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+    };
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@x402/evm": false,
+      "@x402/svm/exact/client": false,
+      "@coinbase/cdp-sdk": false,
+    };
+    return config;
+  },
   async headers() {
     return [
       {
@@ -25,7 +37,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self'",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://js.stripe.com",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://js.stripe.com https://clob.polymarket.com https://polygon-rpc.com https://*.polygon.io",
               "frame-src https://js.stripe.com https://hooks.stripe.com",
               "object-src 'none'",
               "base-uri 'self'",
