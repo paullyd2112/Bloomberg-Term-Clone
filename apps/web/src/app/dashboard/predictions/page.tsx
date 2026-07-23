@@ -125,7 +125,23 @@ export default function PredictionsPage() {
         sparklineByCondition.set(h.condition_id, arr);
       }
 
-      // 4. Fetch whale cluster data (last 4h)
+      // 4. Fetch smart money consensus
+      const { data: smartMoneyRows } = await supabase
+        .from("prediction_smart_money")
+        .select("condition_id, consensus_direction, consensus_strength, wallet_count, total_volume_usd, top_wallet_pnl, breakdown_yes, breakdown_no")
+        .in("condition_id", conditionIds);
+
+      const smartMoneyByCondition = new Map<string, SmartMoneyData>();
+      for (const sm of smartMoneyRows ?? []) {
+        smartMoneyByCondition.set(sm.condition_id, {
+          consensus_direction: sm.consensus_direction as "YES" | "NO" | "SPLIT",
+          consensus_strength: Number(sm.consensus_strength),
+          wallet_count: Number(sm.wallet_count),
+          total_volume_usd: Number(sm.total_volume_usd),
+        });
+      }
+
+      // 5. Fetch whale cluster data (last 4h)
       const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
       const { data: whaleRows } = await supabase
         .from("whale_alerts")
@@ -190,7 +206,7 @@ export default function PredictionsPage() {
             yes_token_id: clobTokenIds?.[0],
             no_token_id: clobTokenIds?.[1],
             signal: signalByCondition.get(r.identifier) ?? null,
-            smart_money: null as SmartMoneyData | null,
+            smart_money: smartMoneyByCondition.get(r.identifier) ?? null,
             whale_activity: whaleByMarket.get(r.identifier) ?? null,
           };
         });

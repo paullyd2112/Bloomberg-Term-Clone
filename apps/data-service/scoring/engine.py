@@ -921,10 +921,11 @@ def score_asset(
 
             smart_money_ctx = None
             try:
-                from scoring.smart_money import get_smart_money_consensus, format_smart_money_context
+                from scoring.smart_money import get_smart_money_consensus, format_smart_money_context, persist_smart_money
                 consensus = get_smart_money_consensus(identifier)
                 if consensus:
                     smart_money_ctx = format_smart_money_context(consensus)
+                    persist_smart_money(identifier, consensus)
             except Exception as e:
                 logger.debug("prediction/{}: smart money lookup failed — {}", identifier, e)
 

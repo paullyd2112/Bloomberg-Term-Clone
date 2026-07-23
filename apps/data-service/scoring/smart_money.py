@@ -118,6 +118,27 @@ def get_smart_money_consensus(condition_id: str) -> dict | None:
     }
 
 
+def persist_smart_money(condition_id: str, consensus: dict) -> None:
+    """Upsert consensus data into prediction_smart_money for frontend reads."""
+    try:
+        supabase.table("prediction_smart_money").upsert(
+            {
+                "condition_id": condition_id,
+                "consensus_direction": consensus["consensus_direction"],
+                "consensus_strength": consensus["consensus_strength"],
+                "wallet_count": consensus["wallet_count"],
+                "total_volume_usd": consensus["total_volume_usd"],
+                "top_wallet_pnl": consensus["top_wallet_pnl"],
+                "breakdown_yes": consensus["breakdown"]["YES"],
+                "breakdown_no": consensus["breakdown"]["NO"],
+                "updated_at": "now()",
+            },
+            on_conflict="condition_id",
+        ).execute()
+    except Exception as e:
+        logger.warning("smart_money: persist failed for {} — {}", condition_id, e)
+
+
 def format_smart_money_context(consensus: dict) -> str:
     """Format consensus data into a string for the scoring prompt."""
     return (
