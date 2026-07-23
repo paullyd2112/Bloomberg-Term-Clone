@@ -35,6 +35,7 @@ from briefing.elite_briefing import send_elite_briefings
 from briefing.welcome_emails import send_welcome_sequence
 from ingestion.polymarket_wallets import ingest_wallet_profiles
 from ingestion.prediction_reference import ingest_prediction_references
+from analysis.wallet_patterns import analyze_all_wallets
 
 load_dotenv()
 
@@ -187,6 +188,9 @@ def job_ingest_wallet_profiles():
 
 def job_ingest_prediction_references():
     return ingest_prediction_references()
+
+def job_analyze_wallet_patterns():
+    return analyze_all_wallets()
 
 
 _uptime_fail_count = 0
@@ -343,6 +347,10 @@ scheduler.add_job(lambda: _run_job("ingest_whale_alerts", job_ingest_whale_alert
 # Wallet Profiling — daily at 4:00 AM ET, backfill wallet trade history + compute stats
 scheduler.add_job(lambda: _run_job("ingest_wallet_profiles", job_ingest_wallet_profiles),
                   CronTrigger(hour=4, minute=0), id="ingest_wallet_profiles")
+
+# Wallet Behavior Patterns — daily at 4:30 AM ET, after wallet profiling completes
+scheduler.add_job(lambda: _run_job("analyze_wallet_patterns", job_analyze_wallet_patterns),
+                  CronTrigger(hour=4, minute=30), id="analyze_wallet_patterns")
 
 # Cross-platform ground truth — daily at 5:00 AM ET, fetch Metaculus/Manifold reference probs
 scheduler.add_job(lambda: _run_job("ingest_prediction_references", job_ingest_prediction_references),
@@ -669,6 +677,7 @@ def run_job_manual(job_name: str):
         "cleanup_stale_predictions": job_cleanup_stale_prediction_signals,
         "ingest_wallet_profiles": job_ingest_wallet_profiles,
         "ingest_prediction_references": job_ingest_prediction_references,
+        "analyze_wallet_patterns": job_analyze_wallet_patterns,
     }
 
     fn = job_map.get(job_name)

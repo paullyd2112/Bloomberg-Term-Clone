@@ -938,7 +938,20 @@ def score_asset(
             except Exception as e:
                 logger.debug("prediction/{}: whale cluster lookup failed — {}", identifier, e)
 
-            combined_intelligence = "\n".join(filter(None, [smart_money_ctx, whale_ctx]))
+            momentum_ctx = None
+            try:
+                momentum = _get_prediction_momentum(identifier)
+                if momentum:
+                    momentum_ctx = (
+                        f"PRICE MOMENTUM: YES price moved {momentum['delta_pct']:+.1f}pp "
+                        f"in 24h ({momentum['price_24h_ago']:.2f} → {momentum['price_now']:.2f}, "
+                        f"{momentum['data_points']} data points). "
+                        f"{'Bullish' if momentum['direction'] == 'up' else 'Bearish'} drift."
+                    )
+            except Exception as e:
+                logger.debug("prediction/{}: momentum lookup failed — {}", identifier, e)
+
+            combined_intelligence = "\n".join(filter(None, [smart_money_ctx, whale_ctx, momentum_ctx]))
 
             context = {
                 "identifier":    identifier,
@@ -1861,6 +1874,80 @@ def _prediction_signals_today_count() -> int:
         return 0
 
 
+def _prediction_candidate_score(row: dict) -> float:
+    """Rank prediction market candidates by volume + expiry proximity + price skew.
+
+    Inspired by CloddsBot's Expiry Fade strategy: markets near close with
+    mispriced YES/NO get a priority boost so time-sensitive opportunities
+    aren't buried below high-volume but stale markets.
+    """
+    volume = float(row.get("volume") or 0)
+    score = volume
+
+    meta = row.get("metadata") or {}
+    end_date_str = meta.get("end_date") or meta.get("close_time")
+    if end_date_str:
+        try:
+            end_str = str(end_date_str).replace("Z", "+00:00")
+            end_dt = datetime.fromisoformat(end_str)
+            hours_left = (end_dt - datetime.now(timezone.utc)).total_seconds() / 3600
+            if 0 < hours_left <= 48:
+                yes_price = float(meta.get("yes_price") or 0.5)
+                skew = abs(yes_price - 0.5)
+                if skew >= 0.10:
+                    score *= 1.5
+                if hours_left <= 6:
+                    score *= 2.0
+                elif hours_left <= 24:
+                    score *= 1.3
+        except (ValueError, TypeError):
+            pass
+
+    return score
+
+
+def _get_prediction_momentum(condition_id: str) -> dict | None:
+    """Compute 24h YES price momentum from prediction_price_history.
+
+    Returns momentum data if significant movement detected, else None.
+    """
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        result = (
+            supabase.table("prediction_price_history")
+            .select("yes_price, captured_at")
+            .eq("condition_id", condition_id)
+            .gte("captured_at", cutoff)
+            .order("captured_at", desc=False)
+            .limit(100)
+            .execute()
+        )
+        rows = result.data or []
+        if len(rows) < 2:
+            return None
+
+        first_price = float(rows[0].get("yes_price", 0))
+        last_price = float(rows[-1].get("yes_price", 0))
+        if first_price <= 0:
+            return None
+
+        delta = last_price - first_price
+        delta_pct = delta * 100
+
+        if abs(delta_pct) < 3.0:
+            return None
+
+        return {
+            "direction": "up" if delta > 0 else "down",
+            "delta_pct": round(delta_pct, 1),
+            "price_24h_ago": round(first_price, 4),
+            "price_now": round(last_price, 4),
+            "data_points": len(rows),
+        }
+    except Exception:
+        return None
+
+
 def score_prediction_markets(subscription: str | None = None) -> str:
     from scoring.haiku_prescreen import prescreen_prediction, should_escalate_to_sonnet
     from scoring.prediction_filters import run_prediction_guardrails
@@ -1889,7 +1976,9 @@ def score_prediction_markets(subscription: str | None = None) -> str:
             if ident not in seen:
                 seen.add(ident)
                 latest_per_market.append(r)
-        pool = sorted(latest_per_market, key=lambda r: r.get("volume") or 0, reverse=True)[:PREDICTION_CANDIDATE_POOL]
+        pool = sorted(latest_per_market,
+                      key=lambda r: _prediction_candidate_score(r),
+                      reverse=True)[:PREDICTION_CANDIDATE_POOL]
     except Exception as e:
         logger.error("score_prediction_markets: failed to fetch identifiers — {}", e)
         return "failed to fetch identifiers"
