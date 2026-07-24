@@ -35,7 +35,7 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(({ data }: { data: { user: { user_metadata?: Record<string, string> } | null } }) => {
       const name = data.user?.user_metadata?.full_name
         ?? data.user?.user_metadata?.name
         ?? "";

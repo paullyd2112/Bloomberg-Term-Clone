@@ -48,7 +48,8 @@ export async function GET() {
         .eq("asset_type", "crypto")
         .eq("is_backtest", false)
         .in("outcome", ["WIN", "LOSS"])
-        .gte("created_at", ENGINE_CUTOFF),
+        .gte("created_at", ENGINE_CUTOFF)
+        .returns<{ outcome: string }[]>(),
       // Actionable signals generated today (crypto + predictions)
       admin
         .from("signals")
@@ -65,7 +66,8 @@ export async function GET() {
         .eq("is_backtest", false)
         .neq("direction", "HOLD")
         .order("created_at", { ascending: false })
-        .limit(20),
+        .limit(20)
+        .returns<{ confidence: number }[]>(),
       // Distinct crypto coins with fresh price rows in the last 24h
       admin
         .from("raw_prices")
@@ -73,7 +75,8 @@ export async function GET() {
         .eq("asset_type", "crypto")
         .neq("identifier", "MARKET_SENTIMENT")
         .gte("captured_at", last24h)
-        .limit(1000),
+        .limit(1000)
+        .returns<{ identifier: string }[]>(),
     ]);
 
     if (resolved.error) throw resolved.error;
