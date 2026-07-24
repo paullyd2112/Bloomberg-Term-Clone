@@ -54,18 +54,22 @@ export default function TradeModal({ market, onClose }: TradeModalProps) {
     getOrderBook(tokenId).then((book) => {
       if (cancelled) return;
       const asks = book.asks.sort((a, b) => Number(a.price) - Number(b.price));
-      let remaining = amountNum;
-      let totalCost = 0;
+      let remainingUsd = amountNum;
+      let totalShares = 0;
+      let totalSpent = 0;
       for (const level of asks) {
         const px = Number(level.price);
-        const sz = Number(level.size) * px;
-        const fill = Math.min(remaining, sz);
-        totalCost += fill;
-        remaining -= fill;
-        if (remaining <= 0) break;
+        const levelShares = Number(level.size);
+        const levelCostUsd = levelShares * px;
+        const fillFraction = Math.min(1, remainingUsd / levelCostUsd);
+        const sharesFilled = levelShares * fillFraction;
+        const usdFilled = levelCostUsd * fillFraction;
+        totalShares += sharesFilled;
+        totalSpent += usdFilled;
+        remainingUsd -= usdFilled;
+        if (remainingUsd <= 0) break;
       }
-      const filled = amountNum - remaining;
-      setEstimatedFill(filled > 0 ? totalCost / filled * Number(asks[0]?.price || currentPrice) : null);
+      setEstimatedFill(totalShares > 0 ? totalSpent / totalShares : null);
     }).catch(() => setEstimatedFill(null));
     return () => { cancelled = true; };
   }, [side, market, orderType, amountNum, currentPrice]);

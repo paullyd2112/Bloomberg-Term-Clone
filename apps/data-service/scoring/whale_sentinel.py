@@ -14,6 +14,7 @@ import sentry_sdk
 from loguru import logger
 
 from supabase_client import supabase
+from scoring.token_direction import resolve_token_direction
 
 CLOB_BASE = "https://clob.polymarket.com"
 MIN_USD_VALUE = 5000
@@ -85,11 +86,8 @@ def _parse_whale_trades(trades: list[dict]) -> list[dict]:
             condition_id = trade.get("condition_id", "")
             market_title = _get_market_title(condition_id) if condition_id else asset_id
 
-            outcome = trade.get("side", trade.get("outcome", "unknown"))
-            if outcome.lower() in ("buy", "bid"):
-                outcome = "YES" if price > 0.5 else "NO"
-            elif outcome.lower() in ("sell", "ask"):
-                outcome = "NO" if price > 0.5 else "YES"
+            side = trade.get("side", trade.get("outcome", ""))
+            outcome = resolve_token_direction(str(asset_id), condition_id, side, price)
 
             tx_hash = trade.get("transaction_hash", trade.get("id", None))
 

@@ -16,6 +16,7 @@ from loguru import logger
 
 from supabase_client import supabase
 from scoring.prediction_filters import infer_category
+from scoring.token_direction import resolve_token_direction
 
 CLOB_BASE = "https://clob.polymarket.com"
 GAMMA_API = "https://gamma-api.polymarket.com"
@@ -154,13 +155,9 @@ def backfill_wallet_history(address: str, max_pages: int = 10) -> int:
                 if not condition_id:
                     continue
 
-                side = trade.get("side", "").lower()
-                if side in ("buy", "bid"):
-                    direction = "YES" if price > 0.5 else "NO"
-                elif side in ("sell", "ask"):
-                    direction = "NO" if price > 0.5 else "YES"
-                else:
-                    direction = "YES" if price > 0.5 else "NO"
+                side = trade.get("side", "")
+                asset_id = trade.get("asset_id", trade.get("token_id", ""))
+                direction = resolve_token_direction(str(asset_id), condition_id, side, price)
 
                 market_title = _resolve_title(condition_id)
                 traded_at = trade.get("created_at", trade.get("timestamp"))
@@ -188,6 +185,70 @@ def backfill_wallet_history(address: str, max_pages: int = 10) -> int:
         time.sleep(REQUEST_DELAY_S)
 
     return inserted
+
+
+_SETTLEMENT_CACHE: dict[str, str] = {}
+_SETTLEMENT_CACHE_MAX = 2000
+_MAX_SETTLEMENT_PAGES = 20
+
+
+def _fetch_settlement_outcomes(condition_ids: list[str]) -> dict[str, str]:
+    """Query Polymarket CLOB for settled market outcomes.
+
+    Returns {condition_id: 'YES'|'NO'} for markets that have resolved.
+    Uses the same approach as resolver.py — iterates /markets?closed=true
+    and checks tokens[].winner.
+    """
+    id_set = set(condition_ids)
+    results: dict[str, str] = {}
+
+    for cid in list(id_set):
+        if cid in _SETTLEMENT_CACHE:
+            results[cid] = _SETTLEMENT_CACHE[cid]
+            id_set.discard(cid)
+
+    if not id_set:
+        return results
+
+    try:
+        next_cursor = ""
+        for _ in range(_MAX_SETTLEMENT_PAGES):
+            params: dict[str, str] = {"closed": "true"}
+            if next_cursor:
+                params["next_cursor"] = next_cursor
+
+            resp = httpx.get(
+                f"{CLOB_BASE}/markets",
+                params=params,
+                timeout=15.0,
+            )
+            if resp.status_code != 200:
+                break
+
+            data = resp.json()
+            for m in data.get("data", []):
+                cid = m.get("condition_id", "")
+                if cid not in id_set:
+                    continue
+                for token in m.get("tokens", []):
+                    if token.get("winner"):
+                        outcome = (token.get("outcome") or "").upper()
+                        if outcome in ("YES", "NO"):
+                            results[cid] = outcome
+                            if len(_SETTLEMENT_CACHE) < _SETTLEMENT_CACHE_MAX:
+                                _SETTLEMENT_CACHE[cid] = outcome
+                            id_set.discard(cid)
+
+            if not id_set:
+                break
+            next_cursor = data.get("next_cursor", "")
+            if not next_cursor or next_cursor == "LTE=":
+                break
+            time.sleep(0.5)
+    except Exception as e:
+        logger.debug("_fetch_settlement_outcomes: error — {}", e)
+
+    return results
 
 
 def compute_wallet_stats(address: str) -> dict | None:
@@ -223,46 +284,27 @@ def compute_wallet_stats(address: str) -> dict | None:
     losses = 0
     realized_pnl = 0.0
 
+    settlement_outcomes = _fetch_settlement_outcomes(list(positions.keys()))
+
     for cid, pos_trades in positions.items():
-        try:
-            settled = (
-                supabase.table("signals")
-                .select("result")
-                .eq("identifier", cid)
-                .eq("asset_type", "prediction")
-                .in_("result", ["WIN", "LOSS"])
-                .limit(1)
-                .execute()
-            )
-            if not settled.data:
-                continue
-
-            outcome = settled.data[0]["result"]
-            total_shares = sum(float(t["size"]) for t in pos_trades)
-            total_cost = sum(float(t["usd_value"]) for t in pos_trades)
-            yes_volume = sum(float(t["usd_value"]) for t in pos_trades if t["direction"] == "YES")
-            no_volume = sum(float(t["usd_value"]) for t in pos_trades if t["direction"] == "NO")
-            dominant_dir = "YES" if yes_volume >= no_volume else "NO"
-
-            if outcome == "WIN":
-                if dominant_dir == "YES":
-                    pnl = total_shares - total_cost if total_shares > 0 else 0
-                    wins += 1
-                else:
-                    pnl = -total_cost
-                    losses += 1
-            else:
-                if dominant_dir == "NO":
-                    pnl = total_cost - total_shares if total_shares > 0 else 0
-                    wins += 1 if pnl > 0 else 0
-                    losses += 0 if pnl > 0 else 1
-                else:
-                    pnl = -total_cost
-                    losses += 1
-
-            realized_pnl += pnl
-        except Exception:
+        winning_outcome = settlement_outcomes.get(cid)
+        if not winning_outcome:
             continue
+
+        total_shares = sum(float(t["size"]) for t in pos_trades)
+        total_cost = sum(float(t["usd_value"]) for t in pos_trades)
+        yes_volume = sum(float(t["usd_value"]) for t in pos_trades if t["direction"] == "YES")
+        no_volume = sum(float(t["usd_value"]) for t in pos_trades if t["direction"] == "NO")
+        dominant_dir = "YES" if yes_volume >= no_volume else "NO"
+
+        if dominant_dir == winning_outcome:
+            pnl = total_shares - total_cost
+            wins += 1
+        else:
+            pnl = -total_cost
+            losses += 1
+
+        realized_pnl += pnl
 
     total_resolved = wins + losses
     win_rate = wins / total_resolved if total_resolved > 0 else None
