@@ -82,7 +82,6 @@ export default function TradeModal({ market, onClose }: TradeModalProps) {
     } catch (e) {
       setOrderState("error");
       setOrderError(e instanceof Error ? e.message : "Trade failed");
-      if (amountNum > 0) recordLoss(amountNum);
     }
   }, [address, amountNum, riskCheck.allowed, side, market, effectivePrice, shares, orderType, signTypedDataAsync]);
 

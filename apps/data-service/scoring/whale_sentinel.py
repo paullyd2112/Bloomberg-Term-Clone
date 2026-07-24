@@ -23,6 +23,7 @@ FETCH_LIMIT = 100
 GAMMA_API = "https://gamma-api.polymarket.com"
 
 _market_cache: dict[str, str] = {}
+_CACHE_MAX = 2000
 
 
 def _get_market_title(condition_id: str) -> str:
@@ -38,10 +39,14 @@ def _get_market_title(condition_id: str) -> str:
             markets = resp.json()
             if markets and len(markets) > 0:
                 title = markets[0].get("question", markets[0].get("title", condition_id))
+                if len(_market_cache) >= _CACHE_MAX:
+                    _market_cache.clear()
                 _market_cache[condition_id] = title
                 return title
     except Exception:
         pass
+    if len(_market_cache) >= _CACHE_MAX:
+        _market_cache.clear()
     _market_cache[condition_id] = condition_id
     return condition_id
 
@@ -57,7 +62,8 @@ def _fetch_recent_trades() -> list[dict]:
         if resp.status_code != 200:
             logger.warning("whale_sentinel: CLOB trades returned {}", resp.status_code)
             return []
-        return resp.json() if isinstance(resp.json(), list) else []
+        data = resp.json()
+        return data if isinstance(data, list) else []
     except Exception as e:
         logger.error("whale_sentinel: failed to fetch trades — {}", e)
         return []

@@ -111,7 +111,7 @@ export async function cancelOrder(
   creds: ClobCredentials,
   orderId: string,
 ): Promise<boolean> {
-  const resp = await clobFetch(creds, "DELETE", `/order/${orderId}`);
+  const resp = await clobFetch(creds, "DELETE", `/order/${encodeURIComponent(orderId)}`);
   return resp.ok;
 }
 
@@ -135,7 +135,8 @@ export async function getTradeHistory(
   creds: ClobCredentials,
   limit = 50,
 ): Promise<TradeRecord[]> {
-  const resp = await clobFetch(creds, "GET", `/trades?limit=${limit}`);
+  const params = new URLSearchParams({ limit: String(limit) });
+  const resp = await clobFetch(creds, "GET", `/trades?${params}`);
   if (!resp.ok) return [];
   const data = await resp.json();
   return Array.isArray(data) ? data : [];
@@ -144,7 +145,8 @@ export async function getTradeHistory(
 export async function getOrderBook(
   tokenId: string,
 ): Promise<{ bids: Array<{ price: string; size: string }>; asks: Array<{ price: string; size: string }> }> {
-  const resp = await fetch(`${CLOB_BASE}/book?token_id=${tokenId}`);
+  const params = new URLSearchParams({ token_id: tokenId });
+  const resp = await fetch(`${CLOB_BASE}/book?${params}`);
   if (!resp.ok) return { bids: [], asks: [] };
   return resp.json();
 }

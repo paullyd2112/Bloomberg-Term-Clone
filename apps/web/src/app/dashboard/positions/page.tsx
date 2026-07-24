@@ -80,35 +80,13 @@ export default function PositionsPage() {
         posMap.set(key, existing);
       }
 
-      // Fetch current prices for positions from Supabase
+      // Fetch current prices and market titles from Supabase (single query)
       const conditionIds = Array.from(new Set(history.map((t) => t.asset_id).filter(Boolean)));
       let priceMap = new Map<string, number>();
-      if (conditionIds.length > 0) {
-        const supabase = createClient();
-        const { data: priceRows } = await supabase
-          .from("raw_prices")
-          .select("identifier, metadata")
-          .eq("asset_type", "prediction")
-          .in("identifier", conditionIds)
-          .order("captured_at", { ascending: false })
-          .limit(conditionIds.length * 2);
-
-        if (priceRows) {
-          for (const row of priceRows) {
-            if (!priceMap.has(row.identifier)) {
-              const meta = (row.metadata as Record<string, unknown>) ?? {};
-              const yp = meta.yes_price != null ? Number(meta.yes_price) : null;
-              if (yp != null) priceMap.set(row.identifier, yp);
-            }
-          }
-        }
-      }
-
-      // Fetch market titles
       let titleMap = new Map<string, string>();
       if (conditionIds.length > 0) {
         const supabase = createClient();
-        const { data: titleRows } = await supabase
+        const { data: rows } = await supabase
           .from("raw_prices")
           .select("identifier, metadata")
           .eq("asset_type", "prediction")
@@ -116,10 +94,14 @@ export default function PositionsPage() {
           .order("captured_at", { ascending: false })
           .limit(conditionIds.length * 2);
 
-        if (titleRows) {
-          for (const row of titleRows) {
+        if (rows) {
+          for (const row of rows) {
+            const meta = (row.metadata as Record<string, unknown>) ?? {};
+            if (!priceMap.has(row.identifier)) {
+              const yp = meta.yes_price != null ? Number(meta.yes_price) : null;
+              if (yp != null) priceMap.set(row.identifier, yp);
+            }
             if (!titleMap.has(row.identifier)) {
-              const meta = (row.metadata as Record<string, unknown>) ?? {};
               if (meta.title) titleMap.set(row.identifier, String(meta.title));
             }
           }

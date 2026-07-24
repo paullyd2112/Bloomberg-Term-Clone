@@ -7,6 +7,8 @@ Zero API cost — all queries hit the local wallet_profiles/wallet_trades tables
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from loguru import logger
 
 from supabase_client import supabase
@@ -151,7 +153,7 @@ def persist_smart_money(condition_id: str, consensus: dict) -> None:
                 "top_wallet_pnl": consensus["top_wallet_pnl"],
                 "breakdown_yes": consensus["breakdown"]["YES"],
                 "breakdown_no": consensus["breakdown"]["NO"],
-                "updated_at": "now()",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             },
             on_conflict="condition_id",
         ).execute()

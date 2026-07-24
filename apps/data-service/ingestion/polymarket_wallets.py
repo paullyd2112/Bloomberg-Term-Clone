@@ -103,6 +103,7 @@ def _fetch_wallet_trades(address: str, after_cursor: str | None = None) -> list[
 
 
 _title_cache: dict[str, str] = {}
+_TITLE_CACHE_MAX = 2000
 
 
 def _resolve_title(condition_id: str) -> str:
@@ -118,10 +119,14 @@ def _resolve_title(condition_id: str) -> str:
             markets = resp.json()
             if markets:
                 title = markets[0].get("question", markets[0].get("title", condition_id))
+                if len(_title_cache) >= _TITLE_CACHE_MAX:
+                    _title_cache.clear()
                 _title_cache[condition_id] = title
                 return title
     except Exception:
         pass
+    if len(_title_cache) >= _TITLE_CACHE_MAX:
+        _title_cache.clear()
     _title_cache[condition_id] = condition_id
     return condition_id
 
@@ -242,14 +247,14 @@ def compute_wallet_stats(address: str) -> dict | None:
 
             if outcome == "WIN":
                 if dominant_dir == "YES":
-                    pnl = total_size * (1.0 - avg_entry) / avg_entry
+                    pnl = total_size * (1.0 - avg_entry) / avg_entry if avg_entry > 0 else 0
                     wins += 1
                 else:
                     pnl = -total_size
                     losses += 1
             else:
                 if dominant_dir == "NO":
-                    pnl = total_size * avg_entry / (1.0 - avg_entry) if avg_entry < 1 else 0
+                    pnl = total_size * avg_entry / (1.0 - avg_entry) if 0 < avg_entry < 1 else 0
                     wins += 1
                 else:
                     pnl = -total_size
