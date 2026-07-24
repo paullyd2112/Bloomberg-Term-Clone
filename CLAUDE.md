@@ -334,10 +334,31 @@ volume caps) stop being acceptable at that point.
       probability numbers, sparklines (from `prediction_price_history` table, 48h rolling window),
       category chips, volume badges, and AI signal badges overlaid on scored markets. Category filter
       tabs, search, and sort. Added to sidebar and mobile bottom nav for all tiers.
-- [ ] **Polymarket WebSocket feed (v2)**: Polymarket offers a real-time WebSocket feed (RTDS) for live
-      order book and price updates. Current v1 uses 30-min Gamma API polling which is fine for discovery,
-      but live-updating probabilities would make the predictions tab feel more alive. Not needed at
-      launch; add once user engagement with the tab justifies the connection management complexity.
+- [ ] **Polymarket WebSocket feed (v2)**: Replace 30-min Gamma API polling with Polymarket's real-time
+      WebSocket feed (RTDS) for live-updating probabilities on the predictions tab. Free (no API cost),
+      but significant engineering + maintenance overhead. **Trigger: paying users actively using the
+      predictions tab** (check analytics — if median session time on `/dashboard/predictions` is >2 min,
+      users care about freshness).
+
+      **Implementation (1-2 sessions):**
+      - Connect to Polymarket RTDS WebSocket for price tick stream
+      - Write incoming ticks to `prediction_price_history` and update `raw_prices.metadata.yes_price`
+      - Auto-reconnect with exponential backoff (disconnects, heartbeats, Railway container restarts)
+      - Health monitor: detect stale connections that look alive but stopped sending data
+      - Keep Gamma API polling as fallback (if WS is down >5 min, poll catches up)
+      - Frontend: swap Supabase query on page load to Supabase Realtime subscription for live updates
+
+      **Ongoing maintenance:**
+      - Monitor reconnection frequency in logs — if Railway recycles containers often, the WS will
+        churn. May need a dedicated long-lived worker service separate from the Flask scheduler.
+      - Memory leak watch on long-lived connections
+      - Polymarket can change their WS protocol without notice (undocumented API) — may break
+
+      **What it enables:**
+      - Predictions tab feels like a live trading terminal (sub-second price updates)
+      - Momentum context in scoring prompt uses real-time data instead of 30-min snapshots
+      - Better expiry fade detection (near-close markets reprice fast, polling misses it)
+      - Trade modal (#9) shows live prices instead of potentially stale quotes
 
 # POLYMARKET SMART MONEY, TRADING INTELLIGENCE & NON-CUSTODIAL EXECUTION (must-have, target: July 24 2026)
 
