@@ -43,6 +43,7 @@ export type OpenOrder = {
 export type TradeRecord = {
   id: string;
   asset_id: string;
+  market?: string;
   side: string;
   price: string;
   size: string;
