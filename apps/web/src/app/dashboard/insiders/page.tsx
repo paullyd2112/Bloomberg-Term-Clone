@@ -56,8 +56,8 @@ export default function InsidersPage() {
       .select("*")
       .order("trade_date", { ascending: false })
       .limit(500)
-      .then(({ data }) => {
-        setTrades((data as InsiderTrade[]) ?? []);
+      .then(({ data }: { data: InsiderTrade[] | null }) => {
+        setTrades(data ?? []);
         setLoading(false);
       });
   }, []);

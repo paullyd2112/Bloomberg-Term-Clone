@@ -1,8 +1,9 @@
 """Cross-Platform Ground Truth — fetches prediction market probabilities
-from Metaculus and Manifold Markets, matches them against Polymarket markets,
-and stores reference data for the ground-truth mismatch guardrail.
+from Manifold Markets, matches them against Polymarket markets, and stores
+reference data for the ground-truth mismatch guardrail.
 
-All sources are free, public, no auth required.
+Manifold's search API is free, public, no auth required.
+Metaculus API is currently returning 403 — disabled until they restore access.
 Runs daily at 5:00 AM ET via scheduler.
 """
 
@@ -16,21 +17,100 @@ from loguru import logger
 
 from supabase_client import supabase
 
-METACULUS_API = "https://www.metaculus.com/api2/questions/"
 MANIFOLD_API = "https://api.manifold.markets/v0"
 
-SIMILARITY_THRESHOLD = 0.70
+STOP_WORDS = frozenset({
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "will", "would", "could", "should", "may", "might", "shall", "can",
+    "do", "does", "did", "has", "have", "had", "having",
+    "in", "on", "at", "to", "for", "of", "by", "from", "with", "as",
+    "and", "or", "but", "not", "no", "if", "than", "that", "this",
+    "it", "its", "there", "their", "they", "he", "she", "we", "you",
+    "what", "which", "who", "whom", "how", "when", "where", "why",
+    "before", "after", "during", "about", "into", "through",
+    "between", "under", "over", "above", "below", "up", "down",
+    "any", "all", "each", "every", "both", "few", "more", "most",
+    "other", "some", "such", "only", "same", "so", "then",
+})
+
+SIMILARITY_THRESHOLD = 0.45
+
+SEARCH_TOPICS = [
+    "election president",
+    "federal reserve rate",
+    "bitcoin crypto",
+    "recession economy GDP",
+    "AI artificial intelligence",
+    "war conflict",
+    "climate change",
+    "supreme court",
+    "congress legislation",
+    "inflation CPI",
+    "China Taiwan",
+    "Russia Ukraine",
+    "NATO",
+    "stock market S&P",
+    "SpaceX Mars",
+    "nuclear",
+    "pandemic virus",
+    "immigration border",
+    "tariff trade",
+    "World Cup Olympics",
+]
+
+
+def _stem(word: str) -> str:
+    """Minimal stemming: strip common English suffixes."""
+    if len(word) <= 3:
+        return word
+    for suffix in ("tion", "sion", "ment", "ness", "ance", "ence", "ing", "ies", "ous", "ive", "ful", "ize", "ise", "ial", "ary", "ory", "ly", "ed", "er", "es", "al", "en", "ty", "le"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            return word[: -len(suffix)]
+    if word.endswith("s") and not word.endswith("ss") and len(word) > 3:
+        return word[:-1]
+    return word
+
+
+_ABBREVIATIONS: dict[str, str] = {
+    "fed": "federal",
+    "ai": "artificial",
+    "gop": "republican",
+    "dem": "democrat",
+    "dems": "democrat",
+    "btc": "bitcoin",
+    "eth": "ethereum",
+    "gdp": "gross",
+    "cpi": "consumer",
+    "uk": "kingdom",
+    "us": "united",
+    "usa": "united",
+}
 
 
 def _normalize(text: str) -> set[str]:
-    """Extract lowercase words, stripping punctuation."""
-    return set(re.findall(r"[a-z0-9]+", text.lower()))
+    """Extract meaningful lowercase words, removing stop words and stemming."""
+    words = set(re.findall(r"[a-z0-9]+", text.lower()))
+    words -= STOP_WORDS
+    expanded = set()
+    for w in words:
+        expanded.add(_stem(w))
+        if w in _ABBREVIATIONS:
+            expanded.add(_stem(_ABBREVIATIONS[w]))
+    return expanded
 
 
-def _jaccard(a: set[str], b: set[str]) -> float:
+def _similarity(a: set[str], b: set[str]) -> float:
+    """Hybrid similarity: max of Jaccard and containment ratio.
+
+    Containment handles asymmetric cases — a short Polymarket title
+    matching a longer Manifold question (or vice versa).
+    """
     if not a or not b:
         return 0.0
-    return len(a & b) / len(a | b)
+    intersection = len(a & b)
+    jaccard = intersection / len(a | b)
+    containment = intersection / min(len(a), len(b))
+    return max(jaccard, containment)
 
 
 def _get_polymarket_markets() -> list[dict]:
@@ -76,7 +156,7 @@ def _match_to_polymarket(
     best_score = 0.0
 
     for pm in polymarket_markets:
-        score = _jaccard(ext_words, pm["words"])
+        score = _similarity(ext_words, pm["words"])
         if score > best_score:
             best_score = score
             best_match = pm
@@ -86,116 +166,73 @@ def _match_to_polymarket(
     return None
 
 
-def fetch_metaculus_probabilities(polymarket_markets: list[dict]) -> int:
-    """Fetch open questions from Metaculus and match to Polymarket."""
-    matched = 0
-    try:
-        resp = httpx.get(
-            METACULUS_API,
-            params={
-                "status": "open",
-                "type": "forecast",
-                "limit": 100,
-                "order_by": "-activity",
-            },
-            timeout=20,
-            headers={"Accept": "application/json"},
-        )
-        if resp.status_code != 200:
-            logger.warning("metaculus: API returned {}", resp.status_code)
-            return 0
-
-        data = resp.json()
-        questions = data.get("results", data) if isinstance(data, dict) else data
-    except Exception as e:
-        logger.error("metaculus: fetch failed — {}", e)
-        return 0
-
-    for q in questions:
-        try:
-            title = q.get("title", "")
-            if not title:
-                continue
-
-            prediction = q.get("community_prediction", {})
-            if isinstance(prediction, dict):
-                prob = prediction.get("full", {}).get("q2")
-            else:
-                prob = prediction
-            if prob is None:
-                continue
-
-            prob = float(prob)
-            external_id = str(q.get("id", ""))
-
-            pm = _match_to_polymarket(title, polymarket_markets)
-            if not pm:
-                continue
-
-            _upsert_reference(
-                polymarket_condition_id=pm["condition_id"],
-                platform="metaculus",
-                external_id=external_id,
-                external_title=title[:500],
-                external_prob=round(prob, 4),
-            )
-            matched += 1
-        except Exception as e:
-            logger.debug("metaculus: skipping question — {}", e)
-
-    return matched
-
-
 def fetch_manifold_probabilities(polymarket_markets: list[dict]) -> int:
-    """Fetch markets from Manifold Markets and match to Polymarket."""
+    """Search Manifold Markets by topic and match to Polymarket."""
     matched = 0
-    try:
-        resp = httpx.get(
-            f"{MANIFOLD_API}/markets",
-            params={"limit": 200, "sort": "liquidity"},
-            timeout=20,
-        )
-        if resp.status_code != 200:
-            logger.warning("manifold: API returned {}", resp.status_code)
-            return 0
+    seen_external: set[str] = set()
+    seen_poly: set[str] = set()
 
-        markets = resp.json()
-    except Exception as e:
-        logger.error("manifold: fetch failed — {}", e)
-        return 0
-
-    for m in markets:
+    for topic in SEARCH_TOPICS:
         try:
-            question = m.get("question", "")
-            if not question:
-                continue
-
-            prob = m.get("probability")
-            if prob is None:
-                continue
-
-            prob = float(prob)
-            if m.get("isResolved", False):
-                continue
-
-            external_id = m.get("id", "")
-            volume = float(m.get("volume", 0))
-
-            pm = _match_to_polymarket(question, polymarket_markets)
-            if not pm:
-                continue
-
-            _upsert_reference(
-                polymarket_condition_id=pm["condition_id"],
-                platform="manifold",
-                external_id=str(external_id),
-                external_title=question[:500],
-                external_prob=round(prob, 4),
-                external_volume=round(volume, 2),
+            resp = httpx.get(
+                f"{MANIFOLD_API}/search-markets",
+                params={"term": topic, "limit": "20", "sort": "liquidity"},
+                timeout=15,
             )
-            matched += 1
+            if resp.status_code != 200:
+                logger.debug("manifold: search '{}' returned {}", topic, resp.status_code)
+                continue
+
+            markets = resp.json()
         except Exception as e:
-            logger.debug("manifold: skipping market — {}", e)
+            logger.debug("manifold: search '{}' failed — {}", topic, e)
+            continue
+
+        for m in markets:
+            try:
+                external_id = m.get("id", "")
+                if external_id in seen_external:
+                    continue
+                seen_external.add(external_id)
+
+                question = m.get("question", "")
+                if not question:
+                    continue
+
+                prob = m.get("probability")
+                if prob is None:
+                    continue
+
+                prob = float(prob)
+                if m.get("isResolved", False):
+                    continue
+
+                volume = float(m.get("volume", 0))
+
+                pm = _match_to_polymarket(question, polymarket_markets)
+                if not pm:
+                    continue
+
+                cid = pm["condition_id"]
+                if cid in seen_poly:
+                    continue
+                seen_poly.add(cid)
+
+                _upsert_reference(
+                    polymarket_condition_id=cid,
+                    platform="manifold",
+                    external_id=str(external_id),
+                    external_title=question[:500],
+                    external_prob=round(prob, 4),
+                    external_volume=round(volume, 2),
+                )
+                matched += 1
+                logger.debug(
+                    "manifold: matched '{}' → '{}' (prob={})",
+                    question[:50], pm["title"][:50], round(prob, 3),
+                )
+            except Exception as e:
+                logger.debug("manifold: skipping market — {}", e)
 
     return matched
 
@@ -235,12 +272,10 @@ def ingest_prediction_references() -> str:
     if not pm_markets:
         return "0 Polymarket markets to match against"
 
-    metaculus_count = fetch_metaculus_probabilities(pm_markets)
     manifold_count = fetch_manifold_probabilities(pm_markets)
 
-    total = metaculus_count + manifold_count
     return (
-        f"{total} cross-platform matches "
-        f"(Metaculus: {metaculus_count}, Manifold: {manifold_count}) "
+        f"{manifold_count} cross-platform matches "
+        f"(Manifold: {manifold_count}) "
         f"against {len(pm_markets)} Polymarket markets"
     )

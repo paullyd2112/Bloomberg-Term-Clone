@@ -43,14 +43,14 @@ let referralCodePromise: Promise<string | null> | null = null;
 function getReferralCode(): Promise<string | null> {
   if (!referralCodePromise) {
     const supabase = createClient();
-    referralCodePromise = supabase.auth.getUser().then(({ data: { user } }) => {
+    referralCodePromise = supabase.auth.getUser().then(({ data: { user } }: { data: { user: { id: string } | null } }) => {
       if (!user) return null;
       return supabase
         .from("profiles")
         .select("referral_code")
         .eq("id", user.id)
         .single()
-        .then(({ data }) => (data?.referral_code as string | undefined) ?? null);
+        .then(({ data }: { data: { referral_code?: string } | null }) => data?.referral_code ?? null);
     });
   }
   return referralCodePromise!;

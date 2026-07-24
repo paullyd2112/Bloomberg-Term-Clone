@@ -32,6 +32,12 @@ PREDICTION_DRIFT_THRESHOLD = 0.15
 PREDICTION_AGED_DRIFT_THRESHOLD = 0.10
 PREDICTION_AGED_DAYS = 30
 
+# Ratchet resolution (inspired by CloddsBot position management):
+# If peak favorable drift ever reached RATCHET_TRIGGER, lock a WIN floor at
+# RATCHET_FLOOR — prevents round-trip losses on signals that were right then reverted.
+PREDICTION_RATCHET_TRIGGER = 0.20
+PREDICTION_RATCHET_FLOOR = 0.15
+
 # ─── Resolution config by (asset_type, time_horizon) ────────────────────────
 # Each tuple: (min_age_hours, win_threshold, loss_threshold)
 # min_age_hours  = how long to wait before evaluating
@@ -133,6 +139,42 @@ def _get_prediction_current_price(identifier: str) -> float | None:
     except Exception as e:
         logger.warning("prediction price fetch failed for {}: {}", identifier, e)
         return None
+
+
+def _get_peak_favorable_drift(
+    condition_id: str,
+    entry_price: float,
+    direction: str,
+    since: str,
+) -> float:
+    """Compute the peak favorable YES-price drift since signal entry.
+
+    For YES signals, favorable = price went up; for NO, favorable = price went down.
+    Returns the peak favorable drift in probability points (0-1 scale), or 0.0.
+    """
+    try:
+        result = (
+            supabase.table("prediction_price_history")
+            .select("yes_price")
+            .eq("condition_id", condition_id)
+            .gte("captured_at", since)
+            .execute()
+        )
+        if not result.data:
+            return 0.0
+
+        peak = 0.0
+        for row in result.data:
+            price = float(row.get("yes_price", 0))
+            if direction == "YES":
+                drift = price - entry_price
+            else:
+                drift = entry_price - price
+            if drift > peak:
+                peak = drift
+        return peak
+    except Exception:
+        return 0.0
 
 
 def _score_outcome(
@@ -425,7 +467,20 @@ def resolve_outcomes() -> str:
                 if age_days >= PREDICTION_AGED_DAYS:
                     drift_threshold = PREDICTION_AGED_DRIFT_THRESHOLD
 
-                if abs(price_move) >= drift_threshold:
+                # Ratchet resolution: if peak favorable drift hit 20pp+,
+                # lock WIN floor at 15pp — prevents round-trip losses.
+                ratchet_resolved = False
+                if direction in ("YES", "NO") and abs(price_move) < drift_threshold:
+                    favorable = (price_move > 0) if direction == "YES" else (price_move < 0)
+                    if favorable and abs(price_move) >= PREDICTION_RATCHET_FLOOR:
+                        peak = _get_peak_favorable_drift(
+                            ident, entry_price, direction,
+                            signal["created_at"],
+                        )
+                        if peak >= PREDICTION_RATCHET_TRIGGER:
+                            ratchet_resolved = True
+
+                if abs(price_move) >= drift_threshold or ratchet_resolved:
                     if direction == "YES":
                         outcome = "WIN" if price_move > 0 else "LOSS"
                     elif direction == "NO":
@@ -433,6 +488,7 @@ def resolve_outcomes() -> str:
                     else:
                         outcome = "NEUTRAL"
 
+                    resolve_tag = "ratchet" if ratchet_resolved else "price-drift"
                     try:
                         supabase.table("signals").update({
                             "outcome":       outcome,
@@ -441,9 +497,9 @@ def resolve_outcomes() -> str:
                         }).eq("id", signal["id"]).execute()
                         resolved_count += 1
                         logger.info(
-                            "prediction/{}: price-drift resolved {} → {} "
+                            "prediction/{}: {} resolved {} → {} "
                             "(entry={:.2f}, now={:.2f}, move={:+.2f}pp, age={:.0f}d)",
-                            ident[:12], direction, outcome,
+                            ident[:12], resolve_tag, direction, outcome,
                             entry_price, current_price, price_move * 100, age_days,
                         )
                     except Exception as e:

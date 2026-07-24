@@ -43,6 +43,8 @@ export async function GET(request: NextRequest) {
 
   const supabase = createAdminClient();
 
+  type PriceRow = { price: number; captured_at: string };
+
   // Get current price
   const { data: currentRow } = await supabase
     .from("raw_prices")
@@ -51,6 +53,7 @@ export async function GET(request: NextRequest) {
     .eq("identifier", identifier)
     .order("captured_at", { ascending: false })
     .limit(1)
+    .returns<PriceRow[]>()
     .single();
 
   const currentPrice = currentRow?.price != null ? Number(currentRow.price) : null;
@@ -73,6 +76,7 @@ export async function GET(request: NextRequest) {
         .eq("identifier", identifier)
         .order("captured_at", { ascending: true })
         .limit(1)
+        .returns<PriceRow[]>()
         .single();
 
       if (!data?.price) {
@@ -105,6 +109,7 @@ export async function GET(request: NextRequest) {
       .lte("captured_at", windowEnd.toISOString())
       .order("captured_at", { ascending: true })
       .limit(1)
+      .returns<PriceRow[]>()
       .single();
 
     if (data?.price) {
@@ -127,6 +132,7 @@ export async function GET(request: NextRequest) {
       .lte("captured_at", windowEnd.toISOString())
       .order("captured_at", { ascending: false })
       .limit(1)
+      .returns<PriceRow[]>()
       .single();
 
     if (widerData?.price) {

@@ -57,8 +57,8 @@ export default function CongressPage() {
       .select("*")
       .order("trade_date", { ascending: false })
       .limit(500)
-      .then(({ data }) => {
-        setTrades((data as CongressTrade[]) ?? []);
+      .then(({ data }: { data: CongressTrade[] | null }) => {
+        setTrades(data ?? []);
         setLoading(false);
       });
   }, []);

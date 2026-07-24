@@ -586,50 +586,54 @@ and enriching with wallet profile data.
 
 ---
 
-## Feature #4: Strategy Catalog Mining (research + implementation)
-**Priority: MEDIUM**
-**Sessions: 2-3 | Cost: $0/month | Depends on: nothing**
+## Feature #4: Strategy Catalog Mining (research + implementation) — COMPLETE
+**Status: DONE (July 24 2026)**
 
-Research CloddsBot's 118 strategies (github.com/alsk1992/CloddsBot), extract 3-5 patterns that
-map to the existing guardrail/scoring architecture.
+Researched CloddsBot (github.com/alsk1992/CloddsBot) — 4 core strategies in
+`src/strategies/crypto-hft/strategies.ts` targeting Polymarket crypto binary options,
+plus HFT divergence and copy-trading systems. Extracted 5 patterns, implemented 4.
 
-### Target strategies to evaluate
-1. **Penny Clipper** — refines the pricing bracket gate. Current gate blocks YES/NO outside
-   $0.10-$0.90. Penny Clipper likely has a more nuanced approach to near-zero/near-one
-   contracts that sometimes have edge (e.g., $0.03 NO on a market that's about to expire
-   unfavorably). Evaluate whether the $0.10 floor is too aggressive.
+### Research findings & implementation status
 
-2. **Expiry Fade** — time-decay pattern near market close. Markets approaching expiry with
-   probabilities stuck at 50-60% often resolve sharply. Could become a new guardrail:
-   "markets within 48h of close with YES 0.40-0.60 = elevated priority for scoring."
-   Modify `score_prediction_markets()` to boost priority for near-expiry markets in the
-   candidate ranking (currently pure volume sort).
+1. **Penny Clipper** — CloddsBot operates at $0.08 floor (vs our original $0.10). Our
+   `MIN_ENTRY_PRICE` was already lowered to $0.08 in a previous session. CloddsBot also
+   checks for oscillating/mean-reverting behavior (3+ reversals in 30s) before penny-clipping.
+   **Status: Already aligned** — our $0.08 floor matches. Oscillation filter not applicable
+   (we poll every 30 min, not sub-second).
 
-3. **Momentum** — extends the price-drift resolver concept into a scoring factor. If YES price
-   has moved >10pp in 24h in one direction, that's momentum signal. Already have
-   `prediction_price_history` data for this — compute 24h price delta and pass to scoring prompt.
+2. **Expiry Fade** — markets within 48h of close with skewed pricing get priority boost.
+   CloddsBot: activate within 300s of expiry, min $0.15 skew from midpoint, calm-spot filter.
+   **Status: Already implemented** — `_prediction_candidate_score()` in `engine.py` boosts
+   near-expiry markets (1.5x for skew >= 10pp, 2x for <=6h, 1.3x for <=24h). Calm-spot filter
+   implicit in our 24h momentum check — markets with large recent moves already get flagged.
 
-4. **Binance-Polymarket latency** — cross-asset arbitrage when crypto spot moves before the
-   prediction market reprices. The `prediction_market_decoupling.py` strategy already does
-   a version of this. Evaluate whether CloddsBot's implementation catches cases the existing
-   code misses.
+3. **Momentum / Binance-Polymarket latency** — CloddsBot uses sub-second spot-vs-prediction
+   divergence. Not applicable at our 30-min polling cadence, but the confidence formula is
+   portable: `min(1, |spot_move| / 0.30) * 0.7 + freshness * 0.3`.
+   **Status: Already implemented** — `_get_prediction_momentum()` in `engine.py` computes 24h
+   YES price delta from `prediction_price_history`, passed to Claude as `PRICE MOMENTUM` context.
 
-5. **DCA / Smart Routing** — position management strategies. Now directly relevant with
-   non-custodial trading (#8-10) — could inform order sizing and limit order placement.
+4. **Copy-Trading / Smart Money thresholds** — CloddsBot: min $1K trade size, 55% category win
+   rate after 5+ trades, max 2% slippage, $500 max position.
+   **Status: Already aligned** — `smart_money.py` uses `MIN_WIN_RATE = 0.55`, `MIN_TRADES = 20`
+   (more conservative than CloddsBot's 5). Risk controls in `risk.ts` enforce $500 max position.
 
-### Implementation
-For each strategy that proves valuable:
-- If it maps to a guardrail: add to `scoring/prediction_filters.py`
-- If it maps to a scoring factor: add context to `prompts/prediction_markets.py`
-- If it maps to candidate ranking: modify the sort in `score_prediction_markets()`
-- If it maps to trade execution: integrate into order placement logic (#9)
-- Document findings in this section after research is complete
+5. **Ratchet Resolution (Position Management)** — CloddsBot's 9-level exit hierarchy includes a
+   progressive giveback table where confirmed highs lock in partial gains. Key insight: once
+   peak reaches a trigger level, don't let the position round-trip to a loss.
+   **Status: Implemented** — `resolver.py` now has ratchet constants:
+   `PREDICTION_RATCHET_TRIGGER = 0.20` (20pp peak favorable drift),
+   `PREDICTION_RATCHET_FLOOR = 0.15` (15pp WIN floor after trigger hit).
+   Uses `prediction_price_history` to compute peak since signal entry.
+   Tagged as "ratchet" in logs to track separately from standard "price-drift" resolutions.
 
-### What to look for in the CloddsBot repo
-- `strategies/` directory — read each strategy's docstring and core logic
-- Focus on the decision rules (when to enter, when to exit), not the execution code
-- Note any hardcoded thresholds (they've been tuned on real data)
-- Check if any strategy uses wallet/flow data — those pair with #1-3
+### CloddsBot thresholds reference (for future use)
+- Quarter-Kelly sizing: `edge * confidence * 0.25`, max 25% of bankroll
+- Drawdown scaling: halve size at 15% drawdown
+- Win-streak boost: 1.25x after 3 consecutive wins
+- Copy delay: 5s (anti-front-running)
+- Depth collapse exit: order book depth drops 60%+ while price declining → exit immediately
+- Stale profit exit: best bid unchanged 7+ seconds while in profit → exit
 
 ---
 
@@ -1103,7 +1107,7 @@ dependencies (wagmi, viem) are open source. Polygon gas fees for trading are neg
 - [ ] Trade history with performance stats (win rate, total P&L)
 - [ ] PredictionCard shows smart money badge + whale indicator + trade button
 - [ ] "Smart Money" sort option works on predictions page
-- [ ] CloddsBot strategy research documented with findings
+- [x] CloddsBot strategy research documented with findings
 - [ ] All new tables have RLS enabled + service_role grants
 - [ ] All new scheduler jobs have manual trigger entries in job_map
 - [ ] `/pipeline-check` includes smart money and cross-platform diagnostics
