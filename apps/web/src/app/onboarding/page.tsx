@@ -241,7 +241,7 @@ export default function OnboardingPage() {
               <div>
                 <div className="font-semibold text-white text-sm">Daily morning briefing</div>
                 <div className="text-xs text-zinc-400 mt-0.5">
-                  Market recap, AI signals, and trade ideas, delivered every weekday morning
+                  Market recap, AI signals, and trade ideas, delivered daily
                 </div>
               </div>
             </label>

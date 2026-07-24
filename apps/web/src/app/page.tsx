@@ -237,7 +237,7 @@ const FEATURES = [
   {
     icon: Sunrise,
     title: "Morning briefing",
-    desc: "An AI-written market brief in your inbox every weekday morning. Top signals, macro, and risk.",
+    desc: "An AI-written market brief delivered daily to your inbox. Top signals, macro, and risk.",
     span: "lg:col-span-3",
   },
   {

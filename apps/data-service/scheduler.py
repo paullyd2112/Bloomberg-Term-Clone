@@ -344,17 +344,17 @@ scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
 scheduler.add_job(lambda: _run_job("ingest_whale_alerts", job_ingest_whale_alerts),
                   IntervalTrigger(minutes=5), id="ingest_whale_alerts")
 
-# Wallet Profiling — daily at 4:00 AM ET, backfill wallet trade history + compute stats
+# Wallet Profiling — daily at 8:30 AM ET (6:30 AM PT), backfill wallet trade history + compute stats
 scheduler.add_job(lambda: _run_job("ingest_wallet_profiles", job_ingest_wallet_profiles),
-                  CronTrigger(hour=4, minute=0), id="ingest_wallet_profiles")
+                  CronTrigger(hour=8, minute=30, timezone="America/New_York"), id="ingest_wallet_profiles")
 
-# Wallet Behavior Patterns — daily at 4:30 AM ET, after wallet profiling completes
+# Wallet Behavior Patterns — daily at 8:45 AM ET, after wallet profiling completes
 scheduler.add_job(lambda: _run_job("analyze_wallet_patterns", job_analyze_wallet_patterns),
-                  CronTrigger(hour=4, minute=30), id="analyze_wallet_patterns")
+                  CronTrigger(hour=8, minute=45, timezone="America/New_York"), id="analyze_wallet_patterns")
 
-# Cross-platform ground truth — daily at 5:00 AM ET, fetch Metaculus/Manifold reference probs
+# Cross-platform ground truth — daily at 8:30 AM ET, fetch Metaculus/Manifold reference probs
 scheduler.add_job(lambda: _run_job("ingest_prediction_references", job_ingest_prediction_references),
-                  CronTrigger(hour=5, minute=0), id="ingest_prediction_references")
+                  CronTrigger(hour=8, minute=30, timezone="America/New_York"), id="ingest_prediction_references")
 
 # Crypto momentum screener — every 2 hours, catches pumps/breakouts outside watchlist
 scheduler.add_job(lambda: _run_job("crypto_momentum", job_crypto_momentum),
@@ -375,40 +375,40 @@ scheduler.add_job(lambda: _run_job("enrich_fred", job_enrich_fred),
 scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressional),
                   CronTrigger(hour=8, minute=0), id="ingest_congressional")
 
-# Market news — ingest at 6:45am ET weekdays, before newsletter generation
+# Market news — ingest at 8:45am ET (5:45am PT) weekdays, before newsletter generation
 scheduler.add_job(lambda: _run_job("ingest_news", job_ingest_news),
-                  CronTrigger(hour=6, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_news")
+                  CronTrigger(hour=8, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_news")
 # AI/tech industry news (RSS, no API key) — same window, gives the newsletter
 # model-launch and product-news coverage Finnhub's finance-wire feed misses
 scheduler.add_job(lambda: _run_job("ingest_tech_news", job_ingest_tech_news),
-                  CronTrigger(hour=6, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_tech_news")
+                  CronTrigger(hour=8, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_tech_news")
 # Geopolitics/defense news (RSS, no API key) — same window, covers wars,
 # sanctions, and Congress/defense activity the finance-wire feed misses
 scheduler.add_job(lambda: _run_job("ingest_geopolitics_news", job_ingest_geopolitics_news),
-                  CronTrigger(hour=6, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_geopolitics_news")
+                  CronTrigger(hour=8, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_geopolitics_news")
 # Sports news (RSS, no API key) — ESPN + BBC Sport, 7 days/week
 scheduler.add_job(lambda: _run_job("ingest_sports_news", job_ingest_sports_news),
-                  CronTrigger(hour=6, minute=45, timezone="America/New_York"), id="ingest_sports_news")
+                  CronTrigger(hour=8, minute=45, timezone="America/New_York"), id="ingest_sports_news")
 # Health/science news (RSS, no API key) — NPR Health + STAT News, 7 days/week
 scheduler.add_job(lambda: _run_job("ingest_health_science_news", job_ingest_health_science_news),
-                  CronTrigger(hour=6, minute=45, timezone="America/New_York"), id="ingest_health_science_news")
+                  CronTrigger(hour=8, minute=45, timezone="America/New_York"), id="ingest_health_science_news")
 # General world/US news (RSS, no API key) — BBC World + NPR + NYT, 7 days/week
 scheduler.add_job(lambda: _run_job("ingest_world_news", job_ingest_world_news),
-                  CronTrigger(hour=6, minute=45, timezone="America/New_York"), id="ingest_world_news")
+                  CronTrigger(hour=8, minute=45, timezone="America/New_York"), id="ingest_world_news")
 # Feed health monitor — alert if any RSS source goes silent for 72h
 scheduler.add_job(lambda: _run_job("check_feed_health", job_check_feed_health),
                   CronTrigger(hour=8, minute=0, timezone="America/New_York"), id="check_feed_health")
 
-# Newsletter — generate at 7:00am, send via Resend at 7:15am ET, retry at 7:45am
+# Newsletter — generate at 9:00am ET (6:00am PT), send at 9:15am, retry at 9:45am
 # Runs 7 days/week (weekend editions draw from daily feeds: sports, world, health, crypto)
 scheduler.add_job(lambda: _run_job("generate_newsletter", job_generate_newsletter),
-                  CronTrigger(hour=7, minute=0, timezone="America/New_York"), id="generate_newsletter")
+                  CronTrigger(hour=9, minute=0, timezone="America/New_York"), id="generate_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter", job_send_newsletter),
-                  CronTrigger(hour=7, minute=15, timezone="America/New_York"), id="send_newsletter")
+                  CronTrigger(hour=9, minute=15, timezone="America/New_York"), id="send_newsletter")
 scheduler.add_job(lambda: _run_job("send_newsletter_retry", job_send_newsletter_retry),
-                  CronTrigger(hour=7, minute=45, timezone="America/New_York"), id="send_newsletter_retry")
+                  CronTrigger(hour=9, minute=45, timezone="America/New_York"), id="send_newsletter_retry")
 scheduler.add_job(lambda: _run_job("send_elite_briefings", job_send_elite_briefings),
-                  CronTrigger(hour=7, minute=20, timezone="America/New_York"), id="send_elite_briefings")
+                  CronTrigger(hour=9, minute=20, timezone="America/New_York"), id="send_elite_briefings")
 scheduler.add_job(lambda: _run_job("send_welcome_sequence", job_send_welcome_sequence),
                   CronTrigger(hour=9, minute=0, timezone="America/New_York"), id="send_welcome_sequence")
 
