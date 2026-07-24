@@ -122,16 +122,19 @@ def _store_whale_alerts(whales: list[dict]) -> int:
     inserted = 0
     for whale in whales:
         try:
-            if whale.get("tx_hash"):
-                existing = (
-                    supabase.table("whale_alerts")
-                    .select("id")
-                    .eq("tx_hash", whale["tx_hash"])
-                    .limit(1)
-                    .execute()
-                )
-                if existing.data:
-                    continue
+            tx_hash = whale.get("tx_hash")
+            if not tx_hash:
+                continue
+
+            existing = (
+                supabase.table("whale_alerts")
+                .select("id")
+                .eq("tx_hash", tx_hash)
+                .limit(1)
+                .execute()
+            )
+            if existing.data:
+                continue
 
             supabase.table("whale_alerts").insert(whale).execute()
             inserted += 1

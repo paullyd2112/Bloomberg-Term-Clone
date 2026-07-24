@@ -91,14 +91,17 @@ export async function createOrder(
   };
 
   const resp = await clobFetch(creds, "POST", "/order", body);
-  const data = await resp.json();
 
   if (!resp.ok) {
-    return {
-      success: false,
-      errorMsg: data.error || data.message || `HTTP ${resp.status}`,
-    };
+    let errorMsg = `HTTP ${resp.status}`;
+    try {
+      const errData = await resp.json();
+      errorMsg = errData.error || errData.message || errorMsg;
+    } catch {}
+    return { success: false, errorMsg };
   }
+
+  const data = await resp.json();
 
   return {
     success: true,

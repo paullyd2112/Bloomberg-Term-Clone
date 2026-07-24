@@ -238,26 +238,26 @@ def compute_wallet_stats(address: str) -> dict | None:
                 continue
 
             outcome = settled.data[0]["result"]
-            avg_entry = sum(float(t["price"]) for t in pos_trades) / len(pos_trades)
-            total_size = sum(float(t["usd_value"]) for t in pos_trades)
-            dominant_dir = max(
-                set(t["direction"] for t in pos_trades),
-                key=lambda d: sum(1 for t in pos_trades if t["direction"] == d),
-            )
+            total_shares = sum(float(t["size"]) for t in pos_trades)
+            total_cost = sum(float(t["usd_value"]) for t in pos_trades)
+            yes_volume = sum(float(t["usd_value"]) for t in pos_trades if t["direction"] == "YES")
+            no_volume = sum(float(t["usd_value"]) for t in pos_trades if t["direction"] == "NO")
+            dominant_dir = "YES" if yes_volume >= no_volume else "NO"
 
             if outcome == "WIN":
                 if dominant_dir == "YES":
-                    pnl = total_size * (1.0 - avg_entry) / avg_entry if avg_entry > 0 else 0
+                    pnl = total_shares - total_cost if total_shares > 0 else 0
                     wins += 1
                 else:
-                    pnl = -total_size
+                    pnl = -total_cost
                     losses += 1
             else:
                 if dominant_dir == "NO":
-                    pnl = total_size * avg_entry / (1.0 - avg_entry) if 0 < avg_entry < 1 else 0
-                    wins += 1
+                    pnl = total_cost - total_shares if total_shares > 0 else 0
+                    wins += 1 if pnl > 0 else 0
+                    losses += 0 if pnl > 0 else 1
                 else:
-                    pnl = -total_size
+                    pnl = -total_cost
                     losses += 1
 
             realized_pnl += pnl

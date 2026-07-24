@@ -24,9 +24,6 @@ type Position = {
 type PerformanceStats = {
   total_trades: number;
   total_volume: number;
-  realized_pnl: number;
-  win_count: number;
-  loss_count: number;
 };
 
 type TabId = "positions" | "orders" | "history";
@@ -140,20 +137,13 @@ export default function PositionsPage() {
 
       setPositions(positionsList);
 
-      // Compute performance stats
       let totalVol = 0;
-      let wins = 0;
-      let losses = 0;
       for (const t of history) {
         totalVol += Number(t.size) * Number(t.price);
       }
-      // Simplified: count sells above buy avg as wins
       setStats({
         total_trades: history.length,
         total_volume: totalVol,
-        realized_pnl: 0,
-        win_count: wins,
-        loss_count: losses,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load positions");

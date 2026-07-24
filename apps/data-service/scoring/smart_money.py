@@ -7,7 +7,7 @@ Zero API cost — all queries hit the local wallet_profiles/wallet_trades tables
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from loguru import logger
 
@@ -46,12 +46,15 @@ def get_smart_money_consensus(condition_id: str) -> dict | None:
     addresses = [w["address"] for w in qualified.data]
     pnl_by_addr = {w["address"]: float(w["realized_pnl_usd"] or 0) for w in qualified.data}
 
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=RECENT_HOURS)).isoformat()
+
     try:
         trades = (
             supabase.table("wallet_trades")
             .select("wallet_address, direction, usd_value, traded_at")
             .eq("condition_id", condition_id)
             .in_("wallet_address", addresses)
+            .gte("traded_at", cutoff)
             .order("traded_at", desc=True)
             .limit(200)
             .execute()
