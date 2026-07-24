@@ -24,9 +24,6 @@ type Position = {
 type PerformanceStats = {
   total_trades: number;
   total_volume: number;
-  realized_pnl: number;
-  win_count: number;
-  loss_count: number;
 };
 
 type TabId = "positions" | "orders" | "history";
@@ -65,11 +62,13 @@ export default function PositionsPage() {
       setOpenOrders(orders);
       setTradeHistory(history);
 
-      // Build positions from trade history
-      const posMap = new Map<string, { size: number; cost: number; direction: string; asset_id: string }>();
+      // Build positions from trade history and map token IDs to condition IDs
+      const posMap = new Map<string, { size: number; cost: number; asset_id: string }>();
+      const tokenToCondition = new Map<string, string>();
       for (const t of history) {
         const key = t.asset_id;
-        const existing = posMap.get(key) ?? { size: 0, cost: 0, direction: t.side, asset_id: t.asset_id };
+        if (t.market) tokenToCondition.set(t.asset_id, t.market);
+        const existing = posMap.get(key) ?? { size: 0, cost: 0, asset_id: t.asset_id };
         if (t.side === "BUY") {
           existing.size += Number(t.size);
           existing.cost += Number(t.size) * Number(t.price);
@@ -80,12 +79,17 @@ export default function PositionsPage() {
         posMap.set(key, existing);
       }
 
-      // Fetch current prices for positions from Supabase
-      const conditionIds = Array.from(new Set(history.map((t) => t.asset_id).filter(Boolean)));
-      let priceMap = new Map<string, number>();
+      // Fetch current prices and market titles using condition IDs (not token IDs)
+      const conditionIds = Array.from(new Set(
+        Array.from(tokenToCondition.values()).filter(Boolean)
+      ));
+      const priceMap = new Map<string, { yes: number; no: number }>();
+      const titleMap = new Map<string, string>();
+      const tokenDirectionMap = new Map<string, "YES" | "NO">();
+
       if (conditionIds.length > 0) {
         const supabase = createClient();
-        const { data: priceRows } = await supabase
+        const { data: rows } = await supabase
           .from("raw_prices")
           .select("identifier, metadata")
           .eq("asset_type", "prediction")
@@ -93,34 +97,23 @@ export default function PositionsPage() {
           .order("captured_at", { ascending: false })
           .limit(conditionIds.length * 2);
 
-        if (priceRows) {
-          for (const row of priceRows) {
+        if (rows) {
+          for (const row of rows) {
+            const meta = (row.metadata as Record<string, unknown>) ?? {};
             if (!priceMap.has(row.identifier)) {
-              const meta = (row.metadata as Record<string, unknown>) ?? {};
               const yp = meta.yes_price != null ? Number(meta.yes_price) : null;
-              if (yp != null) priceMap.set(row.identifier, yp);
+              const np = meta.no_price != null ? Number(meta.no_price) : null;
+              if (yp != null) {
+                priceMap.set(row.identifier, { yes: yp, no: np ?? 1 - yp });
+              }
             }
-          }
-        }
-      }
-
-      // Fetch market titles
-      let titleMap = new Map<string, string>();
-      if (conditionIds.length > 0) {
-        const supabase = createClient();
-        const { data: titleRows } = await supabase
-          .from("raw_prices")
-          .select("identifier, metadata")
-          .eq("asset_type", "prediction")
-          .in("identifier", conditionIds)
-          .order("captured_at", { ascending: false })
-          .limit(conditionIds.length * 2);
-
-        if (titleRows) {
-          for (const row of titleRows) {
             if (!titleMap.has(row.identifier)) {
-              const meta = (row.metadata as Record<string, unknown>) ?? {};
               if (meta.title) titleMap.set(row.identifier, String(meta.title));
+            }
+            const clobTokenIds = meta.clobTokenIds as string[] | undefined;
+            if (Array.isArray(clobTokenIds) && clobTokenIds.length >= 2) {
+              tokenDirectionMap.set(String(clobTokenIds[0]), "YES");
+              tokenDirectionMap.set(String(clobTokenIds[1]), "NO");
             }
           }
         }
@@ -129,15 +122,16 @@ export default function PositionsPage() {
       const positionsList: Position[] = [];
       for (const [assetId, pos] of Array.from(posMap.entries())) {
         if (Math.abs(pos.size) < 0.001) continue;
-        const avgPrice = pos.size > 0 ? pos.cost / pos.size : 0;
-        const condId = assetId;
-        const currentPrice = priceMap.get(condId) ?? null;
-        const direction = pos.size > 0 ? "YES" : "NO";
         const size = Math.abs(pos.size);
+        const avgPrice = size > 0 ? Math.abs(pos.cost) / size : 0;
+        const condId = tokenToCondition.get(assetId) ?? assetId;
+        const direction = tokenDirectionMap.get(assetId) ?? "YES";
+        const prices = priceMap.get(condId);
+        const currentPrice = prices
+          ? direction === "YES" ? prices.yes : prices.no
+          : null;
         const unrealizedPnl = currentPrice != null
-          ? direction === "YES"
-            ? (currentPrice - avgPrice) * size
-            : (avgPrice - currentPrice) * size
+          ? (currentPrice - avgPrice) * size
           : null;
         const pnlPct = unrealizedPnl != null && avgPrice > 0
           ? (unrealizedPnl / (avgPrice * size)) * 100
@@ -147,9 +141,9 @@ export default function PositionsPage() {
           asset_id: assetId,
           condition_id: condId,
           market_title: titleMap.get(condId) ?? condId.slice(0, 12) + "...",
-          direction: direction as "YES" | "NO",
+          direction,
           size,
-          avg_price: Math.abs(avgPrice),
+          avg_price: avgPrice,
           current_price: currentPrice,
           unrealized_pnl: unrealizedPnl,
           pnl_pct: pnlPct,
@@ -158,20 +152,13 @@ export default function PositionsPage() {
 
       setPositions(positionsList);
 
-      // Compute performance stats
       let totalVol = 0;
-      let wins = 0;
-      let losses = 0;
       for (const t of history) {
         totalVol += Number(t.size) * Number(t.price);
       }
-      // Simplified: count sells above buy avg as wins
       setStats({
         total_trades: history.length,
         total_volume: totalVol,
-        realized_pnl: 0,
-        win_count: wins,
-        loss_count: losses,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load positions");

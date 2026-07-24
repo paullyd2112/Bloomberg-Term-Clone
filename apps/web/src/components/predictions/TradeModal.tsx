@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { X, AlertTriangle, Loader2, CheckCircle2 } from "lucide-react";
 import { clsx } from "clsx";
 import { useAccount, useSignTypedData } from "wagmi";
 import { formatUnits } from "viem";
 import { deriveClobCredentials, getCachedCredentials, type ClobCredentials } from "@/lib/polymarket/auth";
-import { createOrder, type OrderSide } from "@/lib/polymarket/clob";
+import { createOrder, getOrderBook, type OrderSide } from "@/lib/polymarket/clob";
 import { checkOrderRisk, incrementTradeCount, recordLoss } from "@/lib/polymarket/risk";
 import type { PredictionMarket } from "./PredictionCard";
 
@@ -40,7 +40,41 @@ export default function TradeModal({ market, onClose }: TradeModalProps) {
     ? Math.abs((market.signal.confidence / 100) - currentPrice) * 100
     : null;
 
-  const riskCheck = checkOrderRisk(amountNum, currentPrice, null);
+  const [estimatedFill, setEstimatedFill] = useState<number | null>(null);
+
+  useEffect(() => {
+    const tokenId = side === "YES"
+      ? (market as Record<string, unknown>).yes_token_id as string | undefined
+      : (market as Record<string, unknown>).no_token_id as string | undefined;
+    if (!tokenId || orderType !== "market" || amountNum <= 0) {
+      setEstimatedFill(null);
+      return;
+    }
+    let cancelled = false;
+    getOrderBook(tokenId).then((book) => {
+      if (cancelled) return;
+      const asks = book.asks.sort((a, b) => Number(a.price) - Number(b.price));
+      let remainingUsd = amountNum;
+      let totalShares = 0;
+      let totalSpent = 0;
+      for (const level of asks) {
+        const px = Number(level.price);
+        const levelShares = Number(level.size);
+        const levelCostUsd = levelShares * px;
+        const fillFraction = Math.min(1, remainingUsd / levelCostUsd);
+        const sharesFilled = levelShares * fillFraction;
+        const usdFilled = levelCostUsd * fillFraction;
+        totalShares += sharesFilled;
+        totalSpent += usdFilled;
+        remainingUsd -= usdFilled;
+        if (remainingUsd <= 0) break;
+      }
+      setEstimatedFill(totalShares > 0 ? totalSpent / totalShares : null);
+    }).catch(() => setEstimatedFill(null));
+    return () => { cancelled = true; };
+  }, [side, market, orderType, amountNum, currentPrice]);
+
+  const riskCheck = checkOrderRisk(amountNum, currentPrice, orderType === "market" ? estimatedFill : null);
 
   const handleTrade = useCallback(async () => {
     if (!address || !amountNum || !riskCheck.allowed) return;
@@ -76,13 +110,13 @@ export default function TradeModal({ market, onClose }: TradeModalProps) {
         setOrderState("success");
         setOrderId(result.orderId || "");
         incrementTradeCount();
+        if (amountNum > 0) recordLoss(amountNum);
       } else {
         throw new Error(result.errorMsg || "Order failed");
       }
     } catch (e) {
       setOrderState("error");
       setOrderError(e instanceof Error ? e.message : "Trade failed");
-      if (amountNum > 0) recordLoss(amountNum);
     }
   }, [address, amountNum, riskCheck.allowed, side, market, effectivePrice, shares, orderType, signTypedDataAsync]);
 

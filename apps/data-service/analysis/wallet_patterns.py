@@ -248,16 +248,31 @@ def _analyze_category_specialization(trades: list[dict]) -> dict:
 def _get_price_movements_for_trades(trades: list[dict]) -> dict[str, str]:
     """Approximate price movement direction for each market at time of trade.
 
-    Uses the trade price itself: if price > 0.5, the market is trending YES (up);
-    if < 0.5, trending NO (down). This is a rough proxy — real momentum would
-    need historical price snapshots, which we don't store per-trade.
+    Groups trades by condition_id, compares the latest and earliest trade
+    prices to determine if the market was moving up or down during the
+    wallet's trading window. Falls back to "flat" if only one trade exists.
     """
-    movements: dict[str, str] = {}
+    market_prices: dict[str, list[float]] = {}
     for t in trades:
         cid = t.get("condition_id", "")
-        if cid and cid not in movements:
+        if cid:
             price = float(t.get("price", 0.5))
-            movements[cid] = "up" if price > 0.5 else "down"
+            if cid not in market_prices:
+                market_prices[cid] = []
+            market_prices[cid].append(price)
+
+    movements: dict[str, str] = {}
+    for cid, prices in market_prices.items():
+        if len(prices) < 2:
+            movements[cid] = "flat"
+        else:
+            delta = prices[0] - prices[-1]
+            if delta > 0.03:
+                movements[cid] = "up"
+            elif delta < -0.03:
+                movements[cid] = "down"
+            else:
+                movements[cid] = "flat"
     return movements
 
 

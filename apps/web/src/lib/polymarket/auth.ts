@@ -32,31 +32,18 @@ export type ClobCredentials = {
   passphrase: string;
 };
 
-const STORAGE_KEY = "plebs_clob_creds";
+let _cachedCreds: ClobCredentials | null = null;
 
 export function getCachedCredentials(): ClobCredentials | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as ClobCredentials;
-  } catch {
-    return null;
-  }
+  return _cachedCreds;
 }
 
 function cacheCredentials(creds: ClobCredentials): void {
-  if (typeof window === "undefined") return;
-  try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(creds));
-  } catch {
-    // sessionStorage full or unavailable
-  }
+  _cachedCreds = creds;
 }
 
 export function clearCredentials(): void {
-  if (typeof window === "undefined") return;
-  sessionStorage.removeItem(STORAGE_KEY);
+  _cachedCreds = null;
 }
 
 export async function deriveClobCredentials(

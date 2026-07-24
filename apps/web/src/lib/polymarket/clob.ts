@@ -43,6 +43,7 @@ export type OpenOrder = {
 export type TradeRecord = {
   id: string;
   asset_id: string;
+  market?: string;
   side: string;
   price: string;
   size: string;
@@ -91,14 +92,17 @@ export async function createOrder(
   };
 
   const resp = await clobFetch(creds, "POST", "/order", body);
-  const data = await resp.json();
 
   if (!resp.ok) {
-    return {
-      success: false,
-      errorMsg: data.error || data.message || `HTTP ${resp.status}`,
-    };
+    let errorMsg = `HTTP ${resp.status}`;
+    try {
+      const errData = await resp.json();
+      errorMsg = errData.error || errData.message || errorMsg;
+    } catch {}
+    return { success: false, errorMsg };
   }
+
+  const data = await resp.json();
 
   return {
     success: true,
@@ -111,7 +115,7 @@ export async function cancelOrder(
   creds: ClobCredentials,
   orderId: string,
 ): Promise<boolean> {
-  const resp = await clobFetch(creds, "DELETE", `/order/${orderId}`);
+  const resp = await clobFetch(creds, "DELETE", `/order/${encodeURIComponent(orderId)}`);
   return resp.ok;
 }
 
@@ -135,7 +139,8 @@ export async function getTradeHistory(
   creds: ClobCredentials,
   limit = 50,
 ): Promise<TradeRecord[]> {
-  const resp = await clobFetch(creds, "GET", `/trades?limit=${limit}`);
+  const params = new URLSearchParams({ limit: String(limit) });
+  const resp = await clobFetch(creds, "GET", `/trades?${params}`);
   if (!resp.ok) return [];
   const data = await resp.json();
   return Array.isArray(data) ? data : [];
@@ -144,7 +149,8 @@ export async function getTradeHistory(
 export async function getOrderBook(
   tokenId: string,
 ): Promise<{ bids: Array<{ price: string; size: string }>; asks: Array<{ price: string; size: string }> }> {
-  const resp = await fetch(`${CLOB_BASE}/book?token_id=${tokenId}`);
+  const params = new URLSearchParams({ token_id: tokenId });
+  const resp = await fetch(`${CLOB_BASE}/book?${params}`);
   if (!resp.ok) return { bids: [], asks: [] };
   return resp.json();
 }

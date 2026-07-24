@@ -14,6 +14,7 @@ import sentry_sdk
 from loguru import logger
 
 from supabase_client import supabase
+from scoring.token_direction import resolve_token_direction
 
 CLOB_BASE = "https://clob.polymarket.com"
 MIN_USD_VALUE = 5000
@@ -23,6 +24,7 @@ FETCH_LIMIT = 100
 GAMMA_API = "https://gamma-api.polymarket.com"
 
 _market_cache: dict[str, str] = {}
+_CACHE_MAX = 2000
 
 
 def _get_market_title(condition_id: str) -> str:
@@ -38,10 +40,14 @@ def _get_market_title(condition_id: str) -> str:
             markets = resp.json()
             if markets and len(markets) > 0:
                 title = markets[0].get("question", markets[0].get("title", condition_id))
+                if len(_market_cache) >= _CACHE_MAX:
+                    _market_cache.clear()
                 _market_cache[condition_id] = title
                 return title
     except Exception:
         pass
+    if len(_market_cache) >= _CACHE_MAX:
+        _market_cache.clear()
     _market_cache[condition_id] = condition_id
     return condition_id
 
@@ -57,7 +63,8 @@ def _fetch_recent_trades() -> list[dict]:
         if resp.status_code != 200:
             logger.warning("whale_sentinel: CLOB trades returned {}", resp.status_code)
             return []
-        return resp.json() if isinstance(resp.json(), list) else []
+        data = resp.json()
+        return data if isinstance(data, list) else []
     except Exception as e:
         logger.error("whale_sentinel: failed to fetch trades — {}", e)
         return []
@@ -79,11 +86,8 @@ def _parse_whale_trades(trades: list[dict]) -> list[dict]:
             condition_id = trade.get("condition_id", "")
             market_title = _get_market_title(condition_id) if condition_id else asset_id
 
-            outcome = trade.get("side", trade.get("outcome", "unknown"))
-            if outcome.lower() in ("buy", "bid"):
-                outcome = "YES" if price > 0.5 else "NO"
-            elif outcome.lower() in ("sell", "ask"):
-                outcome = "NO" if price > 0.5 else "YES"
+            side = trade.get("side", trade.get("outcome", ""))
+            outcome = resolve_token_direction(str(asset_id), condition_id, side, price)
 
             tx_hash = trade.get("transaction_hash", trade.get("id", None))
 
@@ -116,16 +120,19 @@ def _store_whale_alerts(whales: list[dict]) -> int:
     inserted = 0
     for whale in whales:
         try:
-            if whale.get("tx_hash"):
-                existing = (
-                    supabase.table("whale_alerts")
-                    .select("id")
-                    .eq("tx_hash", whale["tx_hash"])
-                    .limit(1)
-                    .execute()
-                )
-                if existing.data:
-                    continue
+            tx_hash = whale.get("tx_hash")
+            if not tx_hash:
+                continue
+
+            existing = (
+                supabase.table("whale_alerts")
+                .select("id")
+                .eq("tx_hash", tx_hash)
+                .limit(1)
+                .execute()
+            )
+            if existing.data:
+                continue
 
             supabase.table("whale_alerts").insert(whale).execute()
             inserted += 1

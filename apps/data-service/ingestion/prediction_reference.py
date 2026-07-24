@@ -19,7 +19,7 @@ from supabase_client import supabase
 METACULUS_API = "https://www.metaculus.com/api2/questions/"
 MANIFOLD_API = "https://api.manifold.markets/v0"
 
-SIMILARITY_THRESHOLD = 0.40
+SIMILARITY_THRESHOLD = 0.70
 
 
 def _normalize(text: str) -> set[str]:
