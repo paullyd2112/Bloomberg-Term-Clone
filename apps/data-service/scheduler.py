@@ -1711,6 +1711,59 @@ def pipeline_check():
 
     checks["news_items_7d"] = _count("news_items", since=cutoff_7d)
 
+    try:
+        xp_result = (
+            supabase.table("prediction_cross_platform")
+            .select("platform, external_prob, last_fetched_at", count="exact")
+            .order("last_fetched_at", desc=True)
+            .limit(5)
+            .execute()
+        )
+        xp_rows = xp_result.data or []
+        platforms = {}
+        for r in xp_rows:
+            p = r.get("platform", "unknown")
+            platforms[p] = platforms.get(p, 0) + 1
+        checks["cross_platform_ground_truth"] = {
+            "total_matches": xp_result.count or 0,
+            "platforms": platforms,
+            "latest_fetch": xp_rows[0]["last_fetched_at"] if xp_rows else None,
+            "status": "active" if (xp_result.count or 0) > 0 else "no matches — check prediction_reference.py",
+        }
+    except Exception as e:
+        checks["cross_platform_ground_truth"] = {"error": str(e)}
+
+    try:
+        wp_result = (
+            supabase.table("wallet_profiles")
+            .select("address, win_rate, total_trades, realized_pnl_usd", count="exact")
+            .order("realized_pnl_usd", desc=True)
+            .limit(5)
+            .execute()
+        )
+        wp_rows = wp_result.data or []
+        qualified = sum(1 for r in wp_rows
+                        if (r.get("win_rate") or 0) >= 0.55
+                        and (r.get("total_trades") or 0) >= 20
+                        and (r.get("realized_pnl_usd") or 0) > 0)
+        wt_count = _count("wallet_trades")
+        checks["smart_money"] = {
+            "wallet_profiles_total": wp_result.count or 0,
+            "wallet_trades_total": wt_count,
+            "qualifying_wallets": qualified,
+            "top_wallets": [
+                {
+                    "address": r["address"][:10] + "...",
+                    "win_rate": r.get("win_rate"),
+                    "trades": r.get("total_trades"),
+                    "pnl_usd": r.get("realized_pnl_usd"),
+                }
+                for r in wp_rows[:3]
+            ] if wp_rows else [],
+        }
+    except Exception as e:
+        checks["smart_money"] = {"error": str(e)}
+
     checks["env_keys"] = {
         "FMP_API_KEY": "set" if os.environ.get("FMP_API_KEY") else "MISSING",
         "ANTHROPIC_API_KEY": "set" if os.environ.get("ANTHROPIC_API_KEY") else "MISSING",
