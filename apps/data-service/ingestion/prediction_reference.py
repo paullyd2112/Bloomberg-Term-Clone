@@ -1,8 +1,9 @@
 """Cross-Platform Ground Truth — fetches prediction market probabilities
-from Manifold Markets, matches them against Polymarket markets, and stores
-reference data for the ground-truth mismatch guardrail.
+from Manifold Markets and PredictIt, matches them against Polymarket
+markets, and stores reference data for the ground-truth mismatch guardrail.
 
 Manifold's search API is free, public, no auth required.
+PredictIt's market data API is free, public, no auth required.
 Metaculus API is currently returning 403 — disabled until they restore access.
 Runs daily at 5:00 AM ET via scheduler.
 """
@@ -18,6 +19,7 @@ from loguru import logger
 from supabase_client import supabase
 
 MANIFOLD_API = "https://api.manifold.markets/v0"
+PREDICTIT_API = "https://www.predictit.org/api/marketdata/all/"
 
 STOP_WORDS = frozenset({
     "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
@@ -283,6 +285,73 @@ def _upsert_reference(
         logger.debug("prediction_reference: upsert failed — {}", e)
 
 
+def fetch_predictit_probabilities(polymarket_markets: list[dict]) -> int:
+    """Fetch all PredictIt markets and match to Polymarket."""
+    try:
+        resp = httpx.get(PREDICTIT_API, timeout=15)
+        if resp.status_code != 200:
+            logger.debug("predictit: API returned {}", resp.status_code)
+            return 0
+        data = resp.json()
+    except Exception as e:
+        logger.debug("predictit: fetch failed — {}", e)
+        return 0
+
+    markets = data.get("markets", []) if isinstance(data, dict) else []
+    matched = 0
+    seen_poly: set[str] = set()
+
+    for market in markets:
+        try:
+            status = market.get("status", "")
+            if status != "Open":
+                continue
+
+            market_name = market.get("name", "")
+            contracts = market.get("contracts", [])
+
+            for contract in contracts:
+                contract_name = contract.get("name", "")
+                title = f"{market_name}: {contract_name}" if contract_name != market_name else market_name
+                if not title:
+                    continue
+
+                last_price = contract.get("lastTradePrice")
+                if last_price is None:
+                    continue
+                prob = float(last_price)
+                if prob <= 0 or prob >= 1:
+                    continue
+
+                pm = _match_to_polymarket(title, polymarket_markets)
+                if not pm:
+                    pm = _match_to_polymarket(contract_name, polymarket_markets)
+                if not pm:
+                    continue
+
+                cid = pm["condition_id"]
+                if cid in seen_poly:
+                    continue
+                seen_poly.add(cid)
+
+                _upsert_reference(
+                    polymarket_condition_id=cid,
+                    platform="predictit",
+                    external_id=str(contract.get("id", market.get("id", ""))),
+                    external_title=title[:500],
+                    external_prob=round(prob, 4),
+                )
+                matched += 1
+                logger.debug(
+                    "predictit: matched '{}' → '{}' (prob={})",
+                    title[:50], pm["title"][:50], round(prob, 3),
+                )
+        except Exception as e:
+            logger.debug("predictit: skipping market — {}", e)
+
+    return matched
+
+
 def ingest_prediction_references() -> str:
     """Orchestrator: fetch all cross-platform sources and match."""
     pm_markets = _get_polymarket_markets()
@@ -290,9 +359,11 @@ def ingest_prediction_references() -> str:
         return "0 Polymarket markets to match against"
 
     manifold_count = fetch_manifold_probabilities(pm_markets)
+    predictit_count = fetch_predictit_probabilities(pm_markets)
 
+    total = manifold_count + predictit_count
     return (
-        f"{manifold_count} cross-platform matches "
-        f"(Manifold: {manifold_count}) "
+        f"{total} cross-platform matches "
+        f"(Manifold: {manifold_count}, PredictIt: {predictit_count}) "
         f"against {len(pm_markets)} Polymarket markets"
     )
