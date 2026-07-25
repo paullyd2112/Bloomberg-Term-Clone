@@ -1,6 +1,7 @@
-"""Wallet Profiling — discovers top Polymarket wallets from whale alerts,
-backfills their trade history via the CLOB API, and computes per-wallet
-statistics (PnL, win rate, category specialization).
+"""Wallet Profiling — discovers top Polymarket wallets from whale alerts
+and known whales, backfills their trade history via the data-api /activity
+endpoint, and computes per-wallet statistics (PnL, win rate, category
+specialization).
 
 Runs daily at 4:00 AM ET via scheduler. Initial backfill may take several
 minutes; subsequent runs are incremental.
@@ -18,17 +19,36 @@ from supabase_client import supabase
 from scoring.prediction_filters import infer_category
 from scoring.token_direction import resolve_token_direction
 
+DATA_API = "https://data-api.polymarket.com"
 CLOB_BASE = "https://clob.polymarket.com"
 GAMMA_API = "https://gamma-api.polymarket.com"
 
-TRADES_PER_PAGE = 100
+ACTIVITY_PER_PAGE = 100
 REQUEST_DELAY_S = 1.0
 MIN_TRADES_FOR_STATS = 5
 
+SEED_WHALE_WALLETS: list[str] = [
+    "0x3dfb153c197d4c19d3b31c1ecd2c7b6860eeabaf",
+    "0x5f659bccbc353dbf7bcdffdee73bee60bb482036",
+    "0xfe787d2da716d60e8acff57fb87eb13cd4d10319",
+    "0xfc25d6c9df744823eaac0c1a7d5543c78f4a4349",
+    "0xff80bb23621f03fc6300808730316c78abe09b4d",
+    "0x25db6ca5935ae858a5c1f2dcd5c62939805328de",
+    "0xd23f8c8aab13cfb2a35da40b67f8471faf9894a1",
+    "0xb357437166e9dc62a8c5aef1f5a8fb78bbeca4ae",
+    "0xc163df5d9317167e1a1cff9be0b5b63d9dfe70c1",
+    "0x84cfffc3f16dcc353094de30d4a45226eccd2f63",
+]
+
 
 def discover_wallets() -> int:
-    """Extract unique wallet addresses from whale_alerts and insert new ones
-    into wallet_profiles."""
+    """Extract unique wallet addresses from whale_alerts, seed whales, and
+    the global trades feed. Insert new ones into wallet_profiles."""
+    addresses: set[str] = set()
+
+    for addr in SEED_WHALE_WALLETS:
+        addresses.add(addr.lower())
+
     try:
         result = (
             supabase.table("whale_alerts")
@@ -38,24 +58,25 @@ def discover_wallets() -> int:
             .limit(1000)
             .execute()
         )
+        for row in result.data or []:
+            if row.get("maker_address"):
+                addresses.add(row["maker_address"].lower())
+            if row.get("taker_address"):
+                addresses.add(row["taker_address"].lower())
     except Exception as e:
         logger.error("discover_wallets: failed to query whale_alerts — {}", e)
-        return 0
 
-    addresses: set[str] = set()
-    for row in result.data or []:
-        if row.get("maker_address"):
-            addresses.add(row["maker_address"].lower())
-        if row.get("taker_address"):
-            addresses.add(row["taker_address"].lower())
+    discovered = _discover_from_global_feed()
+    addresses.update(discovered)
 
     if not addresses:
         return 0
 
     existing = set()
     try:
-        for batch_start in range(0, len(addresses), 50):
-            batch = list(addresses)[batch_start:batch_start + 50]
+        addr_list = list(addresses)
+        for batch_start in range(0, len(addr_list), 50):
+            batch = addr_list[batch_start:batch_start + 50]
             resp = (
                 supabase.table("wallet_profiles")
                 .select("address")
@@ -81,25 +102,52 @@ def discover_wallets() -> int:
     return inserted
 
 
-def _fetch_wallet_trades(address: str, after_cursor: str | None = None) -> list[dict]:
-    """Fetch a page of trades from the CLOB API for a specific wallet."""
-    params: dict = {"maker": address, "limit": TRADES_PER_PAGE}
-    if after_cursor:
-        params["after"] = after_cursor
-
+def _discover_from_global_feed() -> set[str]:
+    """Scan global trades feed for wallets with trades above $250 USD."""
+    addresses: set[str] = set()
     try:
         resp = httpx.get(
-            f"{CLOB_BASE}/trades",
-            params=params,
+            f"{DATA_API}/trades",
+            params={"limit": 500},
             timeout=15,
         )
         if resp.status_code != 200:
-            logger.warning("wallet trades: CLOB returned {} for {}", resp.status_code, address[:10])
+            return addresses
+        trades = resp.json()
+        if not isinstance(trades, list):
+            return addresses
+        for t in trades:
+            w = t.get("proxyWallet", "")
+            if not w:
+                continue
+            price = float(t.get("price", 0))
+            size = float(t.get("size", 0))
+            if price * size >= 250:
+                addresses.add(w.lower())
+    except Exception as e:
+        logger.debug("discover_wallets: global feed scan failed — {}", e)
+    return addresses
+
+
+def _fetch_wallet_activity(address: str, offset: int = 0) -> list[dict]:
+    """Fetch a page of activity from Polymarket data-api for a specific wallet.
+
+    Uses /activity?user= which correctly filters by wallet address.
+    The /trades?proxyWallet= endpoint ignores filter params.
+    """
+    try:
+        resp = httpx.get(
+            f"{DATA_API}/activity",
+            params={"user": address, "limit": ACTIVITY_PER_PAGE, "offset": offset},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            logger.warning("wallet activity: data-api returned {} for {}", resp.status_code, address[:10])
             return []
         data = resp.json()
         return data if isinstance(data, list) else []
     except Exception as e:
-        logger.error("wallet trades: fetch failed for {} — {}", address[:10], e)
+        logger.error("wallet activity: fetch failed for {} — {}", address[:10], e)
         return []
 
 
@@ -133,34 +181,53 @@ def _resolve_title(condition_id: str) -> str:
 
 
 def backfill_wallet_history(address: str, max_pages: int = 10) -> int:
-    """Paginate CLOB /trades for a wallet, store in wallet_trades.
+    """Paginate /activity for a wallet, store trades in wallet_trades.
     Returns number of new trades inserted."""
     inserted = 0
-    cursor: str | None = None
 
-    for _ in range(max_pages):
-        trades = _fetch_wallet_trades(address, cursor)
-        if not trades:
+    for page in range(max_pages):
+        activities = _fetch_wallet_activity(address, offset=page * ACTIVITY_PER_PAGE)
+        if not activities:
             break
 
-        for trade in trades:
+        for item in activities:
             try:
-                tx_hash = trade.get("transaction_hash", trade.get("id"))
+                item_type = item.get("type", "")
+                if item_type not in ("TRADE", "BUY", "SELL"):
+                    continue
+
+                tx_hash = item.get("transactionHash")
                 if not tx_hash:
                     continue
 
-                price = float(trade.get("price", 0))
-                size = float(trade.get("size", 0))
-                condition_id = trade.get("condition_id", "")
+                condition_id = item.get("conditionId", "")
                 if not condition_id:
                     continue
 
-                side = trade.get("side", "")
-                asset_id = trade.get("asset_id", trade.get("token_id", ""))
-                direction = resolve_token_direction(str(asset_id), condition_id, side, price)
+                price = float(item.get("price", 0))
+                size = float(item.get("size", 0))
+                usd_value = float(item.get("usdcSize", 0)) or (price * size)
 
-                market_title = _resolve_title(condition_id)
-                traded_at = trade.get("created_at", trade.get("timestamp"))
+                side = item.get("side", "")
+                asset_id = item.get("asset", "")
+                outcome_index = item.get("outcomeIndex")
+
+                if side and side.upper() in ("BUY", "SELL"):
+                    if outcome_index == 0:
+                        direction = "YES" if side.upper() == "BUY" else "NO"
+                    elif outcome_index == 1:
+                        direction = "NO" if side.upper() == "BUY" else "YES"
+                    else:
+                        direction = resolve_token_direction(str(asset_id), condition_id, side, price)
+                else:
+                    direction = resolve_token_direction(str(asset_id), condition_id, side, price)
+
+                market_title = item.get("title") or _resolve_title(condition_id)
+                raw_ts = item.get("timestamp")
+                if isinstance(raw_ts, (int, float)):
+                    traded_at = datetime.fromtimestamp(raw_ts, tz=timezone.utc).isoformat()
+                else:
+                    traded_at = raw_ts
 
                 supabase.table("wallet_trades").insert({
                     "wallet_address": address,
@@ -169,7 +236,7 @@ def backfill_wallet_history(address: str, max_pages: int = 10) -> int:
                     "direction": direction,
                     "price": round(price, 4),
                     "size": round(size, 4),
-                    "usd_value": round(price * size, 2),
+                    "usd_value": round(usd_value, 2),
                     "tx_hash": str(tx_hash)[:200],
                     "traded_at": traded_at,
                 }).execute()
@@ -179,9 +246,8 @@ def backfill_wallet_history(address: str, max_pages: int = 10) -> int:
                     continue
                 logger.debug("backfill: insert failed — {}", e)
 
-        if len(trades) < TRADES_PER_PAGE:
+        if len(activities) < ACTIVITY_PER_PAGE:
             break
-        cursor = trades[-1].get("id") or trades[-1].get("transaction_hash")
         time.sleep(REQUEST_DELAY_S)
 
     return inserted
