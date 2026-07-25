@@ -18,10 +18,11 @@ from supabase_client import supabase
 from scoring.prediction_filters import infer_category
 from scoring.token_direction import resolve_token_direction
 
+DATA_API = "https://data-api.polymarket.com"
 CLOB_BASE = "https://clob.polymarket.com"
 GAMMA_API = "https://gamma-api.polymarket.com"
 
-TRADES_PER_PAGE = 100
+TRADES_PER_PAGE = 500
 REQUEST_DELAY_S = 1.0
 MIN_TRADES_FOR_STATS = 5
 
@@ -82,19 +83,19 @@ def discover_wallets() -> int:
 
 
 def _fetch_wallet_trades(address: str, after_cursor: str | None = None) -> list[dict]:
-    """Fetch a page of trades from the CLOB API for a specific wallet."""
-    params: dict = {"maker": address, "limit": TRADES_PER_PAGE}
+    """Fetch a page of trades from Polymarket data API for a specific wallet."""
+    params: dict = {"proxyWallet": address, "limit": TRADES_PER_PAGE}
     if after_cursor:
         params["after"] = after_cursor
 
     try:
         resp = httpx.get(
-            f"{CLOB_BASE}/trades",
+            f"{DATA_API}/trades",
             params=params,
             timeout=15,
         )
         if resp.status_code != 200:
-            logger.warning("wallet trades: CLOB returned {} for {}", resp.status_code, address[:10])
+            logger.warning("wallet trades: data-api returned {} for {}", resp.status_code, address[:10])
             return []
         data = resp.json()
         return data if isinstance(data, list) else []
@@ -145,22 +146,32 @@ def backfill_wallet_history(address: str, max_pages: int = 10) -> int:
 
         for trade in trades:
             try:
-                tx_hash = trade.get("transaction_hash", trade.get("id"))
+                tx_hash = trade.get("transactionHash", trade.get("transaction_hash", trade.get("id")))
                 if not tx_hash:
                     continue
 
                 price = float(trade.get("price", 0))
                 size = float(trade.get("size", 0))
-                condition_id = trade.get("condition_id", "")
+                condition_id = trade.get("conditionId", trade.get("condition_id", ""))
                 if not condition_id:
                     continue
 
                 side = trade.get("side", "")
-                asset_id = trade.get("asset_id", trade.get("token_id", ""))
-                direction = resolve_token_direction(str(asset_id), condition_id, side, price)
+                asset_id = trade.get("asset", trade.get("asset_id", ""))
 
-                market_title = _resolve_title(condition_id)
-                traded_at = trade.get("created_at", trade.get("timestamp"))
+                outcome_raw = trade.get("outcome", "")
+                if outcome_raw and str(outcome_raw).upper() in ("YES", "NO"):
+                    direction = str(outcome_raw).upper()
+                else:
+                    direction = resolve_token_direction(str(asset_id), condition_id, side, price)
+
+                market_title = trade.get("title") or _resolve_title(condition_id)
+                raw_ts = trade.get("timestamp", trade.get("created_at"))
+                if isinstance(raw_ts, (int, float)):
+                    from datetime import datetime as _dt, timezone as _tz
+                    traded_at = _dt.fromtimestamp(raw_ts, tz=_tz.utc).isoformat()
+                else:
+                    traded_at = raw_ts
 
                 supabase.table("wallet_trades").insert({
                     "wallet_address": address,
@@ -181,7 +192,7 @@ def backfill_wallet_history(address: str, max_pages: int = 10) -> int:
 
         if len(trades) < TRADES_PER_PAGE:
             break
-        cursor = trades[-1].get("id") or trades[-1].get("transaction_hash")
+        cursor = trades[-1].get("id") or trades[-1].get("transactionHash") or trades[-1].get("transaction_hash")
         time.sleep(REQUEST_DELAY_S)
 
     return inserted

@@ -1,67 +1,33 @@
 """
-Whale Sentinel — tracks large Polymarket CLOB V2 trades.
+Whale Sentinel — tracks large Polymarket trades.
 
-Polls the Polymarket CLOB API for recent trades exceeding $5,000 USD value,
-stores them in the whale_alerts table, and exposes them via the /whale-alerts
-API endpoint. Runs every 5 minutes via scheduler.
+Polls the Polymarket data API for recent trades exceeding $500 USD value,
+stores them in the whale_alerts table (with wallet addresses for profiling),
+and exposes them via the /whale-alerts API endpoint. Runs every 5 min.
 """
 
-import os
 from datetime import datetime, timezone
 
 import httpx
-import sentry_sdk
 from loguru import logger
 
 from supabase_client import supabase
 from scoring.token_direction import resolve_token_direction
 
-CLOB_BASE = "https://clob.polymarket.com"
-MIN_USD_VALUE = 5000
-FETCH_LIMIT = 100
-
-# Polymarket Gamma API for market metadata (title lookups)
-GAMMA_API = "https://gamma-api.polymarket.com"
-
-_market_cache: dict[str, str] = {}
-_CACHE_MAX = 2000
-
-
-def _get_market_title(condition_id: str) -> str:
-    if condition_id in _market_cache:
-        return _market_cache[condition_id]
-    try:
-        resp = httpx.get(
-            f"{GAMMA_API}/markets",
-            params={"condition_id": condition_id, "limit": 1},
-            timeout=8,
-        )
-        if resp.status_code == 200:
-            markets = resp.json()
-            if markets and len(markets) > 0:
-                title = markets[0].get("question", markets[0].get("title", condition_id))
-                if len(_market_cache) >= _CACHE_MAX:
-                    _market_cache.clear()
-                _market_cache[condition_id] = title
-                return title
-    except Exception:
-        pass
-    if len(_market_cache) >= _CACHE_MAX:
-        _market_cache.clear()
-    _market_cache[condition_id] = condition_id
-    return condition_id
-
+DATA_API = "https://data-api.polymarket.com"
+MIN_USD_VALUE = 500
+FETCH_LIMIT = 500
 
 def _fetch_recent_trades() -> list[dict]:
-    """Fetch recent trades from Polymarket CLOB API."""
+    """Fetch recent trades from Polymarket data API (public, no auth)."""
     try:
         resp = httpx.get(
-            f"{CLOB_BASE}/trades",
+            f"{DATA_API}/trades",
             params={"limit": FETCH_LIMIT},
             timeout=15,
         )
         if resp.status_code != 200:
-            logger.warning("whale_sentinel: CLOB trades returned {}", resp.status_code)
+            logger.warning("whale_sentinel: data-api trades returned {}", resp.status_code)
             return []
         data = resp.json()
         return data if isinstance(data, list) else []
@@ -82,28 +48,30 @@ def _parse_whale_trades(trades: list[dict]) -> list[dict]:
             if usd_value < MIN_USD_VALUE:
                 continue
 
-            asset_id = trade.get("asset_id", trade.get("token_id", ""))
-            condition_id = trade.get("condition_id", "")
-            market_title = _get_market_title(condition_id) if condition_id else asset_id
+            condition_id = trade.get("conditionId", trade.get("condition_id", ""))
+            asset_id = trade.get("asset", trade.get("asset_id", ""))
+            market_title = trade.get("title", condition_id)
 
-            side = trade.get("side", trade.get("outcome", ""))
-            outcome = resolve_token_direction(str(asset_id), condition_id, side, price)
+            side = trade.get("side", "")
+            outcome_raw = trade.get("outcome", "")
+            if outcome_raw and outcome_raw.upper() in ("YES", "NO"):
+                outcome = outcome_raw.upper()
+            else:
+                outcome = resolve_token_direction(str(asset_id), condition_id, side, price)
 
-            tx_hash = trade.get("transaction_hash", trade.get("id", None))
-
-            maker = trade.get("maker", None)
-            taker = trade.get("taker", None)
+            tx_hash = trade.get("transactionHash", trade.get("transaction_hash", None))
+            wallet = trade.get("proxyWallet", None)
 
             whales.append({
-                "market_title": market_title[:500],
-                "asset_id": str(asset_id)[:200],
+                "market_title": market_title[:500] if market_title else "",
+                "asset_id": str(condition_id or asset_id)[:200],
                 "outcome": outcome[:50],
                 "price": round(price, 4),
                 "size": round(size, 4),
                 "usd_value": round(usd_value, 2),
                 "tx_hash": str(tx_hash)[:200] if tx_hash else None,
-                "maker_address": str(maker)[:200] if maker else None,
-                "taker_address": str(taker)[:200] if taker else None,
+                "maker_address": str(wallet)[:200] if wallet else None,
+                "taker_address": None,
             })
         except (ValueError, TypeError, KeyError) as e:
             logger.debug("whale_sentinel: skipping malformed trade — {}", e)
