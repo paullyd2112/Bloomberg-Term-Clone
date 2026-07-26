@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { BarChart3, Search, ChevronDown, Wifi, WifiOff } from "lucide-react";
+import { Search, Wifi, WifiOff, Zap } from "lucide-react";
 import { clsx } from "clsx";
 import { createClient } from "@/lib/supabase/client";
 import PredictionCard, { type PredictionMarket, type SmartMoneyData, type WhaleActivityData } from "@/components/predictions/PredictionCard";
+import Sparkline from "@/components/predictions/Sparkline";
 import ConnectWalletButton from "@/components/predictions/ConnectWalletButton";
 
 const SPORTS_KEYWORDS = [
@@ -35,32 +36,44 @@ function inferCategory(title: string, slug: string): string {
   return "";
 }
 
-const CATEGORY_TABS = [
-  { id: "all",        label: "All" },
-  { id: "politics",   label: "Politics" },
-  { id: "economics",  label: "Economics" },
-  { id: "crypto",     label: "Crypto" },
-  { id: "technology", label: "Tech" },
-  { id: "science",    label: "Science" },
+const CATEGORY_PILLS = [
+  { id: "all",         label: "All" },
+  { id: "politics",    label: "Politics" },
+  { id: "economics",   label: "Economics" },
+  { id: "crypto",      label: "Crypto" },
+  { id: "technology",  label: "Tech" },
+  { id: "geopolitics", label: "Geopolitics" },
+  { id: "science",     label: "Science" },
 ] as const;
 
-type CategoryTab = (typeof CATEGORY_TABS)[number]["id"];
+type CategoryId = (typeof CATEGORY_PILLS)[number]["id"];
 
-type SortKey = "volume" | "prob_high" | "prob_low" | "newest" | "ai_first" | "smart_money";
+type SortKey = "volume" | "prob_high" | "prob_low" | "resolution" | "ai_first" | "smart_money";
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "volume",      label: "Volume" },
+  { value: "resolution",  label: "Time to Resolution" },
   { value: "ai_first",    label: "AI Scored" },
-  { value: "smart_money",  label: "Smart Money" },
+  { value: "smart_money", label: "Smart Money" },
   { value: "prob_high",   label: "Prob: High → Low" },
   { value: "prob_low",    label: "Prob: Low → High" },
-  { value: "newest",      label: "Newest" },
 ];
+
+function daysUntilEnd(iso: string | null): number {
+  if (!iso) return 9999;
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000));
+}
+
+function formatVolume(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+  return `$${v.toFixed(0)}`;
+}
 
 export default function PredictionsPage() {
   const [markets, setMarkets]       = useState<PredictionMarket[]>([]);
   const [loading, setLoading]       = useState(true);
-  const [category, setCategory]     = useState<CategoryTab>("all");
+  const [category, setCategory]     = useState<CategoryId>("all");
   const [sort, setSort]             = useState<SortKey>("volume");
   const [search, setSearch]         = useState("");
   const [wsConnected, setWsConnected] = useState(false);
@@ -70,7 +83,6 @@ export default function PredictionsPage() {
     async function load() {
       const supabase = createClient();
 
-      // 1. Fetch latest prediction market snapshot per condition_id
       const { data: rawRows } = await supabase
         .from("raw_prices")
         .select("identifier, price, volume, metadata, captured_at")
@@ -83,14 +95,12 @@ export default function PredictionsPage() {
         return;
       }
 
-      // Deduplicate — keep newest row per identifier
       const seen = new Map<string, (typeof rawRows)[0]>();
       for (const row of rawRows) {
         if (!seen.has(row.identifier)) seen.set(row.identifier, row);
       }
       const uniqueRows = Array.from(seen.values());
 
-      // 2. Fetch AI signals for prediction markets
       const conditionIds = uniqueRows.map((r) => r.identifier);
       const { data: signalRows } = await supabase
         .from("signals")
@@ -112,7 +122,6 @@ export default function PredictionsPage() {
         }
       }
 
-      // 3. Fetch sparkline data (last 48h of price snapshots)
       const { data: historyRows } = await supabase
         .from("prediction_price_history")
         .select("condition_id, yes_price, captured_at")
@@ -127,7 +136,6 @@ export default function PredictionsPage() {
         sparklineByCondition.set(h.condition_id, arr);
       }
 
-      // 4. Fetch smart money consensus
       const { data: smartMoneyRows } = await supabase
         .from("prediction_smart_money")
         .select("condition_id, consensus_direction, consensus_strength, wallet_count, total_volume_usd, top_wallet_pnl, breakdown_yes, breakdown_no")
@@ -143,7 +151,6 @@ export default function PredictionsPage() {
         });
       }
 
-      // 5. Fetch whale cluster data (last 4h)
       const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
       const { data: whaleRows } = await supabase
         .from("whale_alerts")
@@ -173,7 +180,6 @@ export default function PredictionsPage() {
         }
       }
 
-      // 5. Assemble PredictionMarket objects
       const assembled: PredictionMarket[] = uniqueRows
         .filter((r) => {
           const meta = (r.metadata as Record<string, unknown>) ?? {};
@@ -248,7 +254,7 @@ export default function PredictionsPage() {
       );
       setLastRefresh(new Date());
     } catch {
-      // silent — WS prices are a nice-to-have
+      // silent
     }
   }, []);
 
@@ -263,10 +269,7 @@ export default function PredictionsPage() {
     let result = markets;
 
     if (category !== "all") {
-      result = result.filter((m) => {
-        const cat = m.category.toLowerCase();
-        return cat.includes(category);
-      });
+      result = result.filter((m) => m.category.toLowerCase().includes(category));
     }
 
     if (search) {
@@ -282,8 +285,8 @@ export default function PredictionsPage() {
           return b.yes_price - a.yes_price;
         case "prob_low":
           return a.yes_price - b.yes_price;
-        case "newest":
-          return new Date(b.captured_at).getTime() - new Date(a.captured_at).getTime();
+        case "resolution":
+          return daysUntilEnd(a.end_date) - daysUntilEnd(b.end_date);
         case "ai_first": {
           const aScore = a.signal && a.signal.direction !== "HOLD" ? a.signal.confidence : 0;
           const bScore = b.signal && b.signal.direction !== "HOLD" ? b.signal.confidence : 0;
@@ -304,136 +307,213 @@ export default function PredictionsPage() {
     return result;
   }, [markets, category, sort, search]);
 
+  const featuredMarket = useMemo(() => {
+    const withSignal = markets.filter((m) => m.signal && m.signal.direction !== "HOLD");
+    if (withSignal.length === 0) return null;
+    return withSignal.sort((a, b) => (b.signal?.confidence ?? 0) - (a.signal?.confidence ?? 0))[0];
+  }, [markets]);
+
   const aiScoredCount = markets.filter((m) => m.signal && m.signal.direction !== "HOLD").length;
   const smartMoneyCount = markets.filter((m) => m.smart_money && m.smart_money.wallet_count >= 3).length;
+  const totalVolume = markets.reduce((sum, m) => sum + m.volume, 0);
 
   return (
-    <div className="p-5 md:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-5 md:p-8 max-w-[1200px] mx-auto space-y-0">
       {/* Header */}
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
-              <BarChart3 className="h-4 w-4" />
-            </span>
-            <h1 className="text-xl font-semibold tracking-tight text-white">Prediction Markets</h1>
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <h1 className="text-[1.375rem] font-semibold tracking-tight text-white">Prediction Markets</h1>
+            {!loading && (
+              <span className={clsx(
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.625rem] font-semibold uppercase tracking-wide",
+                wsConnected
+                  ? "bg-[#00d4aa]/10 border border-[#00d4aa]/20 text-[#00d4aa]"
+                  : "bg-zinc-500/10 border border-zinc-500/20 text-zinc-500",
+              )}>
+                {wsConnected ? (
+                  <>
+                    <span className="w-[5px] h-[5px] rounded-full bg-[#00d4aa] animate-pulse" />
+                    LIVE
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="h-2.5 w-2.5" />
+                    POLLING
+                  </>
+                )}
+              </span>
+            )}
           </div>
           <ConnectWalletButton />
         </div>
-        <div className="flex items-center gap-3">
-          <p className="text-zinc-500 text-sm">
-            Live Polymarket probabilities with AI-scored edge detection.
-          </p>
-          {!loading && (
-            <span className={clsx(
-              "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium",
-              wsConnected
-                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                : "bg-zinc-500/10 text-zinc-500 border border-zinc-500/20",
-            )}>
-              {wsConnected ? <Wifi className="h-2.5 w-2.5" /> : <WifiOff className="h-2.5 w-2.5" />}
-              {wsConnected ? "LIVE" : "POLLING"}
-            </span>
-          )}
+        <p className="text-[0.8125rem] text-zinc-600">
+          Real-time Polymarket probabilities · AI-scored edges · Smart money tracking
+        </p>
+      </div>
+
+      {/* Stats strip */}
+      <div className="flex gap-8 pb-6">
+        <div>
+          <div className="text-xl font-bold tabular-nums text-white">{markets.length}</div>
+          <div className="text-[0.6875rem] text-zinc-600 mt-0.5">Markets tracked</div>
+        </div>
+        <div>
+          <div className="text-xl font-bold tabular-nums text-[#00d4aa]">{aiScoredCount}</div>
+          <div className="text-[0.6875rem] text-zinc-600 mt-0.5">AI signals active</div>
+        </div>
+        <div>
+          <div className="text-xl font-bold tabular-nums text-[#4f8cff]">{smartMoneyCount}</div>
+          <div className="text-[0.6875rem] text-zinc-600 mt-0.5">Smart money alerts</div>
+        </div>
+        <div>
+          <div className="text-xl font-bold tabular-nums text-white">{formatVolume(totalVolume)}</div>
+          <div className="text-[0.6875rem] text-zinc-600 mt-0.5">24h volume tracked</div>
         </div>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-        {[
-          { label: "Markets tracked", value: markets.length, cls: "text-white" },
-          { label: "AI scored", value: aiScoredCount, cls: "text-emerald-400" },
-          { label: "Smart Money", value: smartMoneyCount, cls: "text-blue-400" },
-          { label: "Categories", value: new Set(markets.map((m) => m.category).filter(Boolean)).size, cls: "text-zinc-400" },
-        ].map(({ label, value, cls }) => (
-          <div key={label} className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all">
-            <div className={`text-2xl font-bold tabular-nums ${cls}`}>{value}</div>
-            <div className="text-zinc-500 text-xs mt-1">{label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="relative w-full sm:w-56">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
-          <input
-            type="text"
-            placeholder="Search markets…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg pl-8 pr-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/40 focus:bg-white/[0.05] transition-colors"
-          />
-        </div>
-
-        <div className="relative flex-shrink-0">
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            className="appearance-none bg-white/[0.04] border border-white/[0.1] rounded-lg pl-3 pr-8 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500 pointer-events-none" />
-        </div>
-      </div>
-
-      {/* Category tabs */}
-      <div className="flex items-center gap-1 border-b border-white/[0.08] pb-0 overflow-x-auto scrollbar-none">
-        {CATEGORY_TABS.map((tab) => {
-          const count = tab.id === "all"
+      {/* Category pills */}
+      <div className="flex items-center gap-2 pb-6 border-b border-white/[0.06] overflow-x-auto scrollbar-none">
+        {CATEGORY_PILLS.map((pill) => {
+          const count = pill.id === "all"
             ? markets.length
-            : markets.filter((m) => m.category.toLowerCase().includes(tab.id)).length;
+            : markets.filter((m) => m.category.toLowerCase().includes(pill.id)).length;
           return (
             <button
-              key={tab.id}
-              onClick={() => setCategory(tab.id)}
+              key={pill.id}
+              onClick={() => setCategory(pill.id)}
               className={clsx(
-                "px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px flex-shrink-0",
-                category === tab.id
-                  ? "border-emerald-500 text-white"
-                  : "border-transparent text-zinc-400 hover:text-white",
+                "flex-shrink-0 px-3.5 py-[7px] rounded-full text-xs font-medium border transition-all whitespace-nowrap",
+                category === pill.id
+                  ? "bg-white text-[#06070a] border-white font-semibold"
+                  : "bg-transparent text-zinc-400 border-white/[0.08] hover:border-white/[0.15] hover:text-white",
               )}
             >
-              {tab.label}
-              <span className="ml-1.5 text-xs text-zinc-600 tabular-nums">{count}</span>
+              {pill.label}
+              <span className={clsx("ml-1.5 tabular-nums", category === pill.id ? "opacity-50" : "opacity-40")}>{count}</span>
             </button>
           );
         })}
       </div>
 
+      {/* Search + Sort */}
+      <div className="flex items-center gap-3 py-5">
+        <div className="relative flex-1 max-w-[280px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-600" />
+          <input
+            type="text"
+            placeholder="Search markets…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-[#10131a] border border-white/[0.06] rounded-lg pl-8 pr-3 py-2 text-[0.8125rem] text-white placeholder-zinc-600 focus:outline-none focus:border-[#00d4aa]/30 transition-colors"
+          />
+        </div>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortKey)}
+          className="appearance-none bg-[#10131a] border border-white/[0.06] rounded-lg px-3 py-2 text-[0.6875rem] text-zinc-400 focus:outline-none focus:border-[#00d4aa]/30 cursor-pointer"
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Featured market */}
+      {featuredMarket && !search && category === "all" && (
+        <div className="relative rounded-2xl p-6 mb-6 bg-gradient-to-br from-[#10131a] to-[#00d4aa]/[0.03] border border-[#00d4aa]/15 overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#00d4aa] to-transparent opacity-40" />
+
+          <div className="inline-flex items-center gap-1.5 mb-4 px-2 py-1 rounded bg-[#00d4aa]/10 text-[0.625rem] font-bold uppercase tracking-wider text-[#00d4aa]">
+            <Zap className="h-2.5 w-2.5" />
+            TOP AI SIGNAL
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="flex-1">
+              <h2 className="text-lg font-semibold tracking-tight text-white leading-snug mb-3">
+                {featuredMarket.title}
+              </h2>
+              <div className="flex items-center gap-3 flex-wrap">
+                {featuredMarket.signal && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#00d4aa]/10 border border-[#00d4aa]/20 text-[0.6875rem] font-semibold text-[#00d4aa]">
+                    AI {featuredMarket.signal.direction} · {featuredMarket.signal.confidence}%
+                  </span>
+                )}
+                {featuredMarket.smart_money && featuredMarket.smart_money.wallet_count >= 3 && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#4f8cff]/10 border border-[#4f8cff]/20 text-[0.6875rem] font-medium text-[#4f8cff]">
+                    Smart Money: {Math.round(featuredMarket.smart_money.consensus_strength * 100)}% {featuredMarket.smart_money.consensus_direction} ({featuredMarket.smart_money.wallet_count})
+                  </span>
+                )}
+                <span className="text-[0.6875rem] text-zinc-600">
+                  {formatVolume(featuredMarket.volume)} vol
+                </span>
+                {featuredMarket.end_date && (
+                  <span className="text-[0.6875rem] text-zinc-600">
+                    {daysUntilEnd(featuredMarket.end_date)}d remaining
+                  </span>
+                )}
+              </div>
+
+              {/* Featured sparkline */}
+              {featuredMarket.sparkline.length >= 2 && (
+                <div className="mt-4 h-12 w-full max-w-md">
+                  <Sparkline
+                    points={featuredMarket.sparkline}
+                    width={400}
+                    height={48}
+                    className="w-full h-full"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="text-right sm:min-w-[120px]">
+              <div className={clsx(
+                "text-[3rem] font-bold tabular-nums leading-none tracking-tight",
+                featuredMarket.yes_price >= 0.65 ? "text-[#00d4aa]"
+                  : featuredMarket.yes_price >= 0.35 ? "text-amber-400"
+                  : "text-red-400",
+              )}>
+                {Math.round(featuredMarket.yes_price * 100)}
+                <span className="text-lg font-medium opacity-60">%</span>
+              </div>
+              <div className="text-[0.6875rem] text-zinc-600 uppercase tracking-wide mt-1">YES probability</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Market grid */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="bg-white/[0.03] border border-white/[0.06] rounded-xl h-48 animate-pulse" />
+            <div key={i} className="bg-[#10131a] border border-white/[0.06] rounded-xl h-52 animate-pulse" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="py-16 text-center text-zinc-500 text-sm">
+        <div className="py-16 text-center text-zinc-600 text-sm">
           No markets match your filters.
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((m) => (
-            <PredictionCard key={m.condition_id} market={m} />
-          ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filtered
+            .filter((m) => m.condition_id !== featuredMarket?.condition_id || search || category !== "all")
+            .map((m) => (
+              <PredictionCard key={m.condition_id} market={m} />
+            ))}
         </div>
       )}
 
       {/* Footer */}
-      <p className="text-zinc-600 text-xs">
+      <div className="mt-8 pt-4 border-t border-white/[0.06] text-[0.6875rem] text-zinc-700">
         Source: Polymarket{wsConnected ? " (WebSocket)" : " (Gamma API)"} ·{" "}
         {wsConnected ? "Live prices, auto-refresh every 30s" : "Updated every 30 minutes"} ·{" "}
         Probabilities reflect current YES price
         {lastRefresh && (
-          <span className="ml-1">
-            · Last update: {lastRefresh.toLocaleTimeString()}
-          </span>
+          <span className="ml-1">· Last update: {lastRefresh.toLocaleTimeString()}</span>
         )}
-      </p>
+      </div>
     </div>
   );
 }

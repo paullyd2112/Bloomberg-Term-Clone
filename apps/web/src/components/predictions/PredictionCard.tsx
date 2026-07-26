@@ -46,9 +46,15 @@ function formatVolume(v: number): string {
 }
 
 function probColor(p: number): string {
-  if (p >= 0.7) return "text-emerald-400";
-  if (p >= 0.4) return "text-amber-400";
+  if (p >= 0.65) return "text-[#00d4aa]";
+  if (p >= 0.35) return "text-amber-400";
   return "text-red-400";
+}
+
+function probBarColor(p: number): string {
+  if (p >= 0.65) return "bg-[#00d4aa]";
+  if (p >= 0.35) return "bg-amber-400";
+  return "bg-red-400";
 }
 
 function daysUntil(iso: string | null): string | null {
@@ -58,8 +64,8 @@ function daysUntil(iso: string | null): string | null {
   );
   if (diff < 0) return "Ended";
   if (diff === 0) return "Today";
-  if (diff === 1) return "1 day";
-  return `${diff} days`;
+  if (diff === 1) return "1d";
+  return `${diff}d`;
 }
 
 export default function PredictionCard({ market }: { market: PredictionMarket }) {
@@ -72,119 +78,106 @@ export default function PredictionCard({ market }: { market: PredictionMarket })
   const hasWhale = market.whale_activity && market.whale_activity.whale_count >= 2;
 
   return (
-    <>
-      <div
-        className={clsx(
-          "group relative bg-white/[0.03] border rounded-xl p-4 sm:p-5 transition-all hover:bg-white/[0.05]",
-          hasSignal
-            ? "border-emerald-500/30 hover:border-emerald-500/50 ring-1 ring-emerald-500/10"
-            : "border-white/[0.06] hover:border-white/[0.1] ring-hairline",
-        )}
-      >
-        {/* AI signal badge */}
-        {hasSignal && market.signal && (
-          <div className="absolute -top-2.5 right-3 flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/30 rounded-full px-2.5 py-0.5">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            </span>
-            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
-              AI {market.signal.direction} {market.signal.confidence}%
-            </span>
-          </div>
-        )}
-
-        {/* Top row: probability + sparkline */}
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex items-baseline gap-1">
-            <span className={clsx("text-3xl font-bold tabular-nums leading-none", probColor(market.yes_price))}>
+    <div
+      className={clsx(
+        "group relative rounded-xl p-5 transition-all cursor-pointer",
+        "bg-[#10131a] border hover:bg-[#151921] hover:-translate-y-px",
+        hasSignal
+          ? "border-[#00d4aa]/15 hover:border-[#00d4aa]/30 hover:shadow-[0_0_20px_rgba(0,212,170,0.06)]"
+          : "border-white/[0.06] hover:border-white/[0.12]",
+      )}
+    >
+      {/* Top row: probability + sparkline */}
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <div className="flex items-baseline">
+            <span className={clsx("text-[1.75rem] font-bold tabular-nums leading-none tracking-tight", probColor(market.yes_price))}>
               {prob}
             </span>
-            <span className={clsx("text-lg font-medium", probColor(market.yes_price))}>%</span>
-            <span className="text-[10px] text-zinc-600 uppercase tracking-wider ml-1">YES</span>
+            <span className={clsx("text-sm font-medium ml-px opacity-60", probColor(market.yes_price))}>%</span>
           </div>
-          <Sparkline points={market.sparkline} className="flex-shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
-        </div>
-
-        {/* Title */}
-        <h3 className="text-sm font-medium text-white leading-snug line-clamp-2 mb-3 min-h-[2.5rem]">
-          {market.title}
-        </h3>
-
-        {/* Smart money + whale badges */}
-        {(hasSmartMoney || hasWhale) && (
-          <div className="flex items-center gap-2 flex-wrap mb-3">
-            {hasSmartMoney && market.smart_money && (
-              <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 text-[10px] font-medium text-blue-400">
-                <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none">
-                  <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.5" />
-                  <path d="M4 6l1.5 1.5L8 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                {Math.round(market.smart_money.consensus_strength * 100)}% {market.smart_money.consensus_direction} ({market.smart_money.wallet_count})
-              </span>
-            )}
-            {hasWhale && market.whale_activity && (
-              <span
-                className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-400 cursor-default"
-                title={`${market.whale_activity.whale_count} whale trades ($${(market.whale_activity.total_usd / 1000).toFixed(0)}K) on ${market.whale_activity.direction} in last 4h`}
-              >
-                <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="currentColor">
-                  <path d="M2 7c0 2 2 3 4 3s4-1 4-3c0-1.5-1-3-2-3.5.5-.5 1-1.5.5-2.5-.5 1-1.5 1.5-2.5 1.5S4 2 3.5 1C3 2 3.5 3 4 3.5 3 4 2 5.5 2 7z" />
-                </svg>
-                ${(market.whale_activity.total_usd / 1000).toFixed(0)}K
-              </span>
-            )}
+          {/* Probability bar */}
+          <div className="h-[3px] w-16 rounded-full bg-white/[0.04] mt-2 overflow-hidden">
+            <div
+              className={clsx("h-full rounded-full transition-all", probBarColor(market.yes_price))}
+              style={{ width: `${prob}%` }}
+            />
           </div>
-        )}
-
-        {/* Meta chips */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {market.category && (
-            <span className="inline-flex items-center rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-zinc-400 uppercase tracking-wider">
-              {market.category}
-            </span>
-          )}
-          <span className="inline-flex items-center rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-zinc-400 tabular-nums">
-            {formatVolume(market.volume)}
-          </span>
-          {remaining && (
-            <span className={clsx(
-              "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium tabular-nums",
-              remaining === "Ended" || remaining === "Today"
-                ? "bg-red-500/10 text-red-400"
-                : "bg-white/[0.06] text-zinc-400",
-            )}>
-              {remaining}
-            </span>
-          )}
         </div>
-
-        {/* Signal reasoning */}
-        {hasSignal && market.signal && (
-          <p className="mt-3 text-xs text-zinc-500 leading-relaxed line-clamp-2 border-t border-white/[0.06] pt-3">
-            {market.signal.reasoning}
-          </p>
-        )}
-
-        {/* Trade button — Coming Soon */}
-        <div className="relative mt-3">
-          <button
-            onClick={() => setShowTrade(!showTrade)}
-            className="w-full py-2 text-xs font-medium text-zinc-400 bg-white/[0.03] border border-white/[0.08] rounded-lg hover:bg-white/[0.05] hover:text-zinc-300 transition-colors"
-          >
-            Trade
-          </button>
-          {showTrade && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowTrade(false)} />
-              <div className="absolute left-0 right-0 bottom-full mb-2 z-50 bg-zinc-900 border border-white/[0.1] rounded-lg shadow-xl p-3 text-center">
-                <p className="text-xs font-medium text-white mb-0.5">Coming Soon</p>
-                <p className="text-[10px] text-zinc-500">Non-custodial trading on Polymarket</p>
-              </div>
-            </>
-          )}
-        </div>
+        <Sparkline
+          points={market.sparkline}
+          width={80}
+          height={32}
+          className="flex-shrink-0 opacity-80 group-hover:opacity-100 transition-opacity"
+        />
       </div>
-    </>
+
+      {/* Title */}
+      <h3 className="text-[0.8125rem] font-medium text-white leading-snug line-clamp-2 mb-3 min-h-[2.25rem]">
+        {market.title}
+      </h3>
+
+      {/* Badges */}
+      {(hasSignal || hasSmartMoney || hasWhale) && (
+        <div className="flex items-center gap-1.5 flex-wrap mb-3">
+          {hasSignal && market.signal && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-[#00d4aa]/10 border border-[#00d4aa]/20 px-2 py-0.5 text-[0.625rem] font-semibold text-[#00d4aa]">
+              AI {market.signal.direction} {market.signal.confidence}%
+            </span>
+          )}
+          {hasSmartMoney && market.smart_money && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-[#4f8cff]/10 border border-[#4f8cff]/20 px-2 py-0.5 text-[0.625rem] font-medium text-[#4f8cff]">
+              SM {Math.round(market.smart_money.consensus_strength * 100)}% {market.smart_money.consensus_direction}
+            </span>
+          )}
+          {hasWhale && market.whale_activity && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-[0.625rem] font-medium text-amber-400">
+              {formatVolume(market.whale_activity.total_usd)}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center gap-3 pt-3 border-t border-white/[0.06]">
+        {market.category && (
+          <span className="inline-flex items-center rounded px-1.5 py-0.5 bg-white/[0.04] text-[0.625rem] font-medium text-zinc-500 uppercase tracking-wide">
+            {market.category}
+          </span>
+        )}
+        <span className="text-[0.6875rem] text-zinc-600 tabular-nums">
+          {formatVolume(market.volume)}
+        </span>
+        {remaining && (
+          <span className={clsx(
+            "text-[0.6875rem] tabular-nums",
+            remaining === "Ended" || remaining === "Today"
+              ? "text-red-400"
+              : "text-zinc-600",
+          )}>
+            {remaining}
+          </span>
+        )}
+      </div>
+
+      {/* Trade tooltip */}
+      <div className="relative mt-3">
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowTrade(!showTrade); }}
+          className="w-full py-2 text-xs font-medium text-zinc-500 bg-white/[0.03] border border-white/[0.06] rounded-lg hover:bg-white/[0.05] hover:text-zinc-300 transition-colors"
+        >
+          Trade
+        </button>
+        {showTrade && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowTrade(false)} />
+            <div className="absolute left-0 right-0 bottom-full mb-2 z-50 bg-zinc-900 border border-white/[0.1] rounded-lg shadow-xl p-3 text-center">
+              <p className="text-xs font-medium text-white mb-0.5">Coming Soon</p>
+              <p className="text-[10px] text-zinc-500">Non-custodial trading on Polymarket</p>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

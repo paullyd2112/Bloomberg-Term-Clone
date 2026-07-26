@@ -10,7 +10,7 @@ type Props = {
 export default function Sparkline({
   points,
   width = 80,
-  height = 28,
+  height = 32,
   className = "",
 }: Props) {
   if (points.length < 2) return null;
@@ -23,11 +23,15 @@ export default function Sparkline({
   const coords = points.map((v, i) => {
     const x = pad + (i / (points.length - 1)) * (width - 2 * pad);
     const y = pad + (1 - (v - min) / range) * (height - 2 * pad);
-    return `${x},${y}`;
+    return [x, y] as const;
   });
 
+  const linePath = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c[0]},${c[1]}`).join(" ");
+  const areaPath = `${linePath} L${coords[coords.length - 1][0]},${height} L${coords[0][0]},${height} Z`;
+
   const trending = points[points.length - 1] >= points[0];
-  const stroke = trending ? "#34d399" : "#f87171";
+  const stroke = trending ? "#00d4aa" : "#ef4444";
+  const fillId = `spark-fill-${Math.random().toString(36).slice(2, 8)}`;
 
   return (
     <svg
@@ -37,8 +41,15 @@ export default function Sparkline({
       className={className}
       aria-hidden
     >
-      <polyline
-        points={coords.join(" ")}
+      <defs>
+        <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={stroke} stopOpacity={0.2} />
+          <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill={`url(#${fillId})`} />
+      <path
+        d={linePath}
         fill="none"
         stroke={stroke}
         strokeWidth={1.5}
