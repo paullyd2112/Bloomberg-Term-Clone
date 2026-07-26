@@ -34,7 +34,19 @@ export default function MarketPulse({
   whalesContent: ReactNode;
   redditContent: ReactNode;
 }) {
-  const [activeTab, setActiveTab] = useState<TabId>(() => readStorage(STORAGE_KEY_TAB, "movers" as TabId));
+  const contentMap: Record<TabId, ReactNode> = {
+    movers: moversContent,
+    whales: whalesContent,
+    reddit: redditContent,
+  };
+
+  const availableTabs = TABS.filter((tab) => contentMap[tab.id] != null);
+  const defaultTab = availableTabs.length > 0 ? availableTabs[0].id : "whales";
+
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    const stored = readStorage<TabId>(STORAGE_KEY_TAB, defaultTab);
+    return contentMap[stored] != null ? stored : defaultTab;
+  });
   const [collapsed, setCollapsed] = useState(() => readStorage(STORAGE_KEY_COLLAPSED, false));
   const [hydrated, setHydrated] = useState(false);
 
@@ -54,13 +66,9 @@ export default function MarketPulse({
     try { localStorage.setItem(STORAGE_KEY_COLLAPSED, JSON.stringify(collapsed)); } catch {}
   }, [collapsed]);
 
-  const contentMap: Record<TabId, ReactNode> = {
-    movers: moversContent,
-    whales: whalesContent,
-    reddit: redditContent,
-  };
-
   const isOpen = hydrated ? !collapsed : true;
+
+  if (availableTabs.length === 0) return null;
 
   return (
     <section className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden">
@@ -91,7 +99,7 @@ export default function MarketPulse({
 
         {isOpen && (
           <div className="flex items-center gap-0.5 ml-auto pr-2">
-            {TABS.map((tab) => {
+            {availableTabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
