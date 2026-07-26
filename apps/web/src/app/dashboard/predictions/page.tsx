@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { BarChart3, Search, ChevronDown } from "lucide-react";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { BarChart3, Search, ChevronDown, Wifi, WifiOff } from "lucide-react";
 import { clsx } from "clsx";
 import { createClient } from "@/lib/supabase/client";
 import PredictionCard, { type PredictionMarket, type SmartMoneyData, type WhaleActivityData } from "@/components/predictions/PredictionCard";
@@ -63,6 +63,8 @@ export default function PredictionsPage() {
   const [category, setCategory]     = useState<CategoryTab>("all");
   const [sort, setSort]             = useState<SortKey>("volume");
   const [search, setSearch]         = useState("");
+  const [wsConnected, setWsConnected] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -218,6 +220,45 @@ export default function PredictionsPage() {
     load();
   }, []);
 
+  const refreshLivePrices = useCallback(async () => {
+    try {
+      const res = await fetch("/api/prediction-prices");
+      if (!res.ok) return;
+      const data = await res.json();
+      const prices = data.prices as Record<string, { yes_price?: number; no_price?: number }>;
+      setWsConnected(data.ws?.connected ?? false);
+      if (!prices || Object.keys(prices).length === 0) return;
+
+      setMarkets((prev) =>
+        prev.map((m) => {
+          const live = prices[m.condition_id];
+          if (!live || live.yes_price == null) return m;
+          const sparkline = [...m.sparkline];
+          if (sparkline.length > 0 && sparkline[sparkline.length - 1] !== live.yes_price) {
+            sparkline.push(live.yes_price);
+            if (sparkline.length > 100) sparkline.shift();
+          }
+          return {
+            ...m,
+            yes_price: live.yes_price,
+            no_price: live.no_price ?? m.no_price,
+            sparkline,
+          };
+        }),
+      );
+      setLastRefresh(new Date());
+    } catch {
+      // silent — WS prices are a nice-to-have
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    const id = setInterval(refreshLivePrices, 30_000);
+    refreshLivePrices();
+    return () => clearInterval(id);
+  }, [loading, refreshLivePrices]);
+
   const filtered = useMemo(() => {
     let result = markets;
 
@@ -279,9 +320,22 @@ export default function PredictionsPage() {
           </div>
           <ConnectWalletButton />
         </div>
-        <p className="text-zinc-500 text-sm">
-          Live Polymarket probabilities with AI-scored edge detection.
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-zinc-500 text-sm">
+            Live Polymarket probabilities with AI-scored edge detection.
+          </p>
+          {!loading && (
+            <span className={clsx(
+              "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium",
+              wsConnected
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                : "bg-zinc-500/10 text-zinc-500 border border-zinc-500/20",
+            )}>
+              {wsConnected ? <Wifi className="h-2.5 w-2.5" /> : <WifiOff className="h-2.5 w-2.5" />}
+              {wsConnected ? "LIVE" : "POLLING"}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Stats row */}
@@ -371,7 +425,14 @@ export default function PredictionsPage() {
 
       {/* Footer */}
       <p className="text-zinc-600 text-xs">
-        Source: Polymarket (Gamma API) · Updated every 30 minutes · Probabilities reflect current YES price
+        Source: Polymarket{wsConnected ? " (WebSocket)" : " (Gamma API)"} ·{" "}
+        {wsConnected ? "Live prices, auto-refresh every 30s" : "Updated every 30 minutes"} ·{" "}
+        Probabilities reflect current YES price
+        {lastRefresh && (
+          <span className="ml-1">
+            · Last update: {lastRefresh.toLocaleTimeString()}
+          </span>
+        )}
       </p>
     </div>
   );

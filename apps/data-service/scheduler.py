@@ -722,6 +722,15 @@ def whale_alerts_endpoint():
     return jsonify({"alerts": alerts, "count": len(alerts)})
 
 
+@app.route("/prediction-prices")
+def prediction_prices_endpoint():
+    """Serve live prediction market prices from WebSocket cache."""
+    from streaming.polymarket_ws import get_live_prediction_prices, get_ws_health
+    prices = get_live_prediction_prices()
+    health = get_ws_health()
+    return jsonify({"prices": prices, "count": len(prices), "ws": health})
+
+
 @app.route("/api/v1/scanners/prediction-markets/trigger", methods=["POST"])
 def trigger_prediction_scan():
     """On-demand prediction market scan — call 5 min after CPI/FOMC/Jobs via webhook."""
@@ -1704,6 +1713,12 @@ def pipeline_check():
         "note": "Ingestion every 30min, scoring every 2h.",
     }
 
+    try:
+        from streaming.polymarket_ws import get_ws_health
+        checks["polymarket_ws"] = get_ws_health()
+    except Exception as e:
+        checks["polymarket_ws"] = {"error": str(e)}
+
     checks["raw_prices_7d"] = {
         "stocks": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "stock"}, date_column="captured_at"),
         "crypto": _count("raw_prices", since=cutoff_7d, extra_filters={"asset_type": "crypto"}, date_column="captured_at"),
@@ -1790,6 +1805,9 @@ if __name__ == "__main__":
         if os.environ.get("ALPACA_API_KEY"):
             from streaming.alpaca_ws import start_streaming
             start_streaming()
+
+        from streaming.polymarket_ws import start_polymarket_streaming
+        start_polymarket_streaming()
     else:
         logger.info("Scheduler DISABLED (set ENABLE_SCHEDULER=true to activate). Endpoints still available.")
     port = int(os.environ.get("PORT", 8080))
