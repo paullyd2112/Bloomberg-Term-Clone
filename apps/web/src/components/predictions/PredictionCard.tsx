@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import { clsx } from "clsx";
-import { useAccount } from "wagmi";
 import Sparkline from "./Sparkline";
-import TradeModal from "./TradeModal";
 
 export type SmartMoneyData = {
   consensus_direction: "YES" | "NO" | "SPLIT";
@@ -66,7 +64,6 @@ function daysUntil(iso: string | null): string | null {
 
 export default function PredictionCard({ market }: { market: PredictionMarket }) {
   const [showTrade, setShowTrade] = useState(false);
-  const { isConnected } = useAccount();
 
   const prob = Math.round(market.yes_price * 100);
   const remaining = daysUntil(market.end_date);
@@ -169,18 +166,25 @@ export default function PredictionCard({ market }: { market: PredictionMarket })
           </p>
         )}
 
-        {/* Trade button */}
-        {isConnected && (
+        {/* Trade button — Coming Soon */}
+        <div className="relative mt-3">
           <button
-            onClick={() => setShowTrade(true)}
-            className="mt-3 w-full py-2 text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-colors"
+            onClick={() => setShowTrade(!showTrade)}
+            className="w-full py-2 text-xs font-medium text-zinc-400 bg-white/[0.03] border border-white/[0.08] rounded-lg hover:bg-white/[0.05] hover:text-zinc-300 transition-colors"
           >
             Trade
           </button>
-        )}
+          {showTrade && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowTrade(false)} />
+              <div className="absolute left-0 right-0 bottom-full mb-2 z-50 bg-zinc-900 border border-white/[0.1] rounded-lg shadow-xl p-3 text-center">
+                <p className="text-xs font-medium text-white mb-0.5">Coming Soon</p>
+                <p className="text-[10px] text-zinc-500">Non-custodial trading on Polymarket</p>
+              </div>
+            </>
+          )}
+        </div>
       </div>
-
-      {showTrade && <TradeModal market={market} onClose={() => setShowTrade(false)} />}
     </>
   );
 }
