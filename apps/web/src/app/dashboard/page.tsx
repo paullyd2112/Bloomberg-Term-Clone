@@ -1,14 +1,10 @@
 import { Suspense } from "react";
-import Link from "next/link";
-import { Activity, Clock, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUserTierAndProfile } from "@/lib/user";
 import { applyFreeDelay, applyFreeLimit, FREE_TIER_SIGNAL_LIMIT, FREE_TIER_DELAY_HOURS } from "@/lib/tier";
 import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
-import SubscribeGate from "@/components/ui/SubscribeGate";
 import FreeSignalGate from "@/components/ui/FreeSignalGate";
-import SectorHeatmap from "@/components/dashboard/SectorHeatmap";
 import WhaleSentinel from "@/components/WhaleSentinel";
 import SectionHeader from "@/components/ui/SectionHeader";
 import SkipTrialBanner from "@/components/SkipTrialBanner";
@@ -16,6 +12,8 @@ import SystemSafeguards from "@/components/dashboard/SystemSafeguards";
 import RedditTrending from "@/components/dashboard/RedditTrending";
 import MarketPulse from "@/components/dashboard/MarketPulse";
 import TrackRecord from "@/components/dashboard/TrackRecord";
+import CryptoMarketGrid from "@/components/dashboard/CryptoMarketGrid";
+import PerformanceBar from "@/components/dashboard/PerformanceBar";
 
 export const revalidate = 60;
 
@@ -202,9 +200,6 @@ async function fetchSignals(): Promise<Signal[]> {
 async function fetchTopMovers() {
   const supabase = createClient();
 
-  // Crypto-only pivot (July 2026): movers are crypto-only so cards never
-  // link to asset pages for a disabled class. Restore the stock query
-  // alongside this one when stocks return.
   const cryptoRes = await supabase
     .from("raw_prices")
     .select("identifier, asset_type, price, change_24h")
@@ -212,18 +207,42 @@ async function fetchTopMovers() {
     .not("change_24h", "is", null)
     .neq("identifier", "MARKET_SENTIMENT")
     .order("captured_at", { ascending: false })
-    .limit(50);
+    .limit(80);
 
   const allData = cryptoRes.data ?? [];
 
-  const seen = new Map<string, typeof allData[0]>();
+  const seen = new Map<string, (typeof allData)[0]>();
   for (const row of allData) {
     if (!seen.has(row.identifier)) seen.set(row.identifier, row);
   }
 
-  return Array.from(seen.values())
+  const top = Array.from(seen.values())
     .sort((a, b) => Math.abs(b.change_24h ?? 0) - Math.abs(a.change_24h ?? 0))
     .slice(0, 10);
+
+  // Fetch sparkline data (last 24h price history) for the top movers
+  const identifiers = top.map((t) => t.identifier);
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: historyRows } = await supabase
+    .from("raw_prices")
+    .select("identifier, price, captured_at")
+    .eq("asset_type", "crypto")
+    .in("identifier", identifiers)
+    .gte("captured_at", since)
+    .order("captured_at", { ascending: true })
+    .limit(1000);
+
+  const sparklines = new Map<string, number[]>();
+  for (const h of historyRows ?? []) {
+    const arr = sparklines.get(h.identifier) ?? [];
+    arr.push(Number(h.price));
+    sparklines.set(h.identifier, arr);
+  }
+
+  return top.map((t) => ({
+    ...t,
+    sparkline: sparklines.get(t.identifier) ?? [],
+  }));
 }
 
 export default async function DashboardPage() {
@@ -239,61 +258,77 @@ export default async function DashboardPage() {
   const allPending = resolved === 0 && pending > 0;
 
   return (
-    <div className="p-5 md:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Page header */}
-      <header className="flex flex-col gap-1">
+    <div className="p-4 md:p-6 lg:p-8 space-y-5 max-w-7xl mx-auto">
+      {/* Page header — compact, exchange-style */}
+      <header className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00d4aa] opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-[#00d4aa]" />
           </span>
-          <h1 className="text-xl font-semibold tracking-tight text-white">Signals</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-white">Crypto Signals</h1>
+          <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider hidden sm:inline">
+            {signals.length} signals · {pending} pending
+          </span>
         </div>
-        <p className="text-sm text-zinc-500">
-          Live AI signals across crypto and prediction markets, updating around the clock.
-        </p>
+        <div className="flex items-center gap-3">
+          {!allPending && (
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[10px] text-zinc-600 font-mono uppercase tracking-wider">W/L</span>
+              <span className="font-mono text-sm font-bold tabular-nums text-[#00d4aa]">{winCount}</span>
+              <span className="text-zinc-600">/</span>
+              <span className="font-mono text-sm font-bold tabular-nums text-red-400">{lossCount}</span>
+            </div>
+          )}
+        </div>
       </header>
 
       {tier !== "free" && profile?.billing_interval !== "lifetime" && (
         <SkipTrialBanner />
       )}
 
-      {/* Stats row */}
-      {allPending ? (
-        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-6 py-5">
-          <div className="flex items-center gap-3">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />
-            </span>
-            <div>
-              <p className="text-sm font-medium text-white">Signals are being analyzed</p>
-              <p className="text-xs text-zinc-500 mt-0.5">{pending} signal{pending === 1 ? "" : "s"} pending resolution. Win rate will appear once signals resolve</p>
-              <p className="text-xs text-zinc-600 mt-0.5">Signals typically resolve within 6–24 hours depending on the time horizon.</p>
-            </div>
+      {/* Crypto market grid — Kraken-style top movers with sparklines */}
+      {movers.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[11px] font-mono font-semibold uppercase tracking-[0.15em] text-zinc-500">
+              Top Movers
+            </h2>
+            <span className="text-[10px] text-zinc-600 font-mono">24h change</span>
           </div>
-        </div>
-      ) : (
-        <div>
-          {/* Compact summary bar on mobile, full cards on sm+ */}
-          <div className="sm:hidden flex items-center bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden divide-x divide-white/[0.06]">
-            <MiniStat label="Signals" value={signals.length} />
-            <MiniStat label="Pending" value={pending} />
-            <MiniStat label="Wins" value={winCount} color="green" />
-            <MiniStat label="Losses" value={lossCount} color="red" />
-          </div>
-          <div className="hidden sm:grid grid-cols-4 gap-3">
-            <StatCard label="Total signals" value={signals.length} icon={Activity} />
-            <StatCard label="Pending" value={pending} icon={Clock} />
-            <StatCard label="Wins" value={winCount} color="green" icon={TrendingUp} />
-            <StatCard label="Losses" value={lossCount} color="red" icon={TrendingDown} />
+          <CryptoMarketGrid coins={movers} />
+        </section>
+      )}
+
+      {/* Performance — visual monthly bar chart */}
+      {accuracy && !allPending && (
+        <PerformanceBar
+          overallWinRate={accuracy.overallWinRate}
+          totalWins={accuracy.totalWins}
+          totalLosses={accuracy.totalLosses}
+          totalResolved={accuracy.totalResolved}
+          byMonth={accuracy.byMonth}
+          yesterday={accuracy.yesterday}
+        />
+      )}
+
+      {/* Pending indicator */}
+      {allPending && (
+        <div className="bg-white/[0.02] border border-amber-500/20 rounded-xl px-5 py-4 flex items-center gap-3">
+          <span className="relative flex h-2 w-2 flex-shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
+          </span>
+          <div>
+            <p className="text-sm font-medium text-white">{pending} signal{pending === 1 ? "" : "s"} pending</p>
+            <p className="text-xs text-zinc-500">Win rate appears once signals resolve (6–24h)</p>
           </div>
         </div>
       )}
 
       {/* Signal feed — the product, front and center */}
       <section>
-        <SectionHeader primary divider className="mb-4">Latest Signals</SectionHeader>
+        <SectionHeader primary divider className="mb-3">Latest Signals</SectionHeader>
         {tier === "free" ? (
           <>
             <SignalFeed signals={applyFreeLimit(applyFreeDelay(signals) as Signal[])} hideTrade />
@@ -308,43 +343,9 @@ export default async function DashboardPage() {
         )}
       </section>
 
-      {/* Market Pulse — movers, whales, reddit in a tabbed container */}
+      {/* Market intelligence — whales + reddit */}
       <MarketPulse
-        moversContent={
-          movers.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-              {movers.map((m) => {
-                const up = (m.change_24h ?? 0) >= 0;
-                return (
-                  <Link
-                    key={`${m.asset_type}:${m.identifier}`}
-                    href={`/dashboard/asset/${m.asset_type}/${m.identifier}`}
-                    className="group flex-shrink-0 bg-white/[0.04] border border-white/[0.08] rounded-lg px-4 py-3 flex flex-col gap-1.5 min-w-[120px] hover:bg-white/[0.07] hover:border-white/[0.12] transition-all"
-                  >
-                    <span className="font-mono text-xs font-semibold text-white truncate">
-                      {m.identifier}
-                    </span>
-                    <span
-                      className={`flex items-center gap-1 text-sm font-semibold tabular-nums ${
-                        up ? "text-emerald-400" : "text-red-400"
-                      }`}
-                    >
-                      {up ? (
-                        <ArrowUpRight className="h-3.5 w-3.5" />
-                      ) : (
-                        <ArrowDownRight className="h-3.5 w-3.5" />
-                      )}
-                      {up ? "+" : ""}
-                      {Number(m.change_24h).toFixed(2)}%
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-zinc-500 text-sm text-center py-6">No movers right now.</p>
-          )
-        }
+        moversContent={null}
         whalesContent={<WhaleSentinel bare />}
         redditContent={
           <Suspense
@@ -357,90 +358,17 @@ export default async function DashboardPage() {
         }
       />
 
-      {/* Platform accuracy — consolidated single card */}
+      {/* Detailed track record (expandable) */}
       {accuracy && (
         <section>
-          <SectionHeader divider className="mb-4">Signal track record</SectionHeader>
+          <SectionHeader divider className="mb-3">Detailed Track Record</SectionHeader>
           <TrackRecord accuracy={accuracy} />
         </section>
       )}
 
       {/* System safeguards */}
       <SystemSafeguards />
-
-      {/* Crypto-only pivot (July 2026): SectorHeatmap aggregates stock
-          signals by sector and renders empty with stock scoring off.
-          Component kept intact; restore this block when stocks return.
-      <Suspense
-        fallback={
-          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-6 h-40 animate-pulse" />
-        }
-      >
-        <SectorHeatmap />
-      </Suspense>
-      */}
     </div>
   );
 }
 
-function MiniStat({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color?: "green" | "red";
-}) {
-  const valueColor =
-    color === "green"
-      ? "text-emerald-400"
-      : color === "red"
-      ? "text-red-400"
-      : "text-white";
-
-  return (
-    <div className="flex-1 flex flex-col items-center py-3 gap-0.5">
-      <span className={`text-lg font-bold tabular-nums ${valueColor}`}>{value}</span>
-      <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{label}</span>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  color,
-  icon: Icon,
-}: {
-  label: string;
-  value: number;
-  color?: "green" | "red";
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  const valueColor =
-    color === "green"
-      ? "text-emerald-400"
-      : color === "red"
-      ? "text-red-400"
-      : "text-white";
-
-  const badge =
-    color === "green"
-      ? "border-emerald-700/30 bg-emerald-500/10 text-emerald-400"
-      : color === "red"
-      ? "border-red-700/30 bg-red-500/10 text-red-400"
-      : "border-white/10 bg-white/[0.04] text-zinc-400";
-
-  return (
-    <div className="group bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl px-5 py-4 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all">
-      <div className="flex items-center justify-between mb-3">
-        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${badge}`}>
-          <Icon className="h-4 w-4" />
-        </span>
-      </div>
-      <div className={`text-2xl font-bold tabular-nums ${valueColor}`}>{value}</div>
-      <div className="text-xs text-zinc-500 mt-1">{label}</div>
-    </div>
-  );
-}
