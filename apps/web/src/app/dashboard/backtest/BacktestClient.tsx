@@ -5,11 +5,11 @@ import { clsx } from "clsx";
 import type { BacktestParams, BacktestResults, EquityPoint, BreakdownEntry, TradeEntry } from "@/app/api/backtest/route";
 
 const DEFAULT_PARAMS: BacktestParams = {
-  asset_type:     "all",
+  asset_type:     "crypto",
   direction:      "all",
   horizon:        "all",
-  min_confidence: 60,
-  start_date:     new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+  min_confidence: 64,
+  start_date:     new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
   end_date:       new Date().toISOString().slice(0, 10),
   trade_size:     1000,
 };

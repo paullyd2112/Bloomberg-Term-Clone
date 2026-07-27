@@ -312,6 +312,21 @@ export default async function DashboardPage() {
         />
       )}
 
+      {/* Market intelligence — whales + reddit */}
+      <MarketPulse
+        moversContent={null}
+        whalesContent={<WhaleSentinel bare />}
+        redditContent={
+          <Suspense
+            fallback={
+              <div className="h-40 bg-white/[0.02] rounded-lg animate-pulse" />
+            }
+          >
+            <RedditTrending bare />
+          </Suspense>
+        }
+      />
+
       {/* Pending indicator */}
       {allPending && (
         <div className="bg-white/[0.02] border border-amber-500/20 rounded-xl px-5 py-4 flex items-center gap-3">
@@ -342,21 +357,6 @@ export default async function DashboardPage() {
           <SignalFeed signals={signals} />
         )}
       </section>
-
-      {/* Market intelligence — whales + reddit */}
-      <MarketPulse
-        moversContent={null}
-        whalesContent={<WhaleSentinel bare />}
-        redditContent={
-          <Suspense
-            fallback={
-              <div className="h-40 bg-white/[0.02] rounded-lg animate-pulse" />
-            }
-          >
-            <RedditTrending bare />
-          </Suspense>
-        }
-      />
 
       {/* Detailed track record (expandable) */}
       {accuracy && (

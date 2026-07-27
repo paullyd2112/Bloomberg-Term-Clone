@@ -31,7 +31,8 @@ QUALIFIED_MIN_TRADES = 20
 
 
 def _fetch_recent_trades() -> list[dict]:
-    """Fetch recent trades from Polymarket data API (public, no auth)."""
+    """Fetch recent trades from Polymarket data API (public, no auth).
+    Handles both flat list responses and wrapped {data: [...]} responses."""
     try:
         resp = httpx.get(
             f"{DATA_API}/trades",
@@ -42,7 +43,14 @@ def _fetch_recent_trades() -> list[dict]:
             logger.warning("whale_sentinel: data-api trades returned {}", resp.status_code)
             return []
         data = resp.json()
-        return data if isinstance(data, list) else []
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            for key in ("data", "trades", "results", "items"):
+                if isinstance(data.get(key), list):
+                    return data[key]
+            logger.warning("whale_sentinel: unexpected response shape — keys: {}", list(data.keys())[:10])
+        return []
     except Exception as e:
         logger.error("whale_sentinel: failed to fetch trades — {}", e)
         return []
