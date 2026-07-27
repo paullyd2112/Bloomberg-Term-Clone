@@ -26,9 +26,9 @@ import DashboardShot from "@/components/landing/showcase/DashboardShot";
 import AssetShot from "@/components/landing/showcase/AssetShot";
 
 export const metadata: Metadata = {
-  title: "Plebs · 24/7 AI crypto signals, tracked to outcome.",
+  title: "Plebs · Crypto & prediction market signals, tracked to outcome.",
   description:
-    "AI signals for BTC, ETH, and 50+ coins, rescored around the clock. Polymarket prediction-market edge, congressional trades, and a morning briefing. Every call tracked to outcome.",
+    "BUY/SELL signals on 50+ coins and YES/NO calls on Polymarket, rescored around the clock. Congressional trades, prop trading tools, and a morning briefing. Every call tracked to outcome.",
 };
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
@@ -116,9 +116,9 @@ function Hero() {
             </h1>
 
             <p className="mt-6 text-lg text-secondary-foreground max-w-md leading-relaxed text-pretty">
-              AI-scored BUY/SELL signals on BTC, ETH, and 50+ coins, updated around
-              the clock with confidence, reasoning, and a win rate you can check.
-              Plus Polymarket edge and a morning briefing in your inbox.
+              BUY/SELL signals on 50+ coins and YES/NO calls on Polymarket contracts,
+              updated around the clock. Confidence, reasoning, and a win rate you can
+              check. Every call tracked to outcome.
             </p>
 
             <div className="mt-9 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -231,17 +231,17 @@ function Transparency() {
     {
       icon: Eye,
       title: "Every signal tracked",
-      desc: "BUY, SELL, or HOLD — every call is logged with a timestamp and tracked to its final outcome. No cherry-picking, no quiet deletions.",
+      desc: "BUY, SELL, or HOLD: every call is logged with a timestamp and tracked to its final outcome. No cherry-picking, no quiet deletions.",
     },
     {
       icon: Target,
       title: "Misses published",
-      desc: "Wrong calls stay on the record. You see the real win rate — not a curated highlight reel. If it's 58%, we say 58%.",
+      desc: "Wrong calls stay on the record. You see the real win rate, not a curated highlight reel. If it's 58%, we say 58%.",
     },
     {
       icon: Scale,
       title: "No black box",
-      desc: "Every signal ships with the reasoning behind it. You see which indicators fired, what the model weighed, and why. Agree or override.",
+      desc: "Every signal ships with the reasoning behind it. You see which indicators fired, what was weighed, and why. Agree or override.",
     },
   ];
 
@@ -255,8 +255,8 @@ function Transparency() {
           </h2>
           <p className="text-secondary-foreground mt-4 leading-relaxed max-w-lg">
             Most signal groups delete bad calls, lock win rates behind paywalls, or
-            stop posting after a losing streak. Plebs tracks every signal to outcome —
-            live, public, and permanent.
+            stop posting after a losing streak. Plebs tracks every signal to outcome.
+            Live, public, and permanent.
           </p>
         </Reveal>
 
@@ -314,7 +314,7 @@ function PropDesk() {
           <p className="text-secondary-foreground mt-4 leading-relaxed">
             Most signal services tell you what to buy. None tell you how much.
             The prop trading desk runs Monte Carlo simulations against your account
-            to find optimal position sizing — so one bad call doesn&apos;t blow the account.
+            to find optimal position sizing so one bad call doesn&apos;t blow the account.
           </p>
         </Reveal>
 
@@ -336,7 +336,7 @@ function PropDesk() {
                   {[
                     { title: "Monte Carlo simulation", desc: "Thousands of randomised trade sequences stress-tested against prop firm rules" },
                     { title: "Position sizing engine", desc: "Per-trade risk calculated from your account size, drawdown limits, and stop method" },
-                    { title: "Drawdown tracking", desc: "Real-time headroom gauges — know exactly how much runway you have left" },
+                    { title: "Drawdown tracking", desc: "Real-time headroom gauges so you always know how much runway you have left" },
                     { title: "Multi-profile support", desc: "Model $10K retail, $50K funded, or $150K boss accounts side by side" },
                   ].map((item) => (
                     <li key={item.title} className="flex gap-3">
@@ -413,7 +413,7 @@ function Ethos() {
                 &ldquo;We got tired of paying for signals from anonymous accounts
                 that delete their misses and screenshot their wins. So we built
                 the opposite: every call tracked, every outcome published, every
-                miss on the record. If the AI is wrong, you&apos;ll know — because
+                miss on the record. If a signal is wrong, you&apos;ll know, because
                 we show you.&rdquo;
               </blockquote>
 
@@ -434,7 +434,7 @@ function Ethos() {
                   <div>
                     <div className="text-white font-medium text-sm">Built in public</div>
                     <p className="text-muted-foreground text-xs mt-1 leading-relaxed">
-                      We ship features in the open. The accuracy page isn&apos;t gated — even free users see the track record.
+                      We ship features in the open. The accuracy page isn&apos;t gated. Even free users see the track record.
                     </p>
                   </div>
                 </div>
@@ -451,21 +451,21 @@ function Ethos() {
 
 const FEATURES = [
   {
-    icon: Zap,
-    title: "24/7 AI crypto signals",
-    desc: "BUY/SELL calls on BTC, ETH, SOL, and 50+ coins, rescored every two hours around the clock. Each comes with a confidence score and the reasoning behind it.",
+    icon: Dices,
+    title: "Prediction market signals",
+    desc: "Live Polymarket contracts scanned for mispriced odds. YES/NO calls with the edge spelled out, not just a probability number.",
     span: "lg:col-span-3",
   },
   {
-    icon: Dices,
-    title: "Prediction-market edge",
-    desc: "AI scans live Polymarket contracts for mispriced odds. YES/NO calls with the edge spelled out, not just a probability.",
+    icon: Zap,
+    title: "24/7 crypto signals",
+    desc: "BUY/SELL calls on BTC, ETH, SOL, and 50+ coins, rescored every two hours around the clock. Each comes with a confidence score and full reasoning.",
     span: "lg:col-span-3",
   },
   {
     icon: Sunrise,
     title: "Morning briefing",
-    desc: "An AI-written market brief delivered daily to your inbox. Top signals, macro, and risk.",
+    desc: "A market brief delivered daily to your inbox. Top signals, macro context, and risk. Crypto, prediction markets, geopolitics, and more.",
     span: "lg:col-span-3",
   },
   {
@@ -495,11 +495,11 @@ function Features() {
         <Reveal className="max-w-2xl mb-12">
           <SectionLabel index="03">What you get</SectionLabel>
           <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
-            A full crypto desk, in one tab
+            Crypto and prediction markets, one tab
           </h2>
           <p className="text-secondary-foreground mt-4 leading-relaxed">
             Stop juggling six subscriptions. Signals, prediction markets, filings,
-            and briefings: the full toolkit, priced for retail.
+            and briefings, all in one place. Priced for retail.
           </p>
         </Reveal>
 
@@ -510,7 +510,7 @@ function Features() {
               <div className="border-b border-white/[0.06] px-6 pt-6 pb-2">
                 <h3 className="text-white font-medium">Asset intelligence</h3>
                 <p className="text-muted-foreground text-sm mt-1 leading-relaxed">
-                  Price action, AI score, and tracked accuracy for every coin.
+                  Price action, signal score, and tracked accuracy for every coin.
                 </p>
               </div>
               <div className="px-4 pb-4 pt-2">
@@ -566,8 +566,8 @@ function NewsletterBand() {
               The daily brief, before the market wakes up
             </h3>
             <p className="text-muted-foreground text-sm mt-2 leading-relaxed">
-              Crypto, prediction markets, geopolitics, tech, and more — in plain English, 7 days a week.
-              Written by the same AI that scores the signals. Choose your frequency, unsubscribe anytime.
+              Crypto, prediction markets, geopolitics, tech, and more. Plain English, 7 days a week.
+              Written by the same engine that scores the signals. Choose your frequency, unsubscribe anytime.
             </p>
           </div>
           <NewsletterSignup />
@@ -589,7 +589,7 @@ const PLANS = [
     cta:       "Create free account",
     href:      "/signup",
     features: [
-      "3 AI signals per day (4h delay)",
+      "3 signals per day (4h delay)",
       "Weekly Monday newsletter recap",
       "Dashboard access (view-only)",
       "Track record & accuracy stats",
@@ -604,7 +604,7 @@ const PLANS = [
     cta:       "Start 7-day trial",
     href:      "/signup",
     features: [
-      "24/7 AI signals for BTC, ETH & 50+ coins",
+      "24/7 signals for BTC, ETH & 50+ coins",
       "Confidence scores + full reasoning",
       "Win rates tracked per coin",
       "Unlimited watchlist",
@@ -617,17 +617,17 @@ const PLANS = [
     name:      "Elite",
     price:     "$80",
     period:    "/mo",
-    blurb:     "The real alpha: prediction markets and your own AI analyst.",
+    blurb:     "The real alpha: prediction markets and your own analyst on call.",
     highlight: true,
     cta:       "Start 14-day trial",
     href:      "/signup",
     features: [
       "Everything in Pro",
-      "Prediction-market signals (Polymarket)",
-      "AI finds mispriced contracts",
-      "Pleby, your AI trading analyst, on call",
+      "Prediction market signals (Polymarket)",
+      "Mispriced contract detection",
+      "Pleby, your personal analyst, on call",
       "Personalised morning briefing",
-      "On-demand AI analysis: score any coin",
+      "On-demand scoring: analyse any coin",
     ],
   },
 ];
@@ -712,23 +712,23 @@ function Pricing() {
 const FAQS = [
   {
     q: "What exactly is Plebs?",
-    a: "Plebs is an AI-powered crypto signal terminal for retail traders. We run AI models over live technicals, news, and market structure to generate BUY/SELL signals on 50+ coins around the clock, each with a confidence score and full reasoning. Think Bloomberg Terminal meets AI analyst, priced for normal people.",
+    a: "Plebs is a crypto and prediction market signal terminal for retail traders. We run models over live technicals, news, and market structure to generate BUY/SELL signals on 50+ coins around the clock, plus YES/NO calls on Polymarket contracts. Each signal comes with a confidence score and full reasoning. Think Bloomberg Terminal, priced for normal people.",
   },
   {
     q: "Is this financial advice?",
-    a: "No. Plebs provides AI-generated market analysis for informational purposes only. We surface signals and data, but every trade decision is yours. Always do your own research.",
+    a: "No. Plebs provides market analysis for informational purposes only. We surface signals and data, but every trade decision is yours. Always do your own research.",
   },
   {
     q: "How does the trial work?",
-    a: "Pro comes with a 7-day trial, Elite with a 14-day trial — full access to everything in that tier. Credit card is required upfront. Cancel anytime during the trial and you won't be charged. Or start with the free plan, no card needed.",
+    a: "Pro comes with a 7-day trial, Elite with a 14-day trial. Full access to everything in that tier. Credit card is required upfront. Cancel anytime during the trial and you won't be charged. Or start with the free plan, no card needed.",
   },
   {
     q: "What markets do you cover?",
-    a: "Crypto and prediction markets. We score BTC, ETH, SOL, and 50+ coins around the clock, plus AI-scored YES/NO calls on Polymarket prediction contracts. Every signal comes with a confidence score and full reasoning.",
+    a: "Crypto and prediction markets. We score BTC, ETH, SOL, and 50+ coins around the clock, plus YES/NO calls on Polymarket prediction contracts. Every signal comes with a confidence score and full reasoning.",
   },
   {
     q: "What's in the newsletter?",
-    a: "A full morning brief covering crypto markets, prediction markets, geopolitics, AI and tech, health and science, sports, and whatever else is moving the world. Think 7 days a week is too much? You can choose your newsletter frequency in settings.",
+    a: "A full morning brief covering crypto markets, prediction markets, geopolitics, tech, health and science, sports, and whatever else is moving the world. 7 days a week. You can choose your newsletter frequency in settings.",
   },
   {
     q: "How accurate are the signals?",
