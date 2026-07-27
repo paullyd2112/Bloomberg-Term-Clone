@@ -21,6 +21,9 @@ type LandingStats = {
   signals_today: number | null;
   avg_confidence: number | null;
   coins_tracked: number | null;
+  prediction_markets: number | null;
+  whale_wallets: number | null;
+  whale_trades_24h: number | null;
 };
 
 const EMPTY: LandingStats = {
@@ -31,6 +34,9 @@ const EMPTY: LandingStats = {
   signals_today: null,
   avg_confidence: null,
   coins_tracked: null,
+  prediction_markets: null,
+  whale_wallets: null,
+  whale_trades_24h: null,
 };
 
 export async function GET() {
@@ -40,7 +46,7 @@ export async function GET() {
     todayStart.setUTCHours(0, 0, 0, 0);
     const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-    const [resolved, today, recent, tracked] = await Promise.all([
+    const [resolved, today, recent, tracked, predMarkets, walletProfiles, whaleRecent] = await Promise.all([
       // Resolved live crypto signals since the engine fix
       admin
         .from("signals")
@@ -77,6 +83,21 @@ export async function GET() {
         .gte("captured_at", last24h)
         .limit(1000)
         .returns<{ identifier: string }[]>(),
+      // Prediction markets tracked
+      admin
+        .from("raw_prices")
+        .select("identifier", { count: "exact", head: true })
+        .eq("asset_type", "prediction")
+        .gte("captured_at", last24h),
+      // Tracked whale wallets
+      admin
+        .from("wallet_profiles")
+        .select("address", { count: "exact", head: true }),
+      // Whale trades in last 24h
+      admin
+        .from("whale_alerts")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", last24h),
     ]);
 
     if (resolved.error) throw resolved.error;
@@ -104,6 +125,9 @@ export async function GET() {
       signals_today: today.error ? null : today.count ?? null,
       avg_confidence,
       coins_tracked: tracked.error || coins.size === 0 ? null : coins.size,
+      prediction_markets: predMarkets.error ? null : predMarkets.count ?? null,
+      whale_wallets: walletProfiles.error ? null : walletProfiles.count ?? null,
+      whale_trades_24h: whaleRecent.error ? null : whaleRecent.count ?? null,
     };
 
     return NextResponse.json(stats);
