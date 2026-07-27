@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import {
   Zap,
-  Landmark,
+  Radar,
   Sunrise,
   Target,
   Dices,
@@ -24,6 +24,7 @@ import MobileNav from "@/components/landing/MobileNav";
 import BrowserFrame from "@/components/landing/showcase/BrowserFrame";
 import DashboardShot from "@/components/landing/showcase/DashboardShot";
 import AssetShot from "@/components/landing/showcase/AssetShot";
+import LiveStats from "@/components/landing/LiveStats";
 
 export const metadata: Metadata = {
   title: "Plebs · Crypto & prediction market signals, tracked to outcome.",
@@ -84,7 +85,7 @@ function SectionLabel({ index, children }: { index: string; children: React.Reac
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
-const COVERAGE = ["Crypto", "Polymarket", "Congress"];
+const COVERAGE = ["Crypto", "Polymarket", "Smart Money", "Congress"];
 
 function Hero() {
   return (
@@ -201,24 +202,10 @@ function Showcase() {
 // ─── Stats strip ────────────────────────────────────────────────────────────────
 
 function Stats() {
-  const items = [
-    { value: "50+",   label: "Coins scored" },
-    { value: "12×",   label: "Scoring runs per day" },
-    { value: "7d",    label: "Daily briefing" },
-    { value: "14d",   label: "Trial period" },
-  ];
-
   return (
     <section className="px-5 sm:px-8">
-      <Reveal className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 border-t border-l border-white/[0.06]">
-        {items.map((item) => (
-          <div key={item.label} className="py-10 px-6 border-b border-r border-white/[0.06]">
-            <div className="font-mono text-3xl sm:text-4xl font-semibold text-white tracking-tightest tabular-nums">
-              {item.value}
-            </div>
-            <div className="text-muted-foreground text-sm mt-2">{item.label}</div>
-          </div>
-        ))}
+      <Reveal>
+        <LiveStats />
       </Reveal>
     </section>
   );
@@ -475,9 +462,9 @@ const FEATURES = [
     span: "lg:col-span-3",
   },
   {
-    icon: Landmark,
-    title: "Congressional trades",
-    desc: "STOCK Act disclosures for every House and Senate member, surfaced before the headlines.",
+    icon: Radar,
+    title: "Smart money tracking",
+    desc: "20 top Polymarket wallets monitored every 5 minutes. See what the best traders are buying before the crowd catches on.",
     span: "lg:col-span-3",
   },
   {
