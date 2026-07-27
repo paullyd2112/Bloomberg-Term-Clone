@@ -1046,8 +1046,9 @@ def run_backtest(
     export_csv: bool = True,
     write_db:   bool = False,
     output_dir: str | None = None,
+    crypto_only: bool = True,
 ) -> dict:
-    stocks     = stocks or DEFAULT_STOCKS
+    stocks     = [] if crypto_only and stocks is None else (stocks or DEFAULT_STOCKS)
     output_dir = output_dir or str(Path.cwd())
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 

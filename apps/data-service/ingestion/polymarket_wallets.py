@@ -113,9 +113,16 @@ def _discover_from_global_feed() -> set[str]:
         )
         if resp.status_code != 200:
             return addresses
-        trades = resp.json()
-        if not isinstance(trades, list):
-            return addresses
+        data = resp.json()
+        if isinstance(data, list):
+            trades = data
+        elif isinstance(data, dict):
+            trades = next(
+                (data[k] for k in ("data", "trades", "results", "items") if isinstance(data.get(k), list)),
+                [],
+            )
+        else:
+            trades = []
         for t in trades:
             w = t.get("proxyWallet", "")
             if not w:
