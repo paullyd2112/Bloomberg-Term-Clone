@@ -28,16 +28,27 @@ REQUEST_DELAY_S = 1.0
 MIN_TRADES_FOR_STATS = 5
 
 SEED_WHALE_WALLETS: list[str] = [
-    "0x3dfb153c197d4c19d3b31c1ecd2c7b6860eeabaf",
-    "0x5f659bccbc353dbf7bcdffdee73bee60bb482036",
-    "0xfe787d2da716d60e8acff57fb87eb13cd4d10319",
-    "0xfc25d6c9df744823eaac0c1a7d5543c78f4a4349",
-    "0xff80bb23621f03fc6300808730316c78abe09b4d",
-    "0x25db6ca5935ae858a5c1f2dcd5c62939805328de",
-    "0xd23f8c8aab13cfb2a35da40b67f8471faf9894a1",
-    "0xb357437166e9dc62a8c5aef1f5a8fb78bbeca4ae",
-    "0xc163df5d9317167e1a1cff9be0b5b63d9dfe70c1",
-    "0x84cfffc3f16dcc353094de30d4a45226eccd2f63",
+    # Top 20 from Polymarket all-time leaderboard
+    "0x204f72f35326db932158cba6adff0b9a1da95e14",  # swisstony
+    "0x09b428f7c2b469786286214aa5c90dd9015f7320",  # DEEDDIT
+    "0x476e1322d1a412fa0325527b8c3bc5e707b1396d",  # asparagus2012
+    "0x2e25b222e2080c377fc1fb2b9f926315f0f4d49e",  # Sparkling8899
+    "0xe549581668a5751c1972d3ad2d1991d900bd2d54",  # Allezpapa
+    "0x83720820a8aa6c3f20ad71850e7a1a17d16c5223",  # Jsram
+    "0x5b4ec9c06b284ee52c41a761974d836992880232",  # ramadamaramadam
+    "0x67542c3219b37fd1610aad290676ff91cdbfe3bc",  # maz26
+    "0xf0318c32136c2db7fec88b84869aee6a1106c80c",  # BreakTheBank
+    "0x2c335066fe58fe9237c3d3dc7b275c2a034a0563",
+    "0xfea31bc088000ff909be1dfd8d0e3f2c7ef2d227",  # ndb1
+    "0x095fbca2e0eaf0c9841005135427e1e0117190b2",  # muchobliged
+    "0x84cfffc3f16dcc353094de30d4a45226eccd2f63",  # mooseborzoi
+    "0x7c1ee865a785de4c00ee90ed86a38489fb8bbab3",
+    "0xd1c537b2a7cba8d365e111bffb9de7b205e2cbd0",
+    "0x076daa87c4fe1a85402a9b6b8e0a866224388d4c",
+    "0xf5fabdcdc6eb6d9765a228824f16cca9c91f62df",
+    "0xc31d0a0d63d760d72a1236d16beaa6a71c854ebe",
+    "0xb61b2079b95f6b7476fd3203e0274ffb93308a06",
+    "0xbb5fbe810633ab08d106b82db84418a0e2ca2e21",
 ]
 
 
