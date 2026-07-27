@@ -22,6 +22,7 @@ from scoring.token_direction import resolve_token_direction
 
 DATA_API = "https://data-api.polymarket.com"
 FETCH_LIMIT = 500
+FETCH_PAGES = 4
 
 DISCOVERY_MIN_USD = 250
 WHALE_MIN_USD = 5_000
@@ -30,30 +31,40 @@ QUALIFIED_MIN_WIN_RATE = 0.55
 QUALIFIED_MIN_TRADES = 20
 
 
+def _extract_list(data) -> list[dict]:
+    """Extract trade list from API response (flat list or wrapped object)."""
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in ("data", "trades", "results", "items"):
+            if isinstance(data.get(key), list):
+                return data[key]
+    return []
+
+
 def _fetch_recent_trades() -> list[dict]:
     """Fetch recent trades from Polymarket data API (public, no auth).
-    Handles both flat list responses and wrapped {data: [...]} responses."""
-    try:
-        resp = httpx.get(
-            f"{DATA_API}/trades",
-            params={"limit": FETCH_LIMIT},
-            timeout=15,
-        )
-        if resp.status_code != 200:
-            logger.warning("whale_sentinel: data-api trades returned {}", resp.status_code)
-            return []
-        data = resp.json()
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            for key in ("data", "trades", "results", "items"):
-                if isinstance(data.get(key), list):
-                    return data[key]
-            logger.warning("whale_sentinel: unexpected response shape — keys: {}", list(data.keys())[:10])
-        return []
-    except Exception as e:
-        logger.error("whale_sentinel: failed to fetch trades — {}", e)
-        return []
+    Paginates FETCH_PAGES pages of FETCH_LIMIT trades each to catch
+    rare large trades in the firehose."""
+    all_trades: list[dict] = []
+    for page in range(FETCH_PAGES):
+        try:
+            resp = httpx.get(
+                f"{DATA_API}/trades",
+                params={"limit": FETCH_LIMIT, "offset": page * FETCH_LIMIT},
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                logger.warning("whale_sentinel: data-api trades page {} returned {}", page, resp.status_code)
+                break
+            batch = _extract_list(resp.json())
+            if not batch:
+                break
+            all_trades.extend(batch)
+        except Exception as e:
+            logger.error("whale_sentinel: fetch page {} failed — {}", page, e)
+            break
+    return all_trades
 
 
 def _parse_trades(trades: list[dict]) -> list[dict]:
@@ -188,7 +199,16 @@ def ingest_whale_alerts() -> str:
 
     parsed = _parse_trades(trades)
     if not parsed:
-        return f"{len(trades)} trades checked, 0 above ${DISCOVERY_MIN_USD} discovery threshold"
+        max_usd = 0.0
+        for t in trades[:100]:
+            try:
+                max_usd = max(max_usd, float(t.get("price", 0)) * float(t.get("size", 0)))
+            except (ValueError, TypeError):
+                pass
+        return (
+            f"{len(trades)} trades checked, 0 above ${DISCOVERY_MIN_USD} threshold "
+            f"(max seen: ${max_usd:.0f})"
+        )
 
     inserted = _store_alerts(parsed)
 
