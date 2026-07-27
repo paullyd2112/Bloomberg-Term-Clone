@@ -11,12 +11,16 @@ import {
   CircleCheck,
   ShieldCheck,
   Plus,
+  Gauge,
+  Eye,
+  Scale,
 } from "lucide-react";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import TickerBar from "@/components/TickerBar";
 import LiveSignalFeed from "@/components/LiveSignalFeed";
 import Reveal from "@/components/landing/Reveal";
 import LiveWinRate from "@/components/landing/LiveWinRate";
+import MobileNav from "@/components/landing/MobileNav";
 import BrowserFrame from "@/components/landing/showcase/BrowserFrame";
 import DashboardShot from "@/components/landing/showcase/DashboardShot";
 import AssetShot from "@/components/landing/showcase/AssetShot";
@@ -48,17 +52,18 @@ function Nav() {
         <div className="flex items-center gap-1 sm:gap-3">
           <Link
             href="/login"
-            className="text-sm text-secondary-foreground hover:text-white transition-colors px-2 sm:px-3 py-1.5"
+            className="hidden md:inline-flex text-sm text-secondary-foreground hover:text-white transition-colors px-2 sm:px-3 py-1.5"
           >
             Log in
           </Link>
           <Link
             href="/signup"
-            className="group text-sm bg-emerald-500 hover:bg-emerald-400 text-black font-semibold pl-4 pr-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+            className="hidden md:inline-flex group text-sm bg-emerald-500 hover:bg-emerald-400 text-black font-semibold pl-4 pr-3 py-1.5 rounded-lg transition-colors items-center gap-1"
           >
             Start free
             <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </Link>
+          <MobileNav />
         </div>
       </div>
     </nav>
@@ -219,6 +224,229 @@ function Stats() {
   );
 }
 
+// ─── Transparency ────────────────────────────────────────────────────────────
+
+function Transparency() {
+  const pillars = [
+    {
+      icon: Eye,
+      title: "Every signal tracked",
+      desc: "BUY, SELL, or HOLD — every call is logged with a timestamp and tracked to its final outcome. No cherry-picking, no quiet deletions.",
+    },
+    {
+      icon: Target,
+      title: "Misses published",
+      desc: "Wrong calls stay on the record. You see the real win rate — not a curated highlight reel. If it's 58%, we say 58%.",
+    },
+    {
+      icon: Scale,
+      title: "No black box",
+      desc: "Every signal ships with the reasoning behind it. You see which indicators fired, what the model weighed, and why. Agree or override.",
+    },
+  ];
+
+  return (
+    <section id="transparency" className="py-24 px-5 sm:px-8">
+      <div className="max-w-6xl mx-auto">
+        <Reveal className="max-w-2xl mb-12">
+          <SectionLabel index="02">Transparency</SectionLabel>
+          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
+            Signal services hide their losses.<br />We publish ours.
+          </h2>
+          <p className="text-secondary-foreground mt-4 leading-relaxed max-w-lg">
+            Most signal groups delete bad calls, lock win rates behind paywalls, or
+            stop posting after a losing streak. Plebs tracks every signal to outcome —
+            live, public, and permanent.
+          </p>
+        </Reveal>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {pillars.map((p, i) => {
+            const Icon = p.icon;
+            return (
+              <Reveal key={p.title} delay={i * 60}>
+                <div className="h-full rounded-2xl border border-white/[0.06] bg-white/[0.02] p-7 transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.12]">
+                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-700/30 bg-emerald-500/10 text-emerald-400 mb-5">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-white font-medium mb-2">{p.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{p.desc}</p>
+                </div>
+              </Reveal>
+            );
+          })}
+        </div>
+
+        <Reveal delay={200}>
+          <div className="mt-8 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.03] p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+            <div className="flex-1">
+              <p className="text-white font-medium">Check for yourself →</p>
+              <p className="text-muted-foreground text-sm mt-1">
+                The accuracy page is live on the dashboard. Every resolved signal,
+                every coin, every outcome. Free accounts can see it too.
+              </p>
+            </div>
+            <Link
+              href="/signup"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors flex-shrink-0"
+            >
+              View live accuracy
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+// ─── Prop Trading Desk ──────────────────────────────────────────────────────────
+
+function PropDesk() {
+  return (
+    <section className="py-24 px-5 sm:px-8">
+      <div className="max-w-6xl mx-auto">
+        <Reveal className="max-w-2xl mb-10">
+          <SectionLabel index="04">Risk management</SectionLabel>
+          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
+            Know your size before you trade
+          </h2>
+          <p className="text-secondary-foreground mt-4 leading-relaxed">
+            Most signal services tell you what to buy. None tell you how much.
+            The prop trading desk runs Monte Carlo simulations against your account
+            to find optimal position sizing — so one bad call doesn&apos;t blow the account.
+          </p>
+        </Reveal>
+
+        <Reveal delay={80}>
+          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+              {/* Left — feature list */}
+              <div className="p-8">
+                <div className="flex items-center gap-2 mb-6">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#00d4aa]/30 bg-[#00d4aa]/10 text-[#00d4aa]">
+                    <Gauge className="h-4.5 w-4.5" />
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-amber-500/15 text-amber-400 border-amber-700/40 tracking-wider uppercase">
+                    Elite
+                  </span>
+                </div>
+
+                <ul className="space-y-4">
+                  {[
+                    { title: "Monte Carlo simulation", desc: "Thousands of randomised trade sequences stress-tested against prop firm rules" },
+                    { title: "Position sizing engine", desc: "Per-trade risk calculated from your account size, drawdown limits, and stop method" },
+                    { title: "Drawdown tracking", desc: "Real-time headroom gauges — know exactly how much runway you have left" },
+                    { title: "Multi-profile support", desc: "Model $10K retail, $50K funded, or $150K boss accounts side by side" },
+                  ].map((item) => (
+                    <li key={item.title} className="flex gap-3">
+                      <CircleCheck className="h-4 w-4 mt-0.5 flex-shrink-0 text-[#00d4aa]" />
+                      <div>
+                        <span className="text-white text-sm font-medium">{item.title}</span>
+                        <p className="text-muted-foreground text-xs mt-0.5 leading-relaxed">{item.desc}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Right — visual mockup */}
+              <div className="p-8 flex flex-col justify-center">
+                <div className="space-y-3">
+                  {/* Gauge mockups */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3 text-center">
+                      <div className="font-mono text-2xl font-bold text-[#00d4aa] tabular-nums">87%</div>
+                      <div className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">Survival</div>
+                    </div>
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3 text-center">
+                      <div className="font-mono text-2xl font-bold text-amber-400 tabular-nums">62%</div>
+                      <div className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">DD Used</div>
+                    </div>
+                  </div>
+                  {/* Progress bar mockup */}
+                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-4">
+                    <div className="flex items-baseline justify-between mb-2">
+                      <span className="text-xs text-zinc-400">Profit Target</span>
+                      <span className="font-mono text-xs text-white tabular-nums">$3,200 <span className="text-zinc-600">/ $5,000</span></span>
+                    </div>
+                    <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
+                      <div className="h-full w-[64%] rounded-full bg-[#00d4aa]" />
+                    </div>
+                  </div>
+                  {/* Rules */}
+                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-4 space-y-2">
+                    {["Max Daily Loss", "Kill Switch", "Position Cap"].map((rule) => (
+                      <div key={rule} className="flex items-center gap-2">
+                        <CircleCheck className="h-3.5 w-3.5 text-[#00d4aa]" />
+                        <span className="text-xs text-zinc-400">{rule}</span>
+                        <span className="ml-auto font-mono text-[10px] text-[#00d4aa]">OK</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+// ─── Ethos ──────────────────────────────────────────────────────────────────────
+
+function Ethos() {
+  return (
+    <section className="py-24 px-5 sm:px-8">
+      <div className="max-w-4xl mx-auto">
+        <Reveal>
+          <div className="relative rounded-2xl border border-white/[0.08] bg-white/[0.02] p-8 sm:p-12 overflow-hidden">
+            <div className="pointer-events-none absolute -top-20 -right-20 h-[300px] w-[300px] rounded-full bg-emerald-500/[0.05] blur-[100px]" />
+
+            <div className="relative">
+              <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-emerald-400 mb-6">
+                Why we built this
+              </div>
+
+              <blockquote className="text-xl sm:text-2xl font-medium text-white leading-relaxed tracking-tight text-balance">
+                &ldquo;We got tired of paying for signals from anonymous accounts
+                that delete their misses and screenshot their wins. So we built
+                the opposite: every call tracked, every outcome published, every
+                miss on the record. If the AI is wrong, you&apos;ll know — because
+                we show you.&rdquo;
+              </blockquote>
+
+              <div className="mt-8 pt-6 border-t border-white/[0.06]">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <div>
+                    <div className="text-white font-medium text-sm">No hidden losses</div>
+                    <p className="text-muted-foreground text-xs mt-1 leading-relaxed">
+                      Every signal stays on the record forever. Wins and losses, publicly tracked.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="text-white font-medium text-sm">Priced for retail</div>
+                    <p className="text-muted-foreground text-xs mt-1 leading-relaxed">
+                      Institutional-grade analysis shouldn&apos;t cost institutional prices. Free tier included.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="text-white font-medium text-sm">Built in public</div>
+                    <p className="text-muted-foreground text-xs mt-1 leading-relaxed">
+                      We ship features in the open. The accuracy page isn&apos;t gated — even free users see the track record.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
 // ─── Features (bento) ────────────────────────────────────────────────────────────
 
 const FEATURES = [
@@ -265,7 +493,7 @@ function Features() {
     <section className="py-24 px-5 sm:px-8">
       <div className="max-w-6xl mx-auto">
         <Reveal className="max-w-2xl mb-12">
-          <SectionLabel index="02">What you get</SectionLabel>
+          <SectionLabel index="03">What you get</SectionLabel>
           <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest text-balance">
             A full crypto desk, in one tab
           </h2>
@@ -409,7 +637,7 @@ function Pricing() {
     <section id="pricing" className="py-24 px-5 sm:px-8">
       <div className="max-w-5xl mx-auto">
         <Reveal className="max-w-2xl mb-12">
-          <SectionLabel index="03">Pricing</SectionLabel>
+          <SectionLabel index="05">Pricing</SectionLabel>
           <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest">
             Start free. Upgrade when the signals pay for themselves.
           </h2>
@@ -513,7 +741,7 @@ function Faq() {
     <section id="faq" className="py-24 px-5 sm:px-8">
       <div className="max-w-3xl mx-auto">
         <Reveal className="max-w-2xl mb-12">
-          <SectionLabel index="04">FAQ</SectionLabel>
+          <SectionLabel index="06">FAQ</SectionLabel>
           <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest">
             Questions, answered.
           </h2>
@@ -687,7 +915,10 @@ export default function LandingPage() {
         <Hero />
         <Showcase />
         <Stats />
+        <Transparency />
         <Features />
+        <PropDesk />
+        <Ethos />
         <NewsletterBand />
         <Pricing />
         <Faq />
