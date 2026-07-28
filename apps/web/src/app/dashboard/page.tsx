@@ -115,8 +115,9 @@ async function fetchSignals(): Promise<Signal[]> {
     .select("*")
     .in("asset_type", ["crypto", "prediction"])
     .eq("is_backtest", false)
+    .neq("direction", "HOLD")
     .gte("created_at", ENGINE_CUTOFF)
-    .gte("confidence", 60)
+    .gte("confidence", 64)
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) {
