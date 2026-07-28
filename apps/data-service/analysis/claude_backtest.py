@@ -53,13 +53,18 @@ MASSIVE_BASE   = "https://api.massive.com"
 FINNHUB_CANDLE = "https://finnhub.io/api/v1/stock/candle"
 AV_URL         = "https://www.alphavantage.co/query"
 
-DATE_FROM = "2026-03-01"
+DATE_FROM = "2025-11-01"
 DATE_TO   = "2026-07-21"
 
-# Post-indicator-fix only. Biweekly cadence with 50-day warmup from DATE_FROM,
-# last sample sits ~2 weeks before DATE_TO for longterm eval runway.
-SAMPLE_DATES = ["2026-05-01", "2026-05-15",
-                "2026-05-29", "2026-06-12", "2026-06-26", "2026-07-07"]
+# Biweekly cadence spanning 6 months (Jan 2026 → Jul 2026).
+# Alpaca provides years of historical data; 50-day warmup from DATE_FROM
+# means indicators are stable by mid-December, first sample Jan 15.
+SAMPLE_DATES = [
+    "2026-01-15", "2026-02-01", "2026-02-15",
+    "2026-03-01", "2026-03-15", "2026-04-01", "2026-04-15",
+    "2026-05-01", "2026-05-15",
+    "2026-05-29", "2026-06-12", "2026-06-26", "2026-07-07",
+]
 
 SAMPLE_STOCKS = ["AAPL", "NVDA", "TSLA", "PLTR", "AMD",
                  "META", "GOOGL", "COIN", "SOFI", "HOOD",
@@ -70,7 +75,7 @@ SAMPLE_STOCKS = ["AAPL", "NVDA", "TSLA", "PLTR", "AMD",
                  "SHOP", "MRNA", "RIVN", "DDOG", "NET"]
 
 CRYPTO_ASSETS = [
-    # CORE_CRYPTO — scored directly with Sonnet in production
+    # CORE_CRYPTO (10) — scored directly with Sonnet in production
     ("BTC", "bitcoin"),
     ("ETH", "ethereum"),
     ("SOL", "solana"),
@@ -81,7 +86,7 @@ CRYPTO_ASSETS = [
     ("AVAX", "avalanche-2"),
     ("LINK", "chainlink"),
     ("UNI", "uniswap"),
-    # TIER1 sample — prescreened with Haiku in production
+    # TIER1 — established, liquid alts (30)
     ("SUI", "sui"),
     ("DOT", "polkadot"),
     ("NEAR", "near"),
@@ -92,6 +97,27 @@ CRYPTO_ASSETS = [
     ("PENDLE", "pendle"),
     ("KAS", "kaspa"),
     ("JUP", "jupiter-exchange-solana"),
+    # New TIER1 expansion (20) — no meme/micro-caps
+    ("ATOM", "cosmos"),
+    ("LTC", "litecoin"),
+    ("TRX", "tron"),
+    ("ARB", "arbitrum"),
+    ("OP", "optimism"),
+    ("FIL", "filecoin"),
+    ("INJ", "injective-protocol"),
+    ("SEI", "sei-network"),
+    ("AAVE", "aave"),
+    ("MKR", "maker"),
+    ("RENDER", "render-token"),
+    ("FET", "fetch-ai"),
+    ("HBAR", "hedera-hashgraph"),
+    ("ALGO", "algorand"),
+    ("XLM", "stellar"),
+    ("ICP", "internet-computer"),
+    ("STX", "blockstack"),
+    ("RUNE", "thorchain"),
+    ("WLD", "worldcoin-wld"),
+    ("ENA", "ethena"),
 ]
 
 EVAL_WINDOWS = {
@@ -1077,6 +1103,19 @@ def run_claude_backtest(
 
     _recent_errors.clear()
 
+    # Load already-backtested (identifier, date) pairs to skip duplicates
+    _existing_bt: set[tuple[str, str]] = set()
+    try:
+        from supabase import create_client
+        _sk = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY_", "")
+        _sb = create_client(os.environ["SUPABASE_URL"], _sk)
+        _rows = _sb.table("signals").select("identifier, created_at").eq("is_backtest", True).limit(5000).execute()
+        for r in (_rows.data or []):
+            _existing_bt.add((r["identifier"], r["created_at"][:10]))
+        logger.info("[claude_backtest] Found {} existing backtest signals to skip", len(_existing_bt))
+    except Exception as e:
+        logger.warning("[claude_backtest] Could not load existing signals for dedup: {}", e)
+
     results: list[ClaudeSignalResult] = []
     api_calls = 0
     errors = 0
@@ -1321,6 +1360,10 @@ def run_claude_backtest(
     for symbol, df in crypto_data.items():
         for date_str in sample_dates:
             try:
+                if (symbol, date_str) in _existing_bt:
+                    logger.debug("[claude_backtest] SKIP {}/{} — already backtested", symbol, date_str)
+                    continue
+
                 target = pd.Timestamp(date_str)
                 idx = df.index.get_indexer([target], method="ffill")[0]
                 if idx < 0 or idx < 50:
