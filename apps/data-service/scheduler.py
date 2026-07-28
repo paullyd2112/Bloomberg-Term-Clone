@@ -79,12 +79,16 @@ def job_ingest_prediction_markets():
     return ingest_prediction_markets()
 
 def job_score_prediction_markets():
+    if os.environ.get("ENABLE_SCORING", "true").lower() != "true":
+        return "scoring disabled (ENABLE_SCORING != true)"
     return score_prediction_markets()
 
 def job_ingest_crypto():
     return ingest_crypto()
 
 def job_score_crypto():
+    if os.environ.get("ENABLE_SCORING", "true").lower() != "true":
+        return "scoring disabled (ENABLE_SCORING != true)"
     return score_crypto_rules()
 
 def job_ingest_whale_alerts():
