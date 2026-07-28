@@ -219,7 +219,14 @@ export default function PredictionsPage() {
           };
         });
 
-      setMarkets(assembled.filter((m) => m.category !== "sports"));
+      const now = new Date();
+      setMarkets(
+        assembled.filter(
+          (m) =>
+            m.category !== "sports" &&
+            (!m.end_date || new Date(m.end_date) > now)
+        )
+      );
       setLoading(false);
     }
 
