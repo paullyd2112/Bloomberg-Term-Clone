@@ -56,21 +56,48 @@ scheduler = BackgroundScheduler(timezone="America/New_York")
 # Track last run times and error counts for health endpoint
 _job_state: dict = {}
 
+_TRANSIENT_MARKERS = ("522", "timeout", "connection", "timed out", "pool", "connect error")
+_MAX_RETRIES = 3
+
+
+def _is_transient(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(m in msg for m in _TRANSIENT_MARKERS)
+
+
 def _run_job(name: str, fn):
-    """Wrapper: logs, times, captures errors, never crashes scheduler."""
+    """Wrapper: logs, times, retries transient errors (522/timeout), never crashes scheduler."""
+    from supabase_client import refresh_if_stale
+    refresh_if_stale()
+
     with sentry_sdk.start_transaction(op="job", name=name):
         logger.info("Job started: {}", name)
         start = datetime.now(timezone.utc)
-        try:
-            result = fn()
-            elapsed = (datetime.now(timezone.utc) - start).total_seconds()
-            _job_state[name] = {"last_run": datetime.now(timezone.utc).isoformat(), "status": "ok", "elapsed_s": elapsed}
-            logger.info("Job completed: {} ({:.1f}s) — {}", name, elapsed, result)
-        except Exception as e:
-            elapsed = (datetime.now(timezone.utc) - start).total_seconds()
-            _job_state[name] = {"last_run": datetime.now(timezone.utc).isoformat(), "status": "error", "error": str(e)}
-            sentry_sdk.capture_exception(e)
-            logger.error("Job failed: {} — {}", name, e)
+        last_err = None
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                if attempt > 0:
+                    import time
+                    wait = 2 ** attempt
+                    logger.warning("Job {} retry {}/{} after {}s", name, attempt, _MAX_RETRIES, wait)
+                    time.sleep(wait)
+                    refresh_if_stale()
+                result = fn()
+                elapsed = (datetime.now(timezone.utc) - start).total_seconds()
+                _job_state[name] = {"last_run": datetime.now(timezone.utc).isoformat(), "status": "ok", "elapsed_s": elapsed}
+                logger.info("Job completed: {} ({:.1f}s) — {}", name, elapsed, result)
+                return
+            except Exception as e:
+                last_err = e
+                if attempt < _MAX_RETRIES and _is_transient(e):
+                    logger.warning("Job {} transient error (attempt {}): {}", name, attempt + 1, e)
+                    continue
+                break
+
+        elapsed = (datetime.now(timezone.utc) - start).total_seconds()
+        _job_state[name] = {"last_run": datetime.now(timezone.utc).isoformat(), "status": "error", "error": str(last_err)}
+        sentry_sdk.capture_exception(last_err)
+        logger.error("Job failed: {} — {}", name, last_err)
 
 
 # ─── Job stubs (bodies filled in subsequent prompts) ─────────────────────
@@ -348,17 +375,17 @@ scheduler.add_job(lambda: _run_job("score_crypto", job_score_crypto),
 scheduler.add_job(lambda: _run_job("ingest_whale_alerts", job_ingest_whale_alerts),
                   IntervalTrigger(minutes=5), id="ingest_whale_alerts")
 
-# Wallet Profiling — daily at 8:30 AM ET (6:30 AM PT), backfill wallet trade history + compute stats
+# Wallet Profiling — daily at 7:30 AM ET, well before the 8:40-9:00 ingestion window
 scheduler.add_job(lambda: _run_job("ingest_wallet_profiles", job_ingest_wallet_profiles),
-                  CronTrigger(hour=8, minute=30, timezone="America/New_York"), id="ingest_wallet_profiles")
+                  CronTrigger(hour=7, minute=30, timezone="America/New_York"), id="ingest_wallet_profiles")
 
-# Wallet Behavior Patterns — daily at 8:45 AM ET, after wallet profiling completes
+# Wallet Behavior Patterns — daily at 7:50 AM ET, after wallet profiling completes
 scheduler.add_job(lambda: _run_job("analyze_wallet_patterns", job_analyze_wallet_patterns),
-                  CronTrigger(hour=8, minute=45, timezone="America/New_York"), id="analyze_wallet_patterns")
+                  CronTrigger(hour=7, minute=50, timezone="America/New_York"), id="analyze_wallet_patterns")
 
-# Cross-platform ground truth — daily at 8:30 AM ET, fetch Metaculus/Manifold reference probs
+# Cross-platform ground truth — daily at 7:40 AM ET
 scheduler.add_job(lambda: _run_job("ingest_prediction_references", job_ingest_prediction_references),
-                  CronTrigger(hour=8, minute=30, timezone="America/New_York"), id="ingest_prediction_references")
+                  CronTrigger(hour=7, minute=40, timezone="America/New_York"), id="ingest_prediction_references")
 
 # Crypto momentum screener — every 2 hours, catches pumps/breakouts outside watchlist
 scheduler.add_job(lambda: _run_job("crypto_momentum", job_crypto_momentum),
@@ -379,26 +406,19 @@ scheduler.add_job(lambda: _run_job("enrich_fred", job_enrich_fred),
 scheduler.add_job(lambda: _run_job("ingest_congressional", job_ingest_congressional),
                   CronTrigger(hour=8, minute=0), id="ingest_congressional")
 
-# Market news — ingest at 8:45am ET (5:45am PT) weekdays, before newsletter generation
+# Market news — staggered across 8:40-8:56 ET to avoid thundering herd on Supabase
 scheduler.add_job(lambda: _run_job("ingest_news", job_ingest_news),
-                  CronTrigger(hour=8, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_news")
-# AI/tech industry news (RSS, no API key) — same window, gives the newsletter
-# model-launch and product-news coverage Finnhub's finance-wire feed misses
+                  CronTrigger(hour=8, minute=40, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_news")
 scheduler.add_job(lambda: _run_job("ingest_tech_news", job_ingest_tech_news),
-                  CronTrigger(hour=8, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_tech_news")
-# Geopolitics/defense news (RSS, no API key) — same window, covers wars,
-# sanctions, and Congress/defense activity the finance-wire feed misses
+                  CronTrigger(hour=8, minute=43, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_tech_news")
 scheduler.add_job(lambda: _run_job("ingest_geopolitics_news", job_ingest_geopolitics_news),
-                  CronTrigger(hour=8, minute=45, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_geopolitics_news")
-# Sports news (RSS, no API key) — ESPN + BBC Sport, 7 days/week
+                  CronTrigger(hour=8, minute=46, day_of_week="mon-fri", timezone="America/New_York"), id="ingest_geopolitics_news")
 scheduler.add_job(lambda: _run_job("ingest_sports_news", job_ingest_sports_news),
-                  CronTrigger(hour=8, minute=45, timezone="America/New_York"), id="ingest_sports_news")
-# Health/science news (RSS, no API key) — NPR Health + STAT News, 7 days/week
+                  CronTrigger(hour=8, minute=49, timezone="America/New_York"), id="ingest_sports_news")
 scheduler.add_job(lambda: _run_job("ingest_health_science_news", job_ingest_health_science_news),
-                  CronTrigger(hour=8, minute=45, timezone="America/New_York"), id="ingest_health_science_news")
-# General world/US news (RSS, no API key) — BBC World + NPR + NYT, 7 days/week
+                  CronTrigger(hour=8, minute=52, timezone="America/New_York"), id="ingest_health_science_news")
 scheduler.add_job(lambda: _run_job("ingest_world_news", job_ingest_world_news),
-                  CronTrigger(hour=8, minute=45, timezone="America/New_York"), id="ingest_world_news")
+                  CronTrigger(hour=8, minute=55, timezone="America/New_York"), id="ingest_world_news")
 # Feed health monitor — alert if any RSS source goes silent for 72h
 scheduler.add_job(lambda: _run_job("check_feed_health", job_check_feed_health),
                   CronTrigger(hour=8, minute=0, timezone="America/New_York"), id="check_feed_health")
@@ -425,6 +445,14 @@ scheduler.add_job(lambda: _run_job("refresh_asset_accuracy", job_refresh_asset_a
 # Alerts — every 30 min
 scheduler.add_job(lambda: _run_job("evaluate_alerts", job_evaluate_alerts),
                   IntervalTrigger(minutes=30), id="evaluate_alerts")
+
+# Supabase client refresh — shed stale Cloudflare connections every 5 min
+def job_refresh_supabase():
+    from supabase_client import refresh_client
+    refresh_client()
+    return "client refreshed"
+scheduler.add_job(lambda: job_refresh_supabase(),
+                  IntervalTrigger(minutes=5), id="refresh_supabase_client")
 
 # Uptime monitor — every 5 min, alerts via Resend if web app is down
 scheduler.add_job(lambda: _run_job("uptime_check", job_uptime_check),
