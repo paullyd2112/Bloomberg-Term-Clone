@@ -27,14 +27,21 @@ const SAFEGUARDS = [
 const SG_KEY = "sg-expanded";
 
 export default function SystemSafeguards() {
-  const [expanded, setExpanded] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try { return JSON.parse(localStorage.getItem(SG_KEY) ?? "false") as boolean; } catch { return false; }
-  });
+  const [expanded, setExpanded] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(SG_KEY) ?? "false") as boolean;
+      if (stored) setExpanded(true);
+    } catch {}
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
     try { localStorage.setItem(SG_KEY, JSON.stringify(expanded)); } catch {}
-  }, [expanded]);
+  }, [expanded, hydrated]);
 
   return (
     <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl overflow-hidden">

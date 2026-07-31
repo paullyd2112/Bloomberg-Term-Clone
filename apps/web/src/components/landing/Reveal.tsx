@@ -2,10 +2,6 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-/**
- * Scroll-reveal wrapper. Fades + lifts children into view once,
- * respecting prefers-reduced-motion (handled in globals.css).
- */
 export default function Reveal({
   children,
   delay = 0,
@@ -18,9 +14,11 @@ export default function Reveal({
   as?: "div" | "section" | "li";
 }) {
   const ref = useRef<HTMLElement>(null);
+  const [jsReady, setJsReady] = useState(false);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    setJsReady(true);
     const el = ref.current;
     if (!el) return;
     const io = new IntersectionObserver(
@@ -36,12 +34,16 @@ export default function Reveal({
     return () => io.disconnect();
   }, []);
 
+  const revealClass = jsReady
+    ? `reveal ${visible ? "is-visible" : ""}`
+    : "reveal is-visible";
+
   return (
     <Tag
       // @ts-expect-error — polymorphic ref across a small union of tags
       ref={ref}
-      className={`reveal ${visible ? "is-visible" : ""} ${className}`}
-      style={{ transitionDelay: `${delay}ms` }}
+      className={`${revealClass} ${className}`}
+      style={jsReady && !visible ? { transitionDelay: `${delay}ms` } : undefined}
     >
       {children}
     </Tag>

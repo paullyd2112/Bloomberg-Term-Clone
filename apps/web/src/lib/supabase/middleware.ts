@@ -1,14 +1,28 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const PROTECTED_PREFIXES = ["/dashboard", "/onboarding"];
+const AUTH_PAGES = ["/login", "/signup"];
+
+function needsAuth(pathname: string): boolean {
+  return (
+    PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
+    AUTH_PAGES.includes(pathname)
+  );
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
+
+  const { pathname } = request.nextUrl;
+
+  if (!needsAuth(pathname)) {
+    return supabaseResponse;
+  }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // If Supabase isn't configured yet, skip session handling so public pages
-  // (like the landing page) still render instead of throwing a 500.
   if (!supabaseUrl || !supabaseAnonKey) {
     return supabaseResponse;
   }
@@ -34,23 +48,18 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // Refresh session — do not remove, required for SSR auth
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
-
-  // Redirect unauthenticated users away from protected routes
-  if (!user && (pathname.startsWith("/dashboard") || pathname === "/onboarding")) {
+  if (!user && PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
-  // Redirect logged-in users away from auth pages
-  if (user && (pathname === "/login" || pathname === "/signup")) {
+  if (user && AUTH_PAGES.includes(pathname)) {
     const rawNext = request.nextUrl.searchParams.get("next") ?? "/dashboard";
     const safeNext = /^\/(?!\/)/.test(rawNext) ? rawNext : "/dashboard";
     const url = request.nextUrl.clone();

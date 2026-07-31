@@ -53,9 +53,10 @@ const STATUS_CONFIG: Record<MarketStatus, { dot: string; ping: string; label: st
 };
 
 export function MarketStatusBadge({ className = "" }: { className?: string }) {
-  const [status, setStatus] = useState<MarketStatus>(getMarketStatus);
+  const [status, setStatus] = useState<MarketStatus>("closed");
 
   useEffect(() => {
+    setStatus(getMarketStatus());
     const id = setInterval(() => setStatus(getMarketStatus()), 30_000);
     return () => clearInterval(id);
   }, []);
