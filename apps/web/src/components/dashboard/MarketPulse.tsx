@@ -43,19 +43,21 @@ export default function MarketPulse({
   const availableTabs = TABS.filter((tab) => contentMap[tab.id] != null);
   const defaultTab = availableTabs.length > 0 ? availableTabs[0].id : "whales";
 
-  const [activeTab, setActiveTab] = useState<TabId>(() => {
-    const stored = readStorage<TabId>(STORAGE_KEY_TAB, defaultTab);
-    return contentMap[stored] != null ? stored : defaultTab;
-  });
-  const [collapsed, setCollapsed] = useState(() => readStorage(STORAGE_KEY_COLLAPSED, false));
+  const [activeTab, setActiveTab] = useState<TabId>(defaultTab);
+  const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setHydrated(true);
-    if (!localStorage.getItem(STORAGE_KEY_COLLAPSED)) {
+    const storedTab = readStorage<TabId>(STORAGE_KEY_TAB, defaultTab);
+    if (contentMap[storedTab] != null) setActiveTab(storedTab);
+    const storedCollapsed = readStorage(STORAGE_KEY_COLLAPSED, false);
+    if (storedCollapsed) {
+      setCollapsed(true);
+    } else if (!localStorage.getItem(STORAGE_KEY_COLLAPSED)) {
       const mql = window.matchMedia("(max-width: 639px)");
       if (mql.matches) setCollapsed(true);
     }
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
