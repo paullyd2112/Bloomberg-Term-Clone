@@ -44,6 +44,7 @@ export async function POST() {
   await stripe.subscriptions.update(profile.stripe_subscription_id, {
     trial_end: "now",
     coupon: coupon.id,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
 
   return NextResponse.json({

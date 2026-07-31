@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ status: "ok", signal: result.signal });
-  } catch (e) {
+  } catch {
     return NextResponse.json(
       { error: "Scoring service unavailable" },
       { status: 503 },

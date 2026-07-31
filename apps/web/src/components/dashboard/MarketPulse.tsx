@@ -58,6 +58,7 @@ export default function MarketPulse({
       if (mql.matches) setCollapsed(true);
     }
     setHydrated(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

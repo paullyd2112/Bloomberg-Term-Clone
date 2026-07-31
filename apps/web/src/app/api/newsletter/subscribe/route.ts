@@ -17,13 +17,14 @@ export async function POST(req: Request) {
   const { email } = parsed.data;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: authData } = await (admin.auth.admin as any).getUserByEmail(email);
   if (authData?.user) {
     return NextResponse.json({ exists: true }, { status: 200 });
   }
 
-  const { data: existing } = await (admin
-    .from("newsletter_subscribers") as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existing } = await (admin.from("newsletter_subscribers") as any)
     .select("email")
     .eq("email", email.toLowerCase())
     .maybeSingle();
@@ -31,8 +32,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ already_subscribed: true }, { status: 200 });
   }
 
-  const { error } = await (admin
-    .from("newsletter_subscribers") as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin.from("newsletter_subscribers") as any)
     .insert({ email: email.toLowerCase(), confirmed: true });
 
   if (error) {

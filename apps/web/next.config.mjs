@@ -1,10 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   webpack: (config) => {
     config.resolve.fallback = {
@@ -15,6 +15,8 @@ const nextConfig = {
       "@x402/evm": false,
       "@x402/svm/exact/client": false,
       "@coinbase/cdp-sdk": false,
+      "@react-native-async-storage/async-storage": false,
+      "pino-pretty": false,
     };
     return config;
   },

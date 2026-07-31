@@ -39,6 +39,7 @@ function LiveClock() {
 
 export default function PriceHeader({
   price: data,
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
   assetType,
 }: {
   price: PriceData;

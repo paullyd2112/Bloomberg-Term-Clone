@@ -15,8 +15,8 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const { email } = parsed.data;
 
-  const { error } = await (admin
-    .from("newsletter_subscribers") as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin.from("newsletter_subscribers") as any)
     .update({ unsubscribed: true })
     .eq("email", email.toLowerCase());
 

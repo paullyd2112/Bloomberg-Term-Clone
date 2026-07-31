@@ -41,7 +41,7 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function formatPrice(price: number | null, assetType: string): string {
+function formatPrice(price: number | null): string {
   if (price == null) return "—";
   return `$${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -109,7 +109,7 @@ export default async function HistoryPage({
 }: {
   searchParams: { asset?: string; outcome?: string; horizon?: string };
 }) {
-  const user = await getUser();
+  await getUser();
   const tier = await getUserTier();
 
   if (tier === "free") {
@@ -161,7 +161,7 @@ export default async function HistoryPage({
   const avgConf  = total > 0 ? pricedSignals.reduce((s, w) => s + w.confidence, 0) / total : 0;
 
   const allReturns = pricedSignals.map(computeReturn).filter((r): r is number => r !== null);
-  const avgReturn  = allReturns.length > 0 ? allReturns.reduce((a, b) => a + b, 0) / allReturns.length : null;
+  const _avgReturn  = allReturns.length > 0 ? allReturns.reduce((a, b) => a + b, 0) / allReturns.length : null; // eslint-disable-line @typescript-eslint/no-unused-vars
 
   // --- YTD ---
   const now = new Date();
@@ -430,10 +430,10 @@ export default async function HistoryPage({
                         {sig.confidence}%
                       </td>
                       <td className="py-2.5 px-3 text-right text-zinc-400 font-mono text-xs tabular-nums">
-                        {formatPrice(sig.price_at_signal, sig.asset_type)}
+                        {formatPrice(sig.price_at_signal)}
                       </td>
                       <td className="py-2.5 px-3 text-right text-zinc-400 font-mono text-xs tabular-nums">
-                        {formatPrice(sig.outcome_price, sig.asset_type)}
+                        {formatPrice(sig.outcome_price)}
                       </td>
                       <td className="py-2.5 px-3 text-right tabular-nums text-xs font-semibold">
                         {ret != null ? (

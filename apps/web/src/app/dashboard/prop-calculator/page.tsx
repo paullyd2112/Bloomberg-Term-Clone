@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Calculator, Shield, Activity, Target, AlertTriangle, TrendingDown, Gauge } from "lucide-react";
+import { Gauge } from "lucide-react";
 import { clsx } from "clsx";
 import RiskGauge from "@/components/prop/RiskGauge";
 import ChallengeProgress from "@/components/prop/ChallengeProgress";
@@ -45,8 +45,6 @@ const DEFAULT_PROFILES: ProfileOption[] = [
   { id: "50k_prop_moderate", label: "Prop $50K", account_size: 50_000 },
   { id: "150k_prop_boss", label: "Prop $150K", account_size: 150_000 },
 ];
-
-const ACCOUNT_PRESETS = [10_000, 25_000, 50_000, 100_000, 150_000, 200_000];
 
 export default function PropCalculatorPage() {
   const [accountSize, setAccountSize] = useState(50_000);

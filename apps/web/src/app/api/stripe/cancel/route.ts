@@ -76,16 +76,13 @@ export async function POST(req: Request) {
       });
 
       // Apply the coupon to the existing subscription
-      await stripe.subscriptions.update(profile.stripe_subscription_id, {
-        coupon: coupon.id,
-      } as any);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await stripe.subscriptions.update(profile.stripe_subscription_id, { coupon: coupon.id } as any);
 
       // Mark offer as used so they can't do this again
       const admin = createAdminClient();
-      await (admin as any)
-        .from("profiles")
-        .update({ retention_offer_used: true })
-        .eq("id", user.id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin as any).from("profiles").update({ retention_offer_used: true }).eq("id", user.id);
 
       return NextResponse.json({ ok: true, discount: discount.percent });
     }
@@ -97,10 +94,8 @@ export async function POST(req: Request) {
         // Trial: immediate cancellation, no access
         await stripe.subscriptions.cancel(profile.stripe_subscription_id);
         const admin = createAdminClient();
-        await (admin as any)
-          .from("profiles")
-          .update({ tier: "free", stripe_subscription_id: null, billing_interval: null })
-          .eq("id", user.id);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin as any).from("profiles").update({ tier: "free", stripe_subscription_id: null, billing_interval: null }).eq("id", user.id);
       } else {
         // Paid: cancel at period end so they keep access for what they paid
         await stripe.subscriptions.update(profile.stripe_subscription_id, {

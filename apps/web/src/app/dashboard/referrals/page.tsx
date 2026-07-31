@@ -43,8 +43,6 @@ export default async function ReferralsPage() {
   const inviteUrl = code ? `${appUrl}/invite/${code}` : null;
 
   const converted = referrals.filter((r) => r.status !== "pending").length;
-  const pending   = referrals.filter((r) => r.status === "pending").length;
-
   const freeMonthsEarned = Math.floor(converted / 3);
   const toNextFreeMonth  = 3 - (converted % 3);
   const lifetimeUnlocked = converted >= 12;
