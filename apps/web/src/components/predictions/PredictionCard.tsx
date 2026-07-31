@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { clsx } from "clsx";
 import Sparkline from "./Sparkline";
 
@@ -69,8 +68,6 @@ function daysUntil(iso: string | null): string | null {
 }
 
 export default function PredictionCard({ market }: { market: PredictionMarket }) {
-  const [showTrade, setShowTrade] = useState(false);
-
   const prob = Math.round(market.yes_price * 100);
   const remaining = daysUntil(market.end_date);
   const hasSignal = market.signal && market.signal.direction !== "HOLD";
@@ -160,24 +157,6 @@ export default function PredictionCard({ market }: { market: PredictionMarket })
         )}
       </div>
 
-      {/* Trade tooltip */}
-      <div className="relative mt-3">
-        <button
-          onClick={(e) => { e.stopPropagation(); setShowTrade(!showTrade); }}
-          className="w-full py-2 text-xs font-medium text-zinc-500 bg-white/[0.03] border border-white/[0.06] rounded-lg hover:bg-white/[0.05] hover:text-zinc-300 transition-colors"
-        >
-          Trade
-        </button>
-        {showTrade && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setShowTrade(false)} />
-            <div className="absolute left-0 right-0 bottom-full mb-2 z-50 bg-zinc-900 border border-white/[0.1] rounded-lg shadow-xl p-3 text-center">
-              <p className="text-xs font-medium text-white mb-0.5">Coming Soon</p>
-              <p className="text-[10px] text-zinc-500">Non-custodial trading on Polymarket</p>
-            </div>
-          </>
-        )}
-      </div>
     </div>
   );
 }
