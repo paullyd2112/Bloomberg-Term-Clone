@@ -145,7 +145,6 @@ export default function TrackRecord({ accuracy }: { accuracy: PlatformAccuracy }
               <div className="text-[10px] uppercase tracking-widest text-zinc-600 mb-2">Month over month</div>
               <div className="flex gap-4 overflow-x-auto scrollbar-none pb-1">
                 {accuracy.byMonth.map((m) => {
-                  const monthResolved = m.wins + m.losses;
                   return (
                     <div key={m.month} className="flex-shrink-0 min-w-[72px]">
                       <div className="text-xs text-zinc-500 font-mono">{m.month}</div>

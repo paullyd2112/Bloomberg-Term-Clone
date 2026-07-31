@@ -89,7 +89,6 @@ export async function POST(req: Request) {
 
   const isLifetime  = plan === "lifetime_pro"   || plan === "lifetime_elite";
   const isMonthly   = plan === "pro_monthly"    || plan === "elite_monthly";
-  const isQuarterly = plan === "pro_quarterly"  || plan === "elite_quarterly";
   const hasTrial    = isMonthly;
   const baseMetadata = {
     supabase_user_id: user.id,

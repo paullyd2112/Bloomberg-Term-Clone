@@ -16,6 +16,7 @@ function getTrialDaysLeft(trialEndsAt: string | null): number | null {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function TopBar({ user, tier, trialEndsAt }: { user: User; tier: Tier; trialEndsAt: string | null }) {
   const router = useRouter();
   const supabase = createClient();

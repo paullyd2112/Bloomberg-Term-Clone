@@ -6,11 +6,9 @@ import { clsx } from "clsx";
 import {
   Zap,
   Star,
-  Landmark,
   Sunrise,
   Sparkles,
   Search,
-  Wallet,
   Bot,
   BarChart3,
   type LucideIcon,

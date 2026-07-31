@@ -37,7 +37,7 @@ export default function UpgradeButtons({ planTier }: { planTier: "pro" | "elite"
         setError(data.error || "Checkout failed. Please try again.");
         setLoading(false);
       }
-    } catch (err) {
+    } catch {
       setError("Network error. Please try again.");
       setLoading(false);
     }

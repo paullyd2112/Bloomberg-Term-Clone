@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect } from "react";
 import { X, AlertTriangle, Loader2, CheckCircle2 } from "lucide-react";
 import { clsx } from "clsx";
 import { useAccount, useSignTypedData } from "wagmi";
-import { formatUnits } from "viem";
 import { deriveClobCredentials, getCachedCredentials, type ClobCredentials } from "@/lib/polymarket/auth";
 import { createOrder, getOrderBook, type OrderSide } from "@/lib/polymarket/clob";
 import { checkOrderRisk, incrementTradeCount, recordLoss } from "@/lib/polymarket/risk";

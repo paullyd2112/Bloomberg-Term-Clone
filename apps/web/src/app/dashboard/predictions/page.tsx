@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Search, Wifi, WifiOff, Zap } from "lucide-react";
+import { Search, WifiOff, Zap } from "lucide-react";
 import { clsx } from "clsx";
 import { createClient } from "@/lib/supabase/client";
 import PredictionCard, { type PredictionMarket, type SmartMoneyData, type WhaleActivityData } from "@/components/predictions/PredictionCard";
