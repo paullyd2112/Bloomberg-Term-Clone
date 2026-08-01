@@ -1,5 +1,5 @@
 import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
+import { Redis } from "@upstash/redis/cloudflare";
 
 // Distributed rate limiting via Upstash Redis.
 // If env vars are absent, upstashConfigured is false and middleware
