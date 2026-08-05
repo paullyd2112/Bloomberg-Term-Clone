@@ -1,6 +1,6 @@
 import sys
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from loguru import logger
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -598,6 +598,174 @@ def score_asset_endpoint():
     except Exception as e:
         logger.error("On-demand score failed for {}/{}: {}", asset_type, identifier, e)
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/confidence-check", methods=["POST"])
+def confidence_check_endpoint():
+    """
+    On-demand confidence check for a user-provided bet question.
+    Fuzzy-matches the question against ingested Polymarket markets,
+    then scores the best match through the full prediction pipeline.
+    """
+    from flask import request as flask_request
+    from scoring.engine import score_asset, format_signal_for_tier
+    from supabase_client import supabase
+    from difflib import SequenceMatcher
+
+    body = flask_request.get_json(silent=True) or {}
+    question = (body.get("question") or "").strip()
+    subscription = body.get("subscription")
+    direct_condition_id = body.get("condition_id")
+
+    if not question or len(question) < 5:
+        return jsonify({"error": "Question too short — provide a clear bet description"}), 400
+
+    # If a specific condition_id is provided (e.g. user clicked an alternative match),
+    # skip fuzzy matching and score directly
+    if direct_condition_id:
+        try:
+            signal = score_asset("prediction", direct_condition_id, skip_hold=False, subscription=subscription)
+            if signal is None:
+                existing = (
+                    supabase.table("signals")
+                    .select("*")
+                    .eq("asset_type", "prediction")
+                    .eq("identifier", direct_condition_id)
+                    .eq("is_backtest", False)
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                if existing.data:
+                    return jsonify({"status": "cached", "matched_market": question, "signal": existing.data[0]})
+                return jsonify({"status": "no_signal", "matched_market": question,
+                                "reason": "No actionable signal — may have been scored recently or failed guardrails."})
+
+            filtered = format_signal_for_tier(signal, subscription)
+            if filtered is None:
+                return jsonify({"status": "rejected", "reason": "Not available on this tier"}), 403
+            return jsonify({"status": "ok", "matched_market": question, "signal": filtered})
+        except Exception as e:
+            logger.error("confidence-check direct: scoring failed for {} — {}", direct_condition_id, e)
+            return jsonify({"error": f"Scoring failed: {str(e)}"}), 500
+
+    try:
+        result = (
+            supabase.table("raw_prices")
+            .select("identifier, price, volume, metadata, captured_at")
+            .eq("asset_type", "prediction")
+            .gte("captured_at", (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat())
+            .order("captured_at", desc=True)
+            .limit(2000)
+            .execute()
+        )
+    except Exception as e:
+        logger.error("confidence-check: failed to fetch markets — {}", e)
+        return jsonify({"error": "Failed to fetch markets"}), 500
+
+    if not result.data:
+        return jsonify({"error": "No prediction markets currently ingested"}), 404
+
+    seen: dict[str, dict] = {}
+    for row in result.data:
+        if row["identifier"] not in seen:
+            seen[row["identifier"]] = row
+    unique_rows = list(seen.values())
+
+    q_lower = question.lower()
+    scored: list[tuple[float, dict]] = []
+    for row in unique_rows:
+        meta = row.get("metadata") or {}
+        title = (meta.get("title") or "").lower()
+        if not title:
+            continue
+
+        seq_ratio = SequenceMatcher(None, q_lower, title).ratio()
+
+        q_words = set(q_lower.split())
+        t_words = set(title.split())
+        overlap = len(q_words & t_words)
+        word_score = overlap / max(len(q_words), 1)
+
+        if q_lower in title or title in q_lower:
+            substring_bonus = 0.3
+        else:
+            substring_bonus = 0.0
+
+        combined = seq_ratio * 0.5 + word_score * 0.3 + substring_bonus * 0.2
+        scored.append((combined, row))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    if not scored or scored[0][0] < 0.15:
+        return jsonify({
+            "status": "no_match",
+            "error": "No matching market found for your question. Try rephrasing or use keywords from the market title.",
+        }), 404
+
+    best_score, best_row = scored[0]
+    best_meta = best_row.get("metadata") or {}
+    best_title = best_meta.get("title", "")
+    best_id = best_row["identifier"]
+
+    top_matches = []
+    for sim, row in scored[:5]:
+        m = row.get("metadata") or {}
+        if sim >= 0.15:
+            top_matches.append({
+                "condition_id": row["identifier"],
+                "title": m.get("title", ""),
+                "yes_price": m.get("yes_price"),
+                "similarity": round(sim, 3),
+            })
+
+    try:
+        signal = score_asset("prediction", best_id, skip_hold=False, subscription=subscription)
+
+        if signal is None:
+            existing = (
+                supabase.table("signals")
+                .select("*")
+                .eq("asset_type", "prediction")
+                .eq("identifier", best_id)
+                .eq("is_backtest", False)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if existing.data:
+                return jsonify({
+                    "status": "cached",
+                    "matched_market": best_title,
+                    "match_score": round(best_score, 3),
+                    "signal": existing.data[0],
+                    "other_matches": top_matches[1:],
+                })
+            return jsonify({
+                "status": "no_signal",
+                "matched_market": best_title,
+                "match_score": round(best_score, 3),
+                "reason": "Market matched but no actionable signal — may have been scored recently or failed guardrails.",
+                "other_matches": top_matches[1:],
+            })
+
+        filtered = format_signal_for_tier(signal, subscription)
+        if filtered is None:
+            return jsonify({
+                "status": "rejected",
+                "reason": "Prediction markets not available on this subscription tier",
+            }), 403
+
+        return jsonify({
+            "status": "ok",
+            "matched_market": best_title,
+            "match_score": round(best_score, 3),
+            "signal": filtered,
+            "other_matches": top_matches[1:],
+        })
+    except Exception as e:
+        logger.error("confidence-check: scoring failed for {} — {}", best_id, e)
+        return jsonify({"error": f"Scoring failed: {str(e)}"}), 500
 
 
 @app.route("/score-now", methods=["GET", "POST"])

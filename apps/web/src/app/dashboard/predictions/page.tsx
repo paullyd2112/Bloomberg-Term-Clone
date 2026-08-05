@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import PredictionCard, { type PredictionMarket, type SmartMoneyData, type WhaleActivityData } from "@/components/predictions/PredictionCard";
 import Sparkline from "@/components/predictions/Sparkline";
 import ConnectWalletButton from "@/components/predictions/ConnectWalletButton";
+import ConfidenceCheck from "@/components/predictions/ConfidenceCheck";
 
 const SPORTS_KEYWORDS = [
   "f1", "formula 1", "nfl", "nba", "mlb", "nhl", "mls",
@@ -377,6 +378,11 @@ export default function PredictionsPage() {
           <div className="text-xl font-bold tabular-nums text-white">{formatVolume(totalVolume)}</div>
           <div className="text-[0.6875rem] text-zinc-600 mt-0.5">24h volume tracked</div>
         </div>
+      </div>
+
+      {/* Confidence Check */}
+      <div className="pb-6">
+        <ConfidenceCheck />
       </div>
 
       {/* Category pills */}
