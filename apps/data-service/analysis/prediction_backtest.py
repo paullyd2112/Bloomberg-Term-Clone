@@ -106,102 +106,50 @@ class BacktestReport:
 # ─── Data fetching ──────────────────────────────────────────────────────────
 
 def _fetch_all_prediction_markets() -> list[dict]:
-    """Fetch all distinct prediction markets that have been ingested.
+    """Fetch all distinct prediction markets from recent raw_prices data.
 
-    Two-pass approach:
-      1. Try prediction_price_history for condition_id discovery (fast).
-      2. Fallback: paginate raw_prices with asset_type=prediction.
-    Then batch-fetch metadata from raw_prices for each discovered market.
+    Uses time-windowed queries on raw_prices (same approach as production
+    score_prediction_markets) to avoid full-table scans that timeout.
+    Queries the last 7 days in daily windows to discover all active markets,
+    then deduplicates by identifier.
     """
     from supabase_client import supabase as sb
 
-    condition_ids: list[str] = []
+    seen: set[str] = set()
+    markets: list[dict] = []
 
-    # --- Pass 1: try prediction_price_history ---
-    try:
-        hist_result = (
-            sb.table("prediction_price_history")
-            .select("condition_id")
-            .order("captured_at", desc=True)
-            .limit(10000)
-            .execute()
-        )
-        seen = set()
-        for row in hist_result.data or []:
-            cid = row.get("condition_id")
-            if cid and cid not in seen:
-                seen.add(cid)
-                condition_ids.append(cid)
-        logger.info("prediction_price_history returned {} rows, {} distinct condition_ids",
-                     len(hist_result.data or []), len(condition_ids))
-    except Exception as e:
-        logger.warning("prediction_price_history query failed ({}), trying raw_prices fallback", e)
-
-    # --- Pass 2: fallback to raw_prices if history was empty ---
-    if not condition_ids:
-        logger.info("Falling back to raw_prices for market discovery")
-        try:
-            offset = 0
-            page_size = 1000
-            seen = set()
-            while True:
-                result = (
-                    sb.table("raw_prices")
-                    .select("identifier")
-                    .eq("asset_type", "prediction")
-                    .order("captured_at", desc=True)
-                    .range(offset, offset + page_size - 1)
-                    .execute()
-                )
-                rows = result.data or []
-                logger.info("raw_prices page at offset {}: {} rows", offset, len(rows))
-                for row in rows:
-                    ident = row.get("identifier")
-                    if ident and ident not in seen:
-                        seen.add(ident)
-                        condition_ids.append(ident)
-                if len(rows) < page_size:
-                    break
-                offset += page_size
-                if offset > 20000:
-                    break
-            logger.info("raw_prices fallback found {} distinct markets", len(condition_ids))
-        except Exception as e:
-            logger.error("raw_prices fallback also failed: {}", e)
-            return []
-
-    if not condition_ids:
-        logger.warning("No prediction markets found in either table")
-        return []
-
-    # --- Fetch metadata for each market ---
-    markets = []
-    batch_size = 50
-    for i in range(0, len(condition_ids), batch_size):
-        batch = condition_ids[i:i + batch_size]
+    # Query raw_prices in daily windows over the past 7 days
+    now = datetime.now(timezone.utc)
+    for days_back in range(7):
+        window_end = now - timedelta(days=days_back)
+        window_start = window_end - timedelta(days=1)
         try:
             result = (
                 sb.table("raw_prices")
-                .select("identifier, metadata")
+                .select("identifier, price, volume, metadata, captured_at")
                 .eq("asset_type", "prediction")
-                .in_("identifier", batch)
+                .gte("captured_at", window_start.isoformat())
+                .lt("captured_at", window_end.isoformat())
                 .order("captured_at", desc=True)
-                .limit(batch_size * 3)
+                .limit(5000)
                 .execute()
             )
-            batch_seen = set()
-            for row in result.data or []:
-                ident = row["identifier"]
-                if ident not in batch_seen:
-                    batch_seen.add(ident)
+            rows = result.data or []
+            new_count = 0
+            for row in rows:
+                ident = row.get("identifier")
+                if ident and ident not in seen:
+                    seen.add(ident)
                     markets.append(row)
+                    new_count += 1
+            logger.info("raw_prices day -{}: {} rows, {} new markets", days_back, len(rows), new_count)
+            if new_count == 0 and days_back >= 2:
+                break
         except Exception as e:
-            logger.warning("Failed to fetch metadata batch {}: {}", i, e)
-            for cid in batch:
-                if cid not in {m["identifier"] for m in markets}:
-                    markets.append({"identifier": cid, "metadata": {}})
+            logger.warning("raw_prices query failed for day -{}: {}", days_back, e)
+            continue
 
-    logger.info("Fetched metadata for {} markets total", len(markets))
+    logger.info("Discovered {} distinct prediction markets from raw_prices", len(markets))
     return markets
 
 
