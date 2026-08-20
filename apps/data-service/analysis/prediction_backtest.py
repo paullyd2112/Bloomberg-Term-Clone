@@ -105,6 +105,9 @@ class BacktestReport:
 
 # ─── Data fetching ──────────────────────────────────────────────────────────
 
+_backtest_debug: list[str] = []
+
+
 def _fetch_all_prediction_markets() -> list[dict]:
     """Fetch all distinct prediction markets from recent raw_prices data.
 
@@ -115,11 +118,21 @@ def _fetch_all_prediction_markets() -> list[dict]:
     """
     from supabase_client import supabase as sb
 
+    _backtest_debug.clear()
     seen: set[str] = set()
     markets: list[dict] = []
 
-    # Query raw_prices in daily windows over the past 7 days
     now = datetime.now(timezone.utc)
+    _backtest_debug.append(f"now={now.isoformat()}")
+
+    # First: quick sanity check — can we read raw_prices at all?
+    try:
+        check = sb.table("raw_prices").select("identifier, asset_type, captured_at").order("captured_at", desc=True).limit(3).execute()
+        _backtest_debug.append(f"raw_prices_check: {len(check.data or [])} rows, types={[r.get('asset_type') for r in (check.data or [])]}")
+    except Exception as e:
+        _backtest_debug.append(f"raw_prices_check FAILED: {type(e).__name__}: {e}")
+
+    # Query raw_prices in daily windows over the past 7 days
     for days_back in range(7):
         window_end = now - timedelta(days=days_back)
         window_start = window_end - timedelta(days=1)
@@ -142,14 +155,19 @@ def _fetch_all_prediction_markets() -> list[dict]:
                     seen.add(ident)
                     markets.append(row)
                     new_count += 1
-            logger.info("raw_prices day -{}: {} rows, {} new markets", days_back, len(rows), new_count)
+            msg = f"day-{days_back} [{window_start.isoformat()[:19]} to {window_end.isoformat()[:19]}]: {len(rows)} rows, {new_count} new"
+            logger.info("raw_prices {}", msg)
+            _backtest_debug.append(msg)
             if new_count == 0 and days_back >= 2:
                 break
         except Exception as e:
-            logger.warning("raw_prices query failed for day -{}: {}", days_back, e)
+            msg = f"day-{days_back} FAILED: {type(e).__name__}: {e}"
+            logger.warning("raw_prices {}", msg)
+            _backtest_debug.append(msg)
             continue
 
     logger.info("Discovered {} distinct prediction markets from raw_prices", len(markets))
+    _backtest_debug.append(f"total_markets={len(markets)}")
     return markets
 
 

@@ -1322,16 +1322,20 @@ def run_prediction_backtest_endpoint():
                 min_confidence=min_confidence,
                 max_markets=max_markets,
             )
+            from analysis.prediction_backtest import _backtest_debug
             _job_state["prediction_backtest"] = {
                 "last_run": datetime.now(timezone.utc).isoformat(),
                 "status": "ok",
                 "summary": _report_to_dict(report),
+                "debug": list(_backtest_debug),
             }
         except Exception as e:
+            from analysis.prediction_backtest import _backtest_debug
             _job_state["prediction_backtest"] = {
                 "last_run": datetime.now(timezone.utc).isoformat(),
                 "status": "error",
                 "error": str(e),
+                "debug": list(_backtest_debug),
             }
             logger.error("Prediction backtest failed: {}", e)
 
