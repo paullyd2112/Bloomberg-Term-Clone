@@ -1353,6 +1353,34 @@ def prediction_backtest_status():
     return jsonify(state)
 
 
+@app.route("/backtest/predictions/data-check")
+def prediction_backtest_data_check():
+    """Diagnostic: check what prediction data exists for backtesting."""
+    from supabase_client import supabase as sb
+    checks = {}
+    try:
+        r = sb.table("prediction_price_history").select("condition_id", count="exact").limit(1).execute()
+        checks["prediction_price_history_total"] = r.count
+    except Exception as e:
+        checks["prediction_price_history_error"] = str(e)
+    try:
+        r = sb.table("raw_prices").select("identifier", count="exact").eq("asset_type", "prediction").limit(1).execute()
+        checks["raw_prices_predictions_total"] = r.count
+    except Exception as e:
+        checks["raw_prices_predictions_error"] = str(e)
+    try:
+        r = sb.table("prediction_price_history").select("condition_id").order("captured_at", desc=True).limit(5).execute()
+        checks["recent_condition_ids"] = [row["condition_id"] for row in (r.data or [])]
+    except Exception as e:
+        checks["recent_condition_ids_error"] = str(e)
+    try:
+        r = sb.table("signals").select("identifier", count="exact").eq("asset_type", "prediction").limit(1).execute()
+        checks["prediction_signals_total"] = r.count
+    except Exception as e:
+        checks["prediction_signals_error"] = str(e)
+    return jsonify(checks)
+
+
 @app.route("/factor-discovery", methods=["GET", "POST"])
 def run_factor_discovery_endpoint():
     """
