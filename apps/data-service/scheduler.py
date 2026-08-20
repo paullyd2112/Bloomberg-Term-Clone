@@ -1298,6 +1298,61 @@ def backtest_status():
     return jsonify(state)
 
 
+@app.route("/backtest/predictions", methods=["GET", "POST"])
+def run_prediction_backtest_endpoint():
+    """Deterministic prediction market backtest — zero Claude API cost.
+
+    POST /backtest/predictions
+    Optional JSON: {"strategy": "momentum", "min_confidence": 65, "max_markets": 200}
+    """
+    from flask import request as flask_request
+    from analysis.prediction_backtest import run_prediction_backtest, _report_to_dict
+    import threading
+
+    body = flask_request.get_json(silent=True) or {}
+    strategy = body.get("strategy")
+    strategies = [strategy] if strategy else None
+    min_confidence = int(body.get("min_confidence", 60))
+    max_markets = int(body.get("max_markets", 500))
+
+    def _run():
+        try:
+            report = run_prediction_backtest(
+                strategies=strategies,
+                min_confidence=min_confidence,
+                max_markets=max_markets,
+            )
+            _job_state["prediction_backtest"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "ok",
+                "summary": _report_to_dict(report),
+            }
+        except Exception as e:
+            _job_state["prediction_backtest"] = {
+                "last_run": datetime.now(timezone.utc).isoformat(),
+                "status": "error",
+                "error": str(e),
+            }
+            logger.error("Prediction backtest failed: {}", e)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    return jsonify({
+        "status": "started",
+        "message": "Prediction backtest running in background. Check /backtest/predictions/status for results.",
+        "strategies": strategies or "all",
+        "min_confidence": min_confidence,
+        "max_markets": max_markets,
+    })
+
+
+@app.route("/backtest/predictions/status")
+def prediction_backtest_status():
+    state = _job_state.get("prediction_backtest", {"status": "never_run"})
+    return jsonify(state)
+
+
 @app.route("/factor-discovery", methods=["GET", "POST"])
 def run_factor_discovery_endpoint():
     """
