@@ -1359,25 +1359,22 @@ def prediction_backtest_data_check():
     from supabase_client import supabase as sb
     checks = {}
     try:
-        r = sb.table("prediction_price_history").select("condition_id", count="exact").limit(1).execute()
-        checks["prediction_price_history_total"] = r.count
+        r = sb.table("prediction_price_history").select("condition_id, captured_at").order("captured_at", desc=True).limit(5).execute()
+        checks["recent_price_history"] = r.data or []
+        checks["has_price_history"] = len(r.data or []) > 0
     except Exception as e:
-        checks["prediction_price_history_error"] = str(e)
+        checks["price_history_error"] = str(e)
     try:
-        r = sb.table("raw_prices").select("identifier", count="exact").eq("asset_type", "prediction").limit(1).execute()
-        checks["raw_prices_predictions_total"] = r.count
+        r = sb.table("raw_prices").select("identifier, captured_at").eq("asset_type", "prediction").order("captured_at", desc=True).limit(5).execute()
+        checks["recent_raw_predictions"] = r.data or []
+        checks["has_raw_predictions"] = len(r.data or []) > 0
     except Exception as e:
-        checks["raw_prices_predictions_error"] = str(e)
+        checks["raw_predictions_error"] = str(e)
     try:
-        r = sb.table("prediction_price_history").select("condition_id").order("captured_at", desc=True).limit(5).execute()
-        checks["recent_condition_ids"] = [row["condition_id"] for row in (r.data or [])]
+        r = sb.table("signals").select("identifier, direction, outcome").eq("asset_type", "prediction").order("created_at", desc=True).limit(5).execute()
+        checks["recent_pred_signals"] = r.data or []
     except Exception as e:
-        checks["recent_condition_ids_error"] = str(e)
-    try:
-        r = sb.table("signals").select("identifier", count="exact").eq("asset_type", "prediction").limit(1).execute()
-        checks["prediction_signals_total"] = r.count
-    except Exception as e:
-        checks["prediction_signals_error"] = str(e)
+        checks["pred_signals_error"] = str(e)
     return jsonify(checks)
 
 
