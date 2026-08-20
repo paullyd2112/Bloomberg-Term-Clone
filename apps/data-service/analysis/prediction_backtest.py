@@ -106,6 +106,28 @@ class BacktestReport:
 # ─── Data fetching ──────────────────────────────────────────────────────────
 
 _backtest_debug: list[str] = []
+_backtest_client = None
+
+
+def _get_backtest_client():
+    """Get a dedicated Supabase client for backtesting.
+
+    Creates its own httpx connection pool separate from the main app,
+    avoiding pool exhaustion when other scheduler jobs run concurrently.
+    """
+    global _backtest_client
+    if _backtest_client is None:
+        import os
+        import httpx
+        from supabase import create_client
+        from supabase.lib.client_options import ClientOptions
+        url = os.environ.get("SUPABASE_URL", "")
+        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY_", "")
+        opts = ClientOptions(
+            postgrest_client_timeout=httpx.Timeout(connect=15.0, read=90.0, write=30.0, pool=60.0),
+        )
+        _backtest_client = create_client(url, key, options=opts)
+    return _backtest_client
 
 
 def _fetch_all_prediction_markets() -> list[dict]:
@@ -116,7 +138,7 @@ def _fetch_all_prediction_markets() -> list[dict]:
     Queries the last 7 days in daily windows to discover all active markets,
     then deduplicates by identifier.
     """
-    from supabase_client import supabase as sb
+    sb = _get_backtest_client()
 
     _backtest_debug.clear()
     seen: set[str] = set()
@@ -173,7 +195,7 @@ def _fetch_all_prediction_markets() -> list[dict]:
 
 def _fetch_price_history(condition_id: str) -> list[dict]:
     """Fetch full price history for a market from prediction_price_history."""
-    from supabase_client import supabase as sb
+    sb = _get_backtest_client()
     all_rows = []
     page_size = 1000
     offset = 0
@@ -200,7 +222,7 @@ def _fetch_price_history(condition_id: str) -> list[dict]:
 
 def _fetch_smart_money_for_market(condition_id: str) -> dict | None:
     """Fetch persisted smart money consensus if available."""
-    from supabase_client import supabase as sb
+    sb = _get_backtest_client()
     try:
         result = (
             sb.table("prediction_smart_money")
@@ -216,7 +238,7 @@ def _fetch_smart_money_for_market(condition_id: str) -> dict | None:
 
 def _fetch_settled_outcomes() -> dict[str, str]:
     """Fetch all resolved prediction signals to use as ground truth."""
-    from supabase_client import supabase as sb
+    sb = _get_backtest_client()
     try:
         result = (
             sb.table("signals")
