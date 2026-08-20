@@ -33,7 +33,6 @@ from typing import Literal
 
 from loguru import logger
 
-from supabase_client import supabase
 from scoring.prediction_filters import (
     run_prediction_guardrails,
     infer_category,
@@ -109,75 +108,113 @@ class BacktestReport:
 def _fetch_all_prediction_markets() -> list[dict]:
     """Fetch all distinct prediction markets that have been ingested.
 
-    Uses prediction_price_history to discover condition_ids (smaller/faster
-    than scanning raw_prices), then fetches metadata from raw_prices for
-    each discovered market.
+    Two-pass approach:
+      1. Try prediction_price_history for condition_id discovery (fast).
+      2. Fallback: paginate raw_prices with asset_type=prediction.
+    Then batch-fetch metadata from raw_prices for each discovered market.
     """
+    from supabase_client import supabase as sb
+
+    condition_ids: list[str] = []
+
+    # --- Pass 1: try prediction_price_history ---
     try:
-        # Step 1: get distinct condition_ids from price history
         hist_result = (
-            supabase.table("prediction_price_history")
+            sb.table("prediction_price_history")
             .select("condition_id")
             .order("captured_at", desc=True)
             .limit(10000)
             .execute()
         )
         seen = set()
-        condition_ids = []
         for row in hist_result.data or []:
-            cid = row["condition_id"]
-            if cid not in seen:
+            cid = row.get("condition_id")
+            if cid and cid not in seen:
                 seen.add(cid)
                 condition_ids.append(cid)
+        logger.info("prediction_price_history returned {} rows, {} distinct condition_ids",
+                     len(hist_result.data or []), len(condition_ids))
+    except Exception as e:
+        logger.warning("prediction_price_history query failed ({}), trying raw_prices fallback", e)
 
-        logger.info("Found {} distinct condition_ids in price history", len(condition_ids))
-        if not condition_ids:
-            return []
-
-        # Step 2: fetch metadata for each market from raw_prices (batched)
-        markets = []
-        batch_size = 50
-        for i in range(0, len(condition_ids), batch_size):
-            batch = condition_ids[i:i + batch_size]
-            try:
+    # --- Pass 2: fallback to raw_prices if history was empty ---
+    if not condition_ids:
+        logger.info("Falling back to raw_prices for market discovery")
+        try:
+            offset = 0
+            page_size = 1000
+            seen = set()
+            while True:
                 result = (
-                    supabase.table("raw_prices")
-                    .select("identifier, metadata")
+                    sb.table("raw_prices")
+                    .select("identifier")
                     .eq("asset_type", "prediction")
-                    .in_("identifier", batch)
                     .order("captured_at", desc=True)
-                    .limit(batch_size * 3)
+                    .range(offset, offset + page_size - 1)
                     .execute()
                 )
-                batch_seen = set()
-                for row in result.data or []:
-                    ident = row["identifier"]
-                    if ident not in batch_seen:
-                        batch_seen.add(ident)
-                        markets.append(row)
-            except Exception as e:
-                logger.warning("Failed to fetch metadata batch {}: {}", i, e)
-                # Still include these markets with empty metadata
-                for cid in batch:
-                    if cid not in {m["identifier"] for m in markets}:
-                        markets.append({"identifier": cid, "metadata": {}})
+                rows = result.data or []
+                logger.info("raw_prices page at offset {}: {} rows", offset, len(rows))
+                for row in rows:
+                    ident = row.get("identifier")
+                    if ident and ident not in seen:
+                        seen.add(ident)
+                        condition_ids.append(ident)
+                if len(rows) < page_size:
+                    break
+                offset += page_size
+                if offset > 20000:
+                    break
+            logger.info("raw_prices fallback found {} distinct markets", len(condition_ids))
+        except Exception as e:
+            logger.error("raw_prices fallback also failed: {}", e)
+            return []
 
-        logger.info("Fetched metadata for {} markets", len(markets))
-        return markets
-    except Exception as e:
-        logger.error("Failed to fetch prediction markets: {}", e)
+    if not condition_ids:
+        logger.warning("No prediction markets found in either table")
         return []
+
+    # --- Fetch metadata for each market ---
+    markets = []
+    batch_size = 50
+    for i in range(0, len(condition_ids), batch_size):
+        batch = condition_ids[i:i + batch_size]
+        try:
+            result = (
+                sb.table("raw_prices")
+                .select("identifier, metadata")
+                .eq("asset_type", "prediction")
+                .in_("identifier", batch)
+                .order("captured_at", desc=True)
+                .limit(batch_size * 3)
+                .execute()
+            )
+            batch_seen = set()
+            for row in result.data or []:
+                ident = row["identifier"]
+                if ident not in batch_seen:
+                    batch_seen.add(ident)
+                    markets.append(row)
+        except Exception as e:
+            logger.warning("Failed to fetch metadata batch {}: {}", i, e)
+            for cid in batch:
+                if cid not in {m["identifier"] for m in markets}:
+                    markets.append({"identifier": cid, "metadata": {}})
+
+    logger.info("Fetched metadata for {} markets total", len(markets))
+    return markets
 
 
 def _fetch_price_history(condition_id: str) -> list[dict]:
     """Fetch full price history for a market from prediction_price_history."""
+    from supabase_client import supabase as sb
     all_rows = []
     page_size = 1000
     offset = 0
     try:
         while True:
             result = (
-                supabase.table("prediction_price_history")
+                sb.table("prediction_price_history")
                 .select("yes_price, no_price, volume, captured_at")
                 .eq("condition_id", condition_id)
                 .order("captured_at", desc=False)
@@ -197,9 +234,10 @@ def _fetch_price_history(condition_id: str) -> list[dict]:
 
 def _fetch_smart_money_for_market(condition_id: str) -> dict | None:
     """Fetch persisted smart money consensus if available."""
+    from supabase_client import supabase as sb
     try:
         result = (
-            supabase.table("prediction_smart_money")
+            sb.table("prediction_smart_money")
             .select("*")
             .eq("condition_id", condition_id)
             .limit(1)
@@ -212,9 +250,10 @@ def _fetch_smart_money_for_market(condition_id: str) -> dict | None:
 
 def _fetch_settled_outcomes() -> dict[str, str]:
     """Fetch all resolved prediction signals to use as ground truth."""
+    from supabase_client import supabase as sb
     try:
         result = (
-            supabase.table("signals")
+            sb.table("signals")
             .select("identifier, direction, outcome, price_at_signal, outcome_price")
             .eq("asset_type", "prediction")
             .in_("outcome", ["WIN", "LOSS", "NEUTRAL"])
