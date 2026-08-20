@@ -1358,23 +1358,37 @@ def prediction_backtest_data_check():
     """Diagnostic: check what prediction data exists for backtesting."""
     from supabase_client import supabase as sb
     checks = {}
+
+    # Test 1: prediction_price_history (the primary data source)
     try:
-        r = sb.table("prediction_price_history").select("condition_id, captured_at").order("captured_at", desc=True).limit(5).execute()
-        checks["recent_price_history"] = r.data or []
-        checks["has_price_history"] = len(r.data or []) > 0
+        r = sb.table("prediction_price_history").select("condition_id, yes_price, captured_at").order("captured_at", desc=True).limit(3).execute()
+        checks["price_history_rows"] = len(r.data or [])
+        checks["price_history_sample"] = r.data[:3] if r.data else []
     except Exception as e:
-        checks["price_history_error"] = str(e)
+        checks["price_history_error"] = f"{type(e).__name__}: {e}"
+
+    # Test 2: raw_prices predictions (fallback)
     try:
-        r = sb.table("raw_prices").select("identifier, captured_at").eq("asset_type", "prediction").order("captured_at", desc=True).limit(5).execute()
-        checks["recent_raw_predictions"] = r.data or []
-        checks["has_raw_predictions"] = len(r.data or []) > 0
+        r = sb.table("raw_prices").select("identifier, price, captured_at").eq("asset_type", "prediction").order("captured_at", desc=True).limit(3).execute()
+        checks["raw_prices_rows"] = len(r.data or [])
+        checks["raw_prices_sample"] = r.data[:3] if r.data else []
     except Exception as e:
-        checks["raw_predictions_error"] = str(e)
+        checks["raw_prices_error"] = f"{type(e).__name__}: {e}"
+
+    # Test 3: exact same query the backtest uses
     try:
-        r = sb.table("signals").select("identifier, direction, outcome").eq("asset_type", "prediction").order("created_at", desc=True).limit(5).execute()
-        checks["recent_pred_signals"] = r.data or []
+        r = sb.table("prediction_price_history").select("condition_id").order("captured_at", desc=True).limit(100).execute()
+        seen = set()
+        for row in r.data or []:
+            cid = row.get("condition_id")
+            if cid:
+                seen.add(cid)
+        checks["backtest_query_rows"] = len(r.data or [])
+        checks["backtest_query_distinct"] = len(seen)
+        checks["backtest_query_sample_ids"] = list(seen)[:5]
     except Exception as e:
-        checks["pred_signals_error"] = str(e)
+        checks["backtest_query_error"] = f"{type(e).__name__}: {e}"
+
     return jsonify(checks)
 
 
