@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -106,28 +107,31 @@ class BacktestReport:
 # ─── Data fetching ──────────────────────────────────────────────────────────
 
 _backtest_debug: list[str] = []
-_backtest_client = None
 
 
-def _get_backtest_client():
-    """Get a dedicated Supabase client for backtesting.
+def _get_sb():
+    """Get the shared Supabase client (same long-lived connection as scheduler jobs)."""
+    import supabase_client
+    return supabase_client.supabase
 
-    Creates its own httpx connection pool separate from the main app,
-    avoiding pool exhaustion when other scheduler jobs run concurrently.
-    """
-    global _backtest_client
-    if _backtest_client is None:
-        import os
-        import httpx
-        from supabase import create_client
-        from supabase.lib.client_options import ClientOptions
-        url = os.environ.get("SUPABASE_URL", "")
-        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY_", "")
-        opts = ClientOptions(
-            postgrest_client_timeout=httpx.Timeout(connect=15.0, read=90.0, write=30.0, pool=60.0),
-        )
-        _backtest_client = create_client(url, key, options=opts)
-    return _backtest_client
+
+def _sb_query_with_retry(query_fn, label: str, retries: int = 3):
+    """Execute a Supabase query with retry + exponential backoff for 522 errors."""
+    for attempt in range(retries):
+        try:
+            return query_fn()
+        except Exception as e:
+            err_str = str(e)
+            if "522" in err_str or "Connection" in err_str:
+                wait = 2 ** attempt
+                logger.warning("{} attempt {}/{} got transient error, retrying in {}s: {}",
+                               label, attempt + 1, retries, wait, type(e).__name__)
+                time.sleep(wait)
+                import supabase_client
+                supabase_client.refresh_client()
+                continue
+            raise
+    return query_fn()
 
 
 def _fetch_all_prediction_markets() -> list[dict]:
@@ -138,8 +142,6 @@ def _fetch_all_prediction_markets() -> list[dict]:
     Queries the last 7 days in daily windows to discover all active markets,
     then deduplicates by identifier.
     """
-    sb = _get_backtest_client()
-
     _backtest_debug.clear()
     seen: set[str] = set()
     markets: list[dict] = []
@@ -147,27 +149,47 @@ def _fetch_all_prediction_markets() -> list[dict]:
     now = datetime.now(timezone.utc)
     _backtest_debug.append(f"now={now.isoformat()}")
 
+    # Refresh the shared client before starting to ensure a fresh connection
+    try:
+        import supabase_client
+        supabase_client.refresh_client()
+        _backtest_debug.append("client_refreshed=ok")
+        time.sleep(1)
+    except Exception as e:
+        _backtest_debug.append(f"client_refresh_failed={e}")
+
+    sb = _get_sb()
+
     # First: quick sanity check — can we read raw_prices at all?
     try:
-        check = sb.table("raw_prices").select("identifier, asset_type, captured_at").order("captured_at", desc=True).limit(3).execute()
+        check = _sb_query_with_retry(
+            lambda: sb.table("raw_prices").select("identifier, asset_type, captured_at").order("captured_at", desc=True).limit(3).execute(),
+            "sanity_check",
+        )
         _backtest_debug.append(f"raw_prices_check: {len(check.data or [])} rows, types={[r.get('asset_type') for r in (check.data or [])]}")
     except Exception as e:
         _backtest_debug.append(f"raw_prices_check FAILED: {type(e).__name__}: {e}")
+
+    # Re-get sb in case refresh happened during retry
+    sb = _get_sb()
 
     # Query raw_prices in daily windows over the past 7 days
     for days_back in range(7):
         window_end = now - timedelta(days=days_back)
         window_start = window_end - timedelta(days=1)
         try:
-            result = (
-                sb.table("raw_prices")
-                .select("identifier, price, volume, metadata, captured_at")
-                .eq("asset_type", "prediction")
-                .gte("captured_at", window_start.isoformat())
-                .lt("captured_at", window_end.isoformat())
-                .order("captured_at", desc=True)
-                .limit(5000)
-                .execute()
+            result = _sb_query_with_retry(
+                lambda ws=window_start, we=window_end: (
+                    _get_sb().table("raw_prices")
+                    .select("identifier, price, volume, metadata, captured_at")
+                    .eq("asset_type", "prediction")
+                    .gte("captured_at", ws.isoformat())
+                    .lt("captured_at", we.isoformat())
+                    .order("captured_at", desc=True)
+                    .limit(5000)
+                    .execute()
+                ),
+                f"day-{days_back}",
             )
             rows = result.data or []
             new_count = 0
@@ -195,7 +217,7 @@ def _fetch_all_prediction_markets() -> list[dict]:
 
 def _fetch_price_history(condition_id: str) -> list[dict]:
     """Fetch full price history for a market from prediction_price_history."""
-    sb = _get_backtest_client()
+    sb = _get_sb()
     all_rows = []
     page_size = 1000
     offset = 0
@@ -222,7 +244,7 @@ def _fetch_price_history(condition_id: str) -> list[dict]:
 
 def _fetch_smart_money_for_market(condition_id: str) -> dict | None:
     """Fetch persisted smart money consensus if available."""
-    sb = _get_backtest_client()
+    sb = _get_sb()
     try:
         result = (
             sb.table("prediction_smart_money")
@@ -238,7 +260,7 @@ def _fetch_smart_money_for_market(condition_id: str) -> dict | None:
 
 def _fetch_settled_outcomes() -> dict[str, str]:
     """Fetch all resolved prediction signals to use as ground truth."""
-    sb = _get_backtest_client()
+    sb = _get_sb()
     try:
         result = (
             sb.table("signals")
