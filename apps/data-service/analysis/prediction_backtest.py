@@ -107,23 +107,62 @@ class BacktestReport:
 # ─── Data fetching ──────────────────────────────────────────────────────────
 
 def _fetch_all_prediction_markets() -> list[dict]:
-    """Fetch all distinct prediction markets that have been ingested."""
+    """Fetch all distinct prediction markets that have been ingested.
+
+    Uses prediction_price_history to discover condition_ids (smaller/faster
+    than scanning raw_prices), then fetches metadata from raw_prices for
+    each discovered market.
+    """
     try:
-        result = (
-            supabase.table("raw_prices")
-            .select("identifier, metadata")
-            .eq("asset_type", "prediction")
+        # Step 1: get distinct condition_ids from price history
+        hist_result = (
+            supabase.table("prediction_price_history")
+            .select("condition_id")
             .order("captured_at", desc=True)
-            .limit(5000)
+            .limit(10000)
             .execute()
         )
         seen = set()
+        condition_ids = []
+        for row in hist_result.data or []:
+            cid = row["condition_id"]
+            if cid not in seen:
+                seen.add(cid)
+                condition_ids.append(cid)
+
+        logger.info("Found {} distinct condition_ids in price history", len(condition_ids))
+        if not condition_ids:
+            return []
+
+        # Step 2: fetch metadata for each market from raw_prices (batched)
         markets = []
-        for row in result.data or []:
-            ident = row["identifier"]
-            if ident not in seen:
-                seen.add(ident)
-                markets.append(row)
+        batch_size = 50
+        for i in range(0, len(condition_ids), batch_size):
+            batch = condition_ids[i:i + batch_size]
+            try:
+                result = (
+                    supabase.table("raw_prices")
+                    .select("identifier, metadata")
+                    .eq("asset_type", "prediction")
+                    .in_("identifier", batch)
+                    .order("captured_at", desc=True)
+                    .limit(batch_size * 3)
+                    .execute()
+                )
+                batch_seen = set()
+                for row in result.data or []:
+                    ident = row["identifier"]
+                    if ident not in batch_seen:
+                        batch_seen.add(ident)
+                        markets.append(row)
+            except Exception as e:
+                logger.warning("Failed to fetch metadata batch {}: {}", i, e)
+                # Still include these markets with empty metadata
+                for cid in batch:
+                    if cid not in {m["identifier"] for m in markets}:
+                        markets.append({"identifier": cid, "metadata": {}})
+
+        logger.info("Fetched metadata for {} markets", len(markets))
         return markets
     except Exception as e:
         logger.error("Failed to fetch prediction markets: {}", e)
