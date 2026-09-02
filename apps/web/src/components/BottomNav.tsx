@@ -8,9 +8,9 @@ import {
   Star,
   Sunrise,
   Sparkles,
-  Search,
   Bot,
   BarChart3,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 import type { Tier } from "@/lib/tier";
@@ -28,7 +28,7 @@ const NAV_FREE: NavItem[] = [
 const NAV_PRO: NavItem[] = [
   { href: "/dashboard",              label: "Signals",     icon: Zap },
   { href: "/dashboard/predictions",  label: "Markets",     icon: BarChart3 },
-  { href: "/dashboard/screener",     label: "Screener",    icon: Search },
+  { href: "/dashboard/challenge",    label: "Challenge",   icon: Trophy },
   { href: "/dashboard/watchlist",    label: "Watch",       icon: Star },
   { href: "/dashboard/briefing",     label: "Brief",       icon: Sunrise },
 ];
@@ -36,7 +36,7 @@ const NAV_PRO: NavItem[] = [
 const NAV_ELITE: NavItem[] = [
   { href: "/dashboard",              label: "Signals",     icon: Zap },
   { href: "/dashboard/predictions",  label: "Markets",     icon: BarChart3 },
-  { href: "/dashboard/screener",     label: "Screener",    icon: Search },
+  { href: "/dashboard/challenge",    label: "Challenge",   icon: Trophy },
   { href: "/dashboard/watchlist",    label: "Watch",       icon: Star },
   { href: "/dashboard/pleby",        label: "Pleby",       icon: Bot },
 ];

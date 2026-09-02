@@ -1927,6 +1927,153 @@ def pipeline_check():
 
 # ─── Entry point ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
+# ─── Challenge API routes ────────────────────────────────────────────────────
+
+@app.route("/api/v1/challenges/templates")
+def challenge_templates():
+    """List available challenge templates, optionally filtered by asset_class."""
+    from supabase_client import supabase
+    asset_class = request.args.get("asset_class")
+    q = supabase.table("challenge_templates").select("*").eq("is_active", True)
+    if asset_class:
+        q = q.eq("asset_class", asset_class)
+    result = q.order("firm_name").execute()
+    return jsonify({"templates": result.data or []})
+
+
+@app.route("/api/v1/challenges/start", methods=["POST"])
+def challenge_start():
+    """Start a new challenge from a template or custom params."""
+    from supabase_client import supabase
+    from scoring.challenge_engine import start_challenge
+    data = request.get_json(force=True)
+    user_id = data.get("user_id")
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+
+    template_id = data.get("template_id")
+    custom_params = data.get("custom_params")
+
+    if not template_id and not custom_params:
+        return jsonify({"error": "template_id or custom_params required"}), 400
+
+    result = start_challenge(supabase, user_id, template_id=template_id,
+                             custom_params=custom_params)
+    if result is None:
+        return jsonify({"error": "Failed to start challenge (active challenge exists or invalid template)"}), 400
+    return jsonify({"challenge": result})
+
+
+@app.route("/api/v1/challenges/progress")
+def challenge_progress():
+    """Get the user's active challenge progress."""
+    from supabase_client import supabase
+    from scoring.challenge_engine import (
+        get_active_challenge, ChallengeRules, ChallengeState,
+        compute_challenge_progress,
+    )
+    user_id = request.args.get("user_id")
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+
+    challenge = get_active_challenge(supabase, user_id)
+    if not challenge:
+        return jsonify({"challenge": None, "progress": None})
+
+    # Get today's snapshot
+    from datetime import date as _date
+    today_snap = supabase.table("challenge_daily_snapshots").select("*") \
+        .eq("challenge_id", challenge["id"]) \
+        .eq("snapshot_date", _date.today().isoformat()).execute()
+    today = today_snap.data[0] if today_snap.data else None
+
+    # Count open positions
+    open_trades = supabase.table("challenge_trades").select("id", count="exact") \
+        .eq("challenge_id", challenge["id"]).eq("status", "open").execute()
+    open_count = open_trades.count or 0
+
+    rules = ChallengeRules.from_challenge_row(challenge)
+    state = ChallengeState.from_challenge_row(challenge, today, open_count)
+    progress = compute_challenge_progress(rules, state)
+
+    return jsonify({"challenge": challenge, "progress": progress})
+
+
+@app.route("/api/v1/challenges/trades")
+def challenge_trades():
+    """Get trades for the user's active challenge."""
+    from supabase_client import supabase
+    from scoring.challenge_engine import get_active_challenge
+    user_id = request.args.get("user_id")
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+
+    challenge = get_active_challenge(supabase, user_id)
+    if not challenge:
+        return jsonify({"trades": []})
+
+    limit = min(int(request.args.get("limit", 50)), 200)
+    result = supabase.table("challenge_trades").select("*") \
+        .eq("challenge_id", challenge["id"]) \
+        .order("created_at", desc=True).limit(limit).execute()
+    return jsonify({"trades": result.data or []})
+
+
+@app.route("/api/v1/challenges/daily-snapshots")
+def challenge_snapshots():
+    """Get daily P&L snapshots for the user's active challenge."""
+    from supabase_client import supabase
+    from scoring.challenge_engine import get_active_challenge
+    user_id = request.args.get("user_id")
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+
+    challenge = get_active_challenge(supabase, user_id)
+    if not challenge:
+        return jsonify({"snapshots": []})
+
+    result = supabase.table("challenge_daily_snapshots").select("*") \
+        .eq("challenge_id", challenge["id"]) \
+        .order("snapshot_date", desc=True).execute()
+    return jsonify({"snapshots": result.data or []})
+
+
+@app.route("/api/v1/challenges/abandon", methods=["POST"])
+def challenge_abandon():
+    """Abandon the user's active challenge."""
+    from supabase_client import supabase
+    from scoring.challenge_engine import get_active_challenge, abandon_challenge
+    data = request.get_json(force=True)
+    user_id = data.get("user_id")
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+
+    challenge = get_active_challenge(supabase, user_id)
+    if not challenge:
+        return jsonify({"error": "No active challenge"}), 404
+
+    abandon_challenge(supabase, challenge["id"], user_id)
+    return jsonify({"status": "abandoned", "challenge_id": challenge["id"]})
+
+
+@app.route("/api/v1/challenges/history")
+def challenge_history():
+    """Get all challenges for a user (active + past)."""
+    from supabase_client import supabase
+    user_id = request.args.get("user_id")
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+
+    limit = min(int(request.args.get("limit", 20)), 100)
+    result = supabase.table("user_challenges").select("*") \
+        .eq("user_id", user_id) \
+        .order("created_at", desc=True).limit(limit).execute()
+    return jsonify({"challenges": result.data or []})
+
+
+# ─── End challenge routes ────────────────────────────────────────────────────
+
+
     logger.info("Starting Plebs data service")
     if os.environ.get("ENABLE_SCHEDULER", "false").lower() == "true":
         scheduler.start()

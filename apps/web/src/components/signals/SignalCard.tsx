@@ -2,6 +2,8 @@ import Link from "next/link";
 import { clsx } from "clsx";
 import ShareButton from "./ShareButton";
 import TradeButton from "./TradeButton";
+import ChallengeTradeButton from "./ChallengeTradeButton";
+import { useChallengeContext } from "./ChallengeContext";
 import { PricePerformanceCompact } from "@/components/asset/PricePerformance";
 
 export type Signal = {
@@ -79,6 +81,10 @@ function confColors(c: number): { text: string; bar: string } {
 }
 
 export default function SignalCard({ signal, hideTrade }: { signal: Signal; hideTrade?: boolean }) {
+  const { hasActiveChallenge, challengeAssetClass } = useChallengeContext();
+  const showChallengeBtn = hasActiveChallenge && !hideTrade && signal.outcome === "PENDING"
+    && signal.direction !== "HOLD"
+    && (challengeAssetClass === "both" || challengeAssetClass === signal.asset_type);
   const conf = confColors(signal.confidence);
   const horizon = HORIZON_SHORT[signal.time_horizon] ?? signal.time_horizon.slice(0, 5).toUpperCase();
   const typeLabel = TYPE_LABEL[signal.asset_type] ?? signal.asset_type;
@@ -185,6 +191,18 @@ export default function SignalCard({ signal, hideTrade }: { signal: Signal; hide
               />
             </>
           )}
+          {showChallengeBtn && (
+            <>
+              <span>·</span>
+              <ChallengeTradeButton
+                signalId={signal.id}
+                assetType={signal.asset_type}
+                identifier={signal.identifier}
+                direction={signal.direction}
+                entryPrice={signal.price_at_signal}
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -284,6 +302,15 @@ export default function SignalCard({ signal, hideTrade }: { signal: Signal; hide
         <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 bg-background/80 pl-2 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover:opacity-100 flex items-center gap-1">
           {signal.outcome === "PENDING" && !hideTrade && (
             <TradeButton
+              assetType={signal.asset_type}
+              identifier={signal.identifier}
+              direction={signal.direction}
+              entryPrice={signal.price_at_signal}
+            />
+          )}
+          {showChallengeBtn && (
+            <ChallengeTradeButton
+              signalId={signal.id}
               assetType={signal.asset_type}
               identifier={signal.identifier}
               direction={signal.direction}
