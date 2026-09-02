@@ -5,6 +5,7 @@ import { clsx } from "clsx";
 import { ChevronDown } from "lucide-react";
 import SignalList from "./SignalList";
 import { type Signal } from "./SignalCard";
+import { ChallengeProvider } from "./ChallengeContext";
 
 const TABS = [
   { id: "all",        label: "All" },
@@ -52,6 +53,7 @@ export default function SignalFeed({ signals, hideTrade }: { signals: Signal[]; 
   }, [typeFiltered, selectedDay]);
 
   return (
+    <ChallengeProvider>
     <div className="space-y-4">
       {/* Asset type tabs + day dropdown */}
       <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] pb-0 overflow-x-auto scrollbar-none">
@@ -106,5 +108,6 @@ export default function SignalFeed({ signals, hideTrade }: { signals: Signal[]; 
         <SignalList signals={filtered} hideTrade={hideTrade} />
       )}
     </div>
+    </ChallengeProvider>
   );
 }

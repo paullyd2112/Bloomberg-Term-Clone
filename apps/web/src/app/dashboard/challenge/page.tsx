@@ -91,6 +91,85 @@ type Trade = {
 
 type AssetFilter = "all" | "crypto" | "prediction" | "both";
 
+function TradeRow({ trade: t, onClose }: { trade: Trade; onClose: () => void }) {
+  const [closing, setClosing] = useState(false);
+  const [exitPrice, setExitPrice] = useState("");
+  const [showClose, setShowClose] = useState(false);
+
+  async function closeTrade() {
+    if (!exitPrice) return;
+    setClosing(true);
+    try {
+      const res = await fetch("/api/challenges", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "close_trade", trade_id: t.id, exit_price: Number(exitPrice) }),
+      });
+      if (res.ok) {
+        onClose();
+        setShowClose(false);
+      }
+    } finally {
+      setClosing(false);
+    }
+  }
+
+  return (
+    <div className="px-5 py-2.5 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className={clsx(
+            "text-[10px] font-bold font-mono px-1.5 py-0.5 rounded",
+            t.direction === "BUY" || t.direction === "YES"
+              ? "text-[#00d4aa] bg-[#00d4aa]/10"
+              : "text-red-400 bg-red-500/10",
+          )}>
+            {t.direction}
+          </span>
+          <span className="text-xs text-white font-mono">{t.identifier}</span>
+          <span className="text-[10px] text-zinc-600 font-mono">${Number(t.entry_price).toFixed(2)}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className={clsx(
+            "text-xs font-mono tabular-nums font-semibold",
+            t.status === "open" ? "text-zinc-400" :
+            (t.pnl ?? 0) >= 0 ? "text-[#00d4aa]" : "text-red-400",
+          )}>
+            {t.status === "open" ? "OPEN" : `${(t.pnl ?? 0) >= 0 ? "+" : ""}$${(t.pnl ?? 0).toFixed(2)}`}
+          </span>
+          {t.status === "open" && (
+            <button
+              onClick={() => setShowClose(!showClose)}
+              className="text-[10px] font-semibold text-amber-400 hover:text-amber-300 transition-colors"
+            >
+              Close
+            </button>
+          )}
+        </div>
+      </div>
+      {showClose && (
+        <div className="flex items-center gap-2 pl-8">
+          <input
+            type="number"
+            step="any"
+            placeholder="Exit price"
+            value={exitPrice}
+            onChange={(e) => setExitPrice(e.target.value)}
+            className="w-28 px-2 py-1 text-xs font-mono bg-white/[0.04] border border-white/[0.1] rounded text-white focus:outline-none focus:border-[#00d4aa]/50"
+          />
+          <button
+            onClick={closeTrade}
+            disabled={closing || !exitPrice}
+            className="px-3 py-1 text-[10px] font-bold bg-[#00d4aa] text-black rounded hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+          >
+            {closing ? "..." : "Confirm"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChallengePage() {
   const [active, setActive] = useState<Challenge | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -364,28 +443,7 @@ export default function ChallengePage() {
               </div>
               <div className="divide-y divide-white/[0.04]">
                 {recentTrades.slice(0, 10).map((t) => (
-                  <div key={t.id} className="flex items-center justify-between px-5 py-2.5">
-                    <div className="flex items-center gap-3">
-                      <span className={clsx(
-                        "text-[10px] font-bold font-mono px-1.5 py-0.5 rounded",
-                        t.direction === "BUY" || t.direction === "YES"
-                          ? "text-[#00d4aa] bg-[#00d4aa]/10"
-                          : "text-red-400 bg-red-500/10",
-                      )}>
-                        {t.direction}
-                      </span>
-                      <span className="text-xs text-white font-mono">{t.identifier}</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className={clsx(
-                        "text-xs font-mono tabular-nums font-semibold",
-                        t.status === "open" ? "text-zinc-400" :
-                        (t.pnl ?? 0) >= 0 ? "text-[#00d4aa]" : "text-red-400",
-                      )}>
-                        {t.status === "open" ? "OPEN" : `${(t.pnl ?? 0) >= 0 ? "+" : ""}$${(t.pnl ?? 0).toFixed(2)}`}
-                      </span>
-                    </div>
-                  </div>
+                  <TradeRow key={t.id} trade={t} onClose={fetchData} />
                 ))}
               </div>
             </div>

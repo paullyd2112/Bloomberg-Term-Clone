@@ -225,5 +225,137 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "abandoned" });
   }
 
+  if (action === "record_trade") {
+    const activeRes = await supabase
+      .from("user_challenges")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .limit(1);
+
+    const challenge = activeRes.data?.[0];
+    if (!challenge) {
+      return NextResponse.json({ error: "No active challenge" }, { status: 400 });
+    }
+
+    const { signal_id, asset_type, identifier, direction, entry_price, size, risk_dollars, stop_loss, take_profit } = body;
+
+    if (!asset_type || !identifier || !direction || !entry_price || !size || risk_dollars == null) {
+      return NextResponse.json({ error: "Missing required trade fields" }, { status: 400 });
+    }
+
+    const maxRisk = challenge.max_risk_per_trade_pct
+      ? Number(challenge.current_balance) * Number(challenge.max_risk_per_trade_pct) / 100
+      : null;
+    if (maxRisk && Number(risk_dollars) > maxRisk) {
+      return NextResponse.json(
+        { error: `Risk $${risk_dollars} exceeds per-trade limit of $${maxRisk.toFixed(2)}` },
+        { status: 400 },
+      );
+    }
+
+    if (challenge.max_open_positions) {
+      const openRes = await supabase
+        .from("challenge_trades")
+        .select("id", { count: "exact" })
+        .eq("challenge_id", challenge.id)
+        .eq("status", "open");
+      if ((openRes.count ?? 0) >= challenge.max_open_positions) {
+        return NextResponse.json(
+          { error: `Max ${challenge.max_open_positions} open positions reached` },
+          { status: 400 },
+        );
+      }
+    }
+
+    const tradeRes = await supabase.from("challenge_trades").insert({
+      challenge_id: challenge.id,
+      signal_id: signal_id || null,
+      asset_type,
+      identifier,
+      direction,
+      entry_price: Number(entry_price),
+      size: Number(size),
+      risk_dollars: Number(risk_dollars),
+      stop_loss: stop_loss ? Number(stop_loss) : null,
+      take_profit: take_profit ? Number(take_profit) : null,
+    }).select().single();
+
+    if (tradeRes.error) {
+      return NextResponse.json({ error: tradeRes.error.message }, { status: 500 });
+    }
+
+    await supabase
+      .from("user_challenges")
+      .update({ total_trades: challenge.total_trades + 1 })
+      .eq("id", challenge.id);
+
+    return NextResponse.json({ trade: tradeRes.data });
+  }
+
+  if (action === "close_trade") {
+    const { trade_id, exit_price, close_status } = body;
+    if (!trade_id || !exit_price) {
+      return NextResponse.json({ error: "trade_id and exit_price required" }, { status: 400 });
+    }
+
+    const tradeRes = await supabase
+      .from("challenge_trades")
+      .select("*, user_challenges!inner(user_id, id, current_balance, peak_balance, total_pnl, current_drawdown, max_drawdown_hit, wins, losses, best_day_pnl, worst_day_pnl, trading_days)")
+      .eq("id", trade_id)
+      .eq("status", "open")
+      .single();
+
+    if (!tradeRes.data) {
+      return NextResponse.json({ error: "Trade not found or already closed" }, { status: 404 });
+    }
+
+    const trade = tradeRes.data;
+    const challenge = trade.user_challenges;
+
+    if (challenge.user_id !== user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    const exitP = Number(exit_price);
+    const entryP = Number(trade.entry_price);
+    const sz = Number(trade.size);
+    const pnl = trade.direction === "BUY" || trade.direction === "YES"
+      ? (exitP - entryP) * sz
+      : (entryP - exitP) * sz;
+
+    await supabase
+      .from("challenge_trades")
+      .update({
+        exit_price: exitP,
+        pnl: Math.round(pnl * 100) / 100,
+        status: close_status || "closed",
+        closed_at: new Date().toISOString(),
+      })
+      .eq("id", trade_id);
+
+    const newBalance = Number(challenge.current_balance) + pnl;
+    const newPeak = Math.max(Number(challenge.peak_balance), newBalance);
+    const newDrawdown = newPeak - newBalance;
+    const isWin = pnl > 0;
+
+    await supabase
+      .from("user_challenges")
+      .update({
+        current_balance: Math.round(newBalance * 100) / 100,
+        peak_balance: Math.round(newPeak * 100) / 100,
+        total_pnl: Math.round((Number(challenge.total_pnl) + pnl) * 100) / 100,
+        current_drawdown: Math.round(newDrawdown * 100) / 100,
+        max_drawdown_hit: Math.round(Math.max(Number(challenge.max_drawdown_hit), newDrawdown) * 100) / 100,
+        wins: isWin ? challenge.wins + 1 : challenge.wins,
+        losses: !isWin ? challenge.losses + 1 : challenge.losses,
+        best_day_pnl: Math.round(Math.max(Number(challenge.best_day_pnl), pnl) * 100) / 100,
+        worst_day_pnl: Math.round(Math.min(Number(challenge.worst_day_pnl), pnl) * 100) / 100,
+      })
+      .eq("id", challenge.id);
+
+    return NextResponse.json({ pnl: Math.round(pnl * 100) / 100, new_balance: Math.round(newBalance * 100) / 100 });
+  }
+
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }
