@@ -20,6 +20,7 @@ import {
   BarChart3,
   Layers,
   Lock,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 import type { Tier } from "@/lib/tier";
@@ -55,6 +56,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/backtest",        label: "Backtest",     icon: ArrowUpRight, tier: "pro" },
       { href: "/dashboard/history",         label: "Pleby Trades", icon: Receipt,    tier: "pro" },
       { href: "/dashboard/alerts",          label: "Alerts",       icon: Bell,       tier: "pro" },
+      { href: "/dashboard/challenge",        label: "Challenge",    icon: Trophy,     tier: "pro" },
       { href: "/dashboard/prop-calculator", label: "Prop Sizing",  icon: Calculator, tier: "elite" },
       { href: "/dashboard/allocator",       label: "Allocator",    icon: PieChart,   tier: "elite" },
       { href: "/dashboard/pleby",           label: "Pleby AI",     icon: Bot,        tier: "elite" },
