@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/user";
+import { abs } from "@/lib/seo";
 import CopyButton from "./CopyButton";
 
 export const revalidate = 60;
@@ -39,8 +40,9 @@ export default async function ReferralsPage() {
   const user              = await requireUser();
   const { code, referrals } = await getData(user.id);
 
-  const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? "https://plebs.finance";
-  const inviteUrl = code ? `${appUrl}/invite/${code}` : null;
+  // SITE_URL is the www host; the bare apex 308-redirects, which costs a hop on
+  // every shared invite link.
+  const inviteUrl = code ? abs(`/invite/${code}`) : null;
 
   const converted = referrals.filter((r) => r.status !== "pending").length;
   const freeMonthsEarned = Math.floor(converted / 3);

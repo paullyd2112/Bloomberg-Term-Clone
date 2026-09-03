@@ -2,9 +2,10 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 export const metadata = {
-  title: "Glossary | Plebs.Finance",
+  title: "Glossary",
   description:
     "Trading terms and platform concepts explained — RSI, MACD, confidence scores, prediction markets, and more.",
+  alternates: { canonical: "/glossary" },
 };
 
 const SECTIONS: { title: string; terms: { term: string; definition: string }[] }[] = [

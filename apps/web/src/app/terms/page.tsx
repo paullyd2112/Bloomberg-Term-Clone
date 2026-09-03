@@ -1,6 +1,7 @@
 export const metadata = {
-  title: 'Terms of Service | Plebs.Finance',
+  title: 'Terms of Service',
   description: 'Terms of Service for Plebs.Finance',
+  alternates: { canonical: '/terms' },
 };
 
 export default function TermsOfService() {

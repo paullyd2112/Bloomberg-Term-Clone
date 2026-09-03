@@ -2,6 +2,13 @@ import { Suspense } from "react";
 import Link from "next/link";
 import SignupForm from "./SignupForm";
 
+export const metadata = {
+  title: "Create your account",
+  description:
+    "Start free with 3 signals a day, or trial Pro or Elite for full 24/7 coverage of 50+ coins and Polymarket prediction markets.",
+  alternates: { canonical: "/signup" },
+};
+
 export default function SignupPage() {
   return (
     <div className="relative min-h-screen bg-background flex items-center justify-center px-4 overflow-hidden">

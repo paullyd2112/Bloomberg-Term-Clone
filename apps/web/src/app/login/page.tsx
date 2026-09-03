@@ -2,6 +2,12 @@ import { Suspense } from "react";
 import Link from "next/link";
 import LoginForm from "./LoginForm";
 
+export const metadata = {
+  title: "Sign in",
+  description: "Sign in to your Plebs account.",
+  alternates: { canonical: "/login" },
+};
+
 export default function LoginPage() {
   return (
     <div className="relative min-h-screen bg-background flex items-center justify-center px-4 overflow-hidden">

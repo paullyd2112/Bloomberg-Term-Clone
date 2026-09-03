@@ -49,11 +49,11 @@ export async function generateMetadata({
   const supabase = createClient();
   const { data } = await supabase
     .from("signals")
-    .select("direction, identifier, asset_type, confidence, reasoning, market_title")
+    .select("direction, identifier, asset_type, confidence, reasoning, market_title, outcome")
     .eq("id", params.id)
     .single();
 
-  if (!data) return { title: "Signal — Plebs.Finance" };
+  if (!data) return { title: { absolute: "Signal — Plebs.Finance" } };
 
   const displayName = data.asset_type === "prediction"
     ? data.market_title ?? data.identifier
@@ -61,17 +61,27 @@ export async function generateMetadata({
   const title = `${data.direction} ${displayName} (${data.confidence}%) — Plebs.Finance`;
   const desc  = (data.reasoning as string).slice(0, 160);
 
+  // Only resolved signals are indexed, matching what src/app/sitemap.ts lists.
+  // A PENDING signal has no concluded outcome and goes stale fast, so indexing
+  // it would put a page in search results that misrepresents itself by the time
+  // anyone lands on it.
+  const isResolved = data.outcome != null && data.outcome !== "PENDING";
+
   return {
-    title,
+    // Already brand-suffixed; opt out of the root template.
+    title: { absolute: title },
     description: desc,
+    alternates: { canonical: `/signal/${params.id}` },
+    robots: isResolved ? undefined : { index: false, follow: true },
     openGraph: {
       title,
       description: desc,
+      url:         `/signal/${params.id}`,
       siteName:    "Plebs.Finance",
       type:        "website",
     },
     twitter: {
-      card:        "summary",
+      card:        "summary_large_image",
       title,
       description: desc,
     },
