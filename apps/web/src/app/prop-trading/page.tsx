@@ -2,9 +2,10 @@ import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, Shield, Target, TrendingDown, Layers, Clock, Zap } from "lucide-react";
 
 export const metadata = {
-  title: "Prop Trading | Plebs.Finance",
+  title: "Prop Trading",
   description:
     "AI crypto signals built for prop traders. Risk profiles modeled on real prop firm rules — position sizing, daily kill switches, drawdown limits, and more.",
+  alternates: { canonical: "/prop-trading" },
 };
 
 /* ── Hero ──────────────────────────────────────────────────────────────────── */

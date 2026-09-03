@@ -1,6 +1,7 @@
 export const metadata = {
-  title: 'Privacy Policy | Plebs.Finance',
+  title: 'Privacy Policy',
   description: 'Privacy Policy for Plebs.Finance',
+  alternates: { canonical: '/privacy' },
 };
 
 export default function PrivacyPolicy() {

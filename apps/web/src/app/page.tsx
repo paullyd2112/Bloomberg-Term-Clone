@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import JsonLd from "@/components/seo/JsonLd";
+import { abs, SITE_NAME } from "@/lib/seo";
 import {
   Zap,
   Radar,
@@ -26,10 +28,30 @@ import DashboardShot from "@/components/landing/showcase/DashboardShot";
 import AssetShot from "@/components/landing/showcase/AssetShot";
 import LiveStats from "@/components/landing/LiveStats";
 
+const HOME_TITLE = "Plebs · Crypto & prediction market signals, tracked to outcome.";
+const HOME_DESCRIPTION =
+  "BUY/SELL signals on 50+ coins and YES/NO calls on Polymarket, rescored around the clock. Congressional trades, prop trading tools, and a morning briefing. Every call tracked to outcome.";
+
 export const metadata: Metadata = {
-  title: "Plebs · Crypto & prediction market signals, tracked to outcome.",
-  description:
-    "BUY/SELL signals on 50+ coins and YES/NO calls on Polymarket, rescored around the clock. Congressional trades, prop trading tools, and a morning briefing. Every call tracked to outcome.",
+  // `absolute` opts out of the root "%s · Plebs" template — this title already
+  // leads with the brand.
+  title: { absolute: HOME_TITLE },
+  description: HOME_DESCRIPTION,
+  alternates: { canonical: "/" },
+  // Without these, Open Graph falls back to the generic root copy, so shared
+  // links advertised something different from what the page actually says.
+  openGraph: {
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    url: "/",
+    type: "website",
+    siteName: "Plebs",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+  },
 };
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
@@ -891,9 +913,59 @@ function Footer() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Organization + WebSite + SoftwareApplication schema.
+ *
+ * Offers are derived from the PLANS array rendered on this page, so the prices
+ * in search results cannot drift out of sync with the prices on screen.
+ */
+function homeJsonLd() {
+  const organization = {
+    "@type": "Organization",
+    "@id": abs("/#organization"),
+    name: SITE_NAME,
+    url: abs("/"),
+    logo: abs("/logo.png"),
+    description: HOME_DESCRIPTION,
+  };
+
+  const website = {
+    "@type": "WebSite",
+    "@id": abs("/#website"),
+    name: SITE_NAME,
+    url: abs("/"),
+    description: HOME_DESCRIPTION,
+    publisher: { "@id": abs("/#organization") },
+  };
+
+  const application = {
+    "@type": "SoftwareApplication",
+    "@id": abs("/#app"),
+    name: SITE_NAME,
+    applicationCategory: "FinanceApplication",
+    operatingSystem: "Web",
+    description: HOME_DESCRIPTION,
+    publisher: { "@id": abs("/#organization") },
+    offers: PLANS.map((plan) => ({
+      "@type": "Offer",
+      name: plan.name,
+      price: plan.price.replace(/[^0-9.]/g, ""),
+      priceCurrency: "USD",
+      category: plan.period === "/mo" ? "Subscription" : "Free",
+      url: abs(plan.href),
+    })),
+  };
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [organization, website, application],
+  };
+}
+
 export default function LandingPage() {
   return (
     <div className="font-sans bg-background min-h-screen antialiased selection:bg-emerald-500/30 selection:text-white">
+      <JsonLd data={homeJsonLd()} />
       <Nav />
       <div className="pt-14">
         <TickerBar showStatus={false} />

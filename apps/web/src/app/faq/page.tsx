@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import JsonLd from "@/components/seo/JsonLd";
 
 export const metadata = {
-  title: "FAQ | Plebs.Finance",
+  // Brand suffix comes from the root `%s · Plebs` template.
+  title: "FAQ",
   description:
     "Frequently asked questions about Plebs.Finance — AI crypto signals, prediction markets, pricing, and more.",
+  alternates: { canonical: "/faq" },
 };
 
 const CATEGORIES: { title: string; items: { q: string; a: string }[] }[] = [
@@ -124,9 +127,29 @@ const CATEGORIES: { title: string; items: { q: string; a: string }[] }[] = [
   },
 ];
 
+/**
+ * FAQPage schema built by flattening CATEGORIES — the same source the page
+ * renders from, so the markup and the visible answers can never disagree
+ * (Google requires the answer text to be present on the page).
+ */
+function faqJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: CATEGORIES.flatMap((category) =>
+      category.items.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: { "@type": "Answer", text: item.a },
+      })),
+    ),
+  };
+}
+
 export default function FaqPage() {
   return (
     <main className="max-w-3xl mx-auto px-6 py-16 text-gray-300">
+      <JsonLd data={faqJsonLd()} />
       <Link
         href="/"
         className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-white transition-colors mb-10"
