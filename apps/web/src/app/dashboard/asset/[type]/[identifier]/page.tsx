@@ -1,8 +1,6 @@
 import { notFound } from "next/navigation";
-import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getUserTier } from "@/lib/user";
-import { canAccessFeature } from "@/lib/tier";
+import { getUser } from "@/lib/user";
 import SignalList from "@/components/signals/SignalList";
 import type { Signal } from "@/components/signals/SignalCard";
 import WatchlistToggle from "@/components/watchlist/WatchlistToggle";
@@ -171,9 +169,6 @@ export default async function AssetPage({ params }: PageProps) {
   const identifier = type === "prediction" ? rawIdentifier : rawIdentifier.toUpperCase();
 
   const user = await getUser();
-  const tier = await getUserTier();
-  const canSeeOptions = canAccessFeature(tier, "real_time");
-  const canScoreOnDemand = canAccessFeature(tier, "on_demand_scoring");
 
   const { price, history, signals, accuracy, news, options, watchlistId, shortInterest, earnings, sentiment, corporateActions } =
     await fetchAssetData(type, identifier, user!.id);
@@ -251,11 +246,7 @@ export default async function AssetPage({ params }: PageProps) {
         <div className="lg:col-span-2 space-y-4">
           <SectionHeader count={signals.length}>Signal history</SectionHeader>
           {signals.length === 0 ? (
-            canScoreOnDemand ? (
-              <OnDemandScore assetType={type} identifier={identifier} />
-            ) : (
-              <div className="text-sm text-zinc-500 py-8 text-center">No signals yet for {headerTitle}.</div>
-            )
+            <OnDemandScore assetType={type} identifier={identifier} />
           ) : (
             <SignalList signals={signals} />
           )}
@@ -319,23 +310,10 @@ export default async function AssetPage({ params }: PageProps) {
           {type === "stock" && (
             <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-xl p-4 space-y-3">
               <SectionHeader>Options flow</SectionHeader>
-              {canSeeOptions ? (
-                options.length > 0 ? (
-                  <OptionsFlowTable rows={options} />
-                ) : (
-                  <p className="text-xs text-zinc-600">No unusual flow recorded.</p>
-                )
+              {options.length > 0 ? (
+                <OptionsFlowTable rows={options} />
               ) : (
-                <div className="text-center py-4 space-y-2">
-                  <p className="text-xs text-zinc-500">Options flow is a Pro feature.</p>
-                  <a
-                    href="/dashboard/upgrade"
-                    className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300"
-                  >
-                    Upgrade
-                    <ArrowRight className="h-3 w-3" />
-                  </a>
-                </div>
+                <p className="text-xs text-zinc-600">No unusual flow recorded.</p>
               )}
             </div>
           )}

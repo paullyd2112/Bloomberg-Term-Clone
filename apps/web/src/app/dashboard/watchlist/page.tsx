@@ -1,10 +1,8 @@
 import { Star } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getUserTier } from "@/lib/user";
-import { WATCHLIST_LIMIT } from "@/lib/tier";
+import { getUser } from "@/lib/user";
 import AddToWatchlist from "@/components/watchlist/AddToWatchlist";
 import WatchlistRow from "@/components/watchlist/WatchlistRow";
-import SubscribeGate from "@/components/ui/SubscribeGate";
 
 export const revalidate = 60;
 
@@ -71,15 +69,10 @@ async function fetchWatchlist(userId: string): Promise<WatchlistItem[]> {
 
 export default async function WatchlistPage() {
   const user = await getUser();
-  const tier = await getUserTier();
-
-  if (tier === "free") return <SubscribeGate />;
 
   const items = await fetchWatchlist(user!.id);
 
-  const limit        = WATCHLIST_LIMIT[tier];
-  const count        = items.length;
-  const limitReached = count >= limit;
+  const count = items.length;
 
   return (
     <div className="p-5 md:p-8 max-w-3xl mx-auto space-y-6">
@@ -96,12 +89,11 @@ export default async function WatchlistPage() {
             Tracking{" "}
             <span className="tabular-nums text-zinc-300">
               {count}
-              {limit === Infinity ? "" : ` / ${limit}`}
             </span>{" "}
             assets for live signals.
           </p>
         </div>
-        <AddToWatchlist limitReached={limitReached} />
+        <AddToWatchlist />
       </div>
 
       {/* Table */}

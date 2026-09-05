@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/user";
-import { WATCHLIST_LIMIT } from "@/lib/tier";
 import type { Tier } from "@/lib/tier";
 
 const Body = z.object({
@@ -29,13 +28,12 @@ export async function POST(req: Request) {
     supabase.from("watchlist").select("id", { count: "exact", head: true }).eq("user_id", user.id),
   ]);
 
-  const tier  = (profileRes.data?.tier ?? "free") as Tier;
   const count = countRes.count ?? 0;
-  const limit = WATCHLIST_LIMIT[tier];
+  const limit = Infinity;
 
   if (count >= limit) {
     return NextResponse.json(
-      { error: `Watchlist limit reached (${limit} assets on ${tier} plan)`, upgrade: tier === "free" },
+      { error: `Watchlist limit reached` },
       { status: 403 },
     );
   }

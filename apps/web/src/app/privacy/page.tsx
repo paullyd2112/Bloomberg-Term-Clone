@@ -27,7 +27,7 @@ export default function PrivacyPolicy() {
         <h2 className="text-xl font-semibold text-white mb-3">Information We Collect</h2>
         <ul className="list-disc pl-5 space-y-2">
           <li><strong>Account information:</strong> name, email address, and password when you register.</li>
-          <li><strong>Payment information:</strong> billing details processed securely through Stripe. We do not store full card numbers.</li>
+          <li><strong>Wallet information:</strong> public wallet addresses you connect for Polymarket trading. We never access private keys.</li>
           <li><strong>Usage data:</strong> pages visited, features used, signals viewed, watchlist items, portfolio positions, and alerts you create.</li>
           <li><strong>Communications:</strong> messages you send to our AI assistant (Pleby) and support inquiries sent to support@plebs.finance.</li>
           <li><strong>Device data:</strong> IP address, browser type, and operating system for security and analytics purposes.</li>
@@ -38,7 +38,7 @@ export default function PrivacyPolicy() {
         <h2 className="text-xl font-semibold text-white mb-3">How We Use Your Information</h2>
         <ul className="list-disc pl-5 space-y-2">
           <li>To provide and maintain the Plebs.Finance service.</li>
-          <li>To process payments and manage your subscription.</li>
+          <li>To deliver signals, alerts, and briefings you have opted into.</li>
           <li>To send daily briefings, alerts, and product updates you have opted into.</li>
           <li>To personalize your experience and improve our signal generation.</li>
           <li>To detect and prevent fraud or unauthorized access.</li>
@@ -51,7 +51,7 @@ export default function PrivacyPolicy() {
         <p>We use the following third-party services to operate Plebs.Finance:</p>
         <ul className="list-disc pl-5 mt-3 space-y-2">
           <li><strong>Supabase</strong> — database and authentication</li>
-          <li><strong>Stripe</strong> — payment processing</li>
+          <li><strong>Polymarket</strong> — prediction market data and non-custodial trading</li>
           <li><strong>Anthropic</strong> — AI assistant (Pleby) and signal analysis</li>
           <li><strong>Resend</strong> — transactional email delivery</li>
           <li><strong>Vercel</strong> — hosting and infrastructure</li>

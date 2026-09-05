@@ -1,9 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { getUserTier } from "@/lib/user";
-import { canAccessFeature } from "@/lib/tier";
 import { format } from "date-fns";
-import Link from "next/link";
-import { Sunrise, ArrowRight } from "lucide-react";
+import { Sunrise } from "lucide-react";
 
 export const revalidate = 300;
 
@@ -56,31 +53,7 @@ async function fetchBriefings(): Promise<Briefing[]> {
 }
 
 export default async function BriefingPage() {
-  const [briefings, tier] = await Promise.all([fetchBriefings(), getUserTier()]);
-  const hasBriefingAccess = canAccessFeature(tier, "real_time");
-
-  if (!hasBriefingAccess) {
-    return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-2xl p-8 text-center flex flex-col items-center gap-4">
-          <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-700/30 bg-amber-500/10 text-amber-400">
-            <Sunrise className="h-6 w-6" />
-          </span>
-          <h2 className="text-white font-semibold text-lg tracking-tight">Morning Briefing</h2>
-          <p className="text-zinc-400 text-sm leading-relaxed max-w-md">
-            A daily AI-generated market brief delivered to your inbox, covering top signals, macro context, and trade ideas. Pro and Elite only.
-          </p>
-          <Link
-            href="/dashboard/upgrade"
-            className="inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm px-5 py-2.5 rounded-lg transition-colors"
-          >
-            Upgrade to Pro
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const briefings = await fetchBriefings();
 
   if (briefings.length === 0) {
     return (

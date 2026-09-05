@@ -1,6 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getUser, getUserTier } from "@/lib/user";
-import { canAccessFeature } from "@/lib/tier";
+import { getUser } from "@/lib/user";
 import { createClient } from "@/lib/supabase/server";
 import { PLEBY_TOOLS, executeTool } from "@/lib/pleby/tools";
 import { PLEBY_SYSTEM_PROMPT } from "@/lib/pleby/system-prompt";
@@ -45,11 +44,6 @@ function sse(event: string, data: unknown): string {
 export async function POST(req: Request) {
   const user = await getUser();
   if (!user) return new Response("Unauthorized", { status: 401 });
-
-  const tier = await getUserTier();
-  if (!canAccessFeature(tier, "pleby")) {
-    return new Response("Elite tier required", { status: 403 });
-  }
 
   if (await isRateLimited(user.id)) {
     return new Response(

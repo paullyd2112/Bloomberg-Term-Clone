@@ -18,7 +18,6 @@ const RATE_LIMITS: Record<string, number> = {
   "/api/score-on-demand":          10,
   "/api/push/subscribe":           10,
   "/api/push/unsubscribe":         10,
-  "/api/stripe/checkout":          10,
   "/api/pleby/chat":               20,
 };
 

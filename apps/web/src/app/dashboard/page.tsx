@@ -1,13 +1,9 @@
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { getUserTierAndProfile } from "@/lib/user";
-import { applyFreeDelay, applyFreeLimit, FREE_TIER_SIGNAL_LIMIT, FREE_TIER_DELAY_HOURS } from "@/lib/tier";
 import SignalFeed from "@/components/signals/SignalFeed";
 import type { Signal } from "@/components/signals/SignalCard";
-import FreeSignalGate from "@/components/ui/FreeSignalGate";
 import WhaleSentinel from "@/components/WhaleSentinel";
 import SectionHeader from "@/components/ui/SectionHeader";
-import SkipTrialBanner from "@/components/SkipTrialBanner";
 import SystemSafeguards from "@/components/dashboard/SystemSafeguards";
 import RedditTrending from "@/components/dashboard/RedditTrending";
 import MarketPulse from "@/components/dashboard/MarketPulse";
@@ -247,9 +243,8 @@ async function fetchTopMovers() {
 }
 
 export default async function DashboardPage() {
-  const [{ tier, profile }, [signals, movers, accuracy]] = await Promise.all([
-    getUserTierAndProfile(),
-    Promise.all([fetchSignals(), fetchTopMovers(), fetchPlatformAccuracy()]),
+  const [signals, movers, accuracy] = await Promise.all([
+    fetchSignals(), fetchTopMovers(), fetchPlatformAccuracy(),
   ]);
 
   const winCount  = signals.filter((s) => s.outcome === "WIN").length;
@@ -283,10 +278,6 @@ export default async function DashboardPage() {
           )}
         </div>
       </header>
-
-      {tier !== "free" && profile?.billing_interval !== "lifetime" && (
-        <SkipTrialBanner />
-      )}
 
       {/* Crypto market grid — Kraken-style top movers with sparklines */}
       {movers.length > 0 && (
@@ -345,18 +336,7 @@ export default async function DashboardPage() {
       {/* Signal feed — the product, front and center */}
       <section>
         <SectionHeader primary divider className="mb-3">Latest Signals</SectionHeader>
-        {tier === "free" ? (
-          <>
-            <SignalFeed signals={applyFreeLimit(applyFreeDelay(signals) as Signal[])} hideTrade />
-            <FreeSignalGate
-              delayHours={FREE_TIER_DELAY_HOURS}
-              dailyLimit={FREE_TIER_SIGNAL_LIMIT}
-              totalAvailable={signals.length}
-            />
-          </>
-        ) : (
-          <SignalFeed signals={signals} />
-        )}
+        <SignalFeed signals={signals} />
       </section>
 
       {/* Detailed track record (expandable) */}

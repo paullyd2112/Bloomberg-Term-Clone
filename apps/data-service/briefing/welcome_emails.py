@@ -1,13 +1,12 @@
 """
-Welcome email sequence — 4 emails sent over the 7-day trial.
+Welcome email sequence — 3 emails sent over the first week.
   Day 0 (immediate): Welcome + getting started
-  Day 2: Feature spotlight — signals & options flow
-  Day 4: Feature spotlight — congressional trades & briefing
-  Day 6: Trial ending soon — convert to paid
+  Day 2: Feature spotlight — signals & accuracy
+  Day 4: Feature spotlight — prediction markets & briefing
 """
 
 import os
-from datetime import date, timedelta
+from datetime import date
 
 import resend
 import sentry_sdk
@@ -34,7 +33,7 @@ def _email_day0(name: str) -> tuple[str, str, str]:
       plebs<span style="color:#22c55e;">.finance</span>
     </div>
     <h1 style="color:#fff;font-size:22px;font-weight:700;margin:0 0 12px;">
-      Welcome{f", {name}" if name else ""} — your 7-day trial is live.
+      Welcome{f", {name}" if name else ""} — you're in.
     </h1>
     <p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:0 0 24px;">
       You now have full access to everything Plebs offers. Here's where to start:
@@ -43,44 +42,44 @@ def _email_day0(name: str) -> tuple[str, str, str]:
       <div style="font-size:12px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Start here</div>
       <div style="margin-bottom:12px;">
         <a href="{APP_URL}/dashboard" style="color:#22c55e;font-weight:600;text-decoration:none;">→ Open your dashboard</a>
-        <div style="color:#71717a;font-size:13px;margin-top:2px;">Check the live signal feed — stocks, crypto, and prediction markets.</div>
+        <div style="color:#71717a;font-size:13px;margin-top:2px;">Check the live signal feed — crypto and prediction markets.</div>
       </div>
       <div style="margin-bottom:12px;">
-        <a href="{APP_URL}/dashboard" style="color:#22c55e;font-weight:600;text-decoration:none;">→ Add tickers to your watchlist</a>
+        <a href="{APP_URL}/dashboard/watchlist" style="color:#22c55e;font-weight:600;text-decoration:none;">→ Add assets to your watchlist</a>
         <div style="color:#71717a;font-size:13px;margin-top:2px;">Set up alerts so you never miss a signal on assets you follow.</div>
       </div>
       <div>
-        <a href="{APP_URL}/dashboard/congress" style="color:#22c55e;font-weight:600;text-decoration:none;">→ Check congressional trades</a>
-        <div style="color:#71717a;font-size:13px;margin-top:2px;">See what House and Senate members are buying and selling.</div>
+        <a href="{APP_URL}/dashboard/predictions" style="color:#22c55e;font-weight:600;text-decoration:none;">→ Browse prediction markets</a>
+        <div style="color:#71717a;font-size:13px;margin-top:2px;">See AI-scored Polymarket contracts with probability tracking.</div>
       </div>
     </div>
     <p style="color:#71717a;font-size:13px;line-height:1.6;margin:0 0 24px;">
-      Your morning briefing starts arriving at 7am ET on weekdays — it covers top signals, macro context, and what to watch for the day.
+      Your morning briefing starts arriving at 7am ET daily — it covers crypto, prediction markets, and what's moving the world.
     </p>
     <a href="{APP_URL}/dashboard" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:14px;padding:12px 24px;border-radius:8px;text-decoration:none;">
       Open dashboard →
     </a>
     <div style="margin-top:32px;padding-top:20px;border-top:1px solid #27272a;font-size:11px;color:#3f3f46;text-align:center;">
-      Plebs.finance · Not financial advice · <a href="{APP_URL}/unsubscribe" style="color:#52525b;">Unsubscribe</a>
+      Plebs is open source · Not financial advice · <a href="{APP_URL}/unsubscribe" style="color:#52525b;">Unsubscribe</a>
     </div>
   </div>
 </body>
 </html>"""
-    text = f"""Welcome{f", {name}" if name else ""} — your 7-day trial is live.
+    text = f"""Welcome{f", {name}" if name else ""} — you're in.
 
 Start here:
 → Open your dashboard: {APP_URL}/dashboard
-→ Add tickers to your watchlist and set alerts
-→ Check congressional trades: {APP_URL}/dashboard/congress
+→ Add assets to your watchlist and set alerts
+→ Browse prediction markets: {APP_URL}/dashboard/predictions
 
-Your morning briefing starts arriving at 7am ET on weekdays.
+Your morning briefing starts arriving at 7am ET daily.
 
 Not financial advice. Unsubscribe: {APP_URL}/unsubscribe"""
     return subject, html, text
 
 
 def _email_day2(name: str) -> tuple[str, str, str]:
-    subject = "The two features most traders miss on Plebs"
+    subject = "Two features most traders miss on Plebs"
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -93,47 +92,47 @@ def _email_day2(name: str) -> tuple[str, str, str]:
       Two features worth checking out
     </h1>
     <p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:0 0 24px;">
-      Day 2 of your trial. Most users find these two the most valuable:
+      Most users find these two the most valuable:
     </p>
     <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:20px;margin-bottom:16px;">
       <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">⚡ Signal accuracy per asset</div>
       <div style="color:#a1a1aa;font-size:14px;line-height:1.6;margin-bottom:12px;">
-        Every signal we generate gets tracked against the actual outcome. You can see win rates per ticker — so you know which signals actually make money over time.
+        Every signal we generate gets tracked against the actual outcome. You can see win rates per asset — so you know which signals actually make money over time.
       </div>
       <a href="{APP_URL}/dashboard" style="color:#22c55e;font-size:13px;font-weight:600;text-decoration:none;">View signal feed →</a>
     </div>
     <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:20px;margin-bottom:24px;">
-      <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">🌊 Options flow</div>
+      <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">🎯 On-demand scoring</div>
       <div style="color:#a1a1aa;font-size:14px;line-height:1.6;margin-bottom:12px;">
-        Unusual call and put sweeps flagged in real time. When institutions make big options bets, it shows up here before it shows up in the price.
+        Want an AI analysis on a specific coin? Open any asset page and generate a signal on demand.
       </div>
-      <a href="{APP_URL}/dashboard/asset/stock/SPY" style="color:#22c55e;font-size:13px;font-weight:600;text-decoration:none;">Check options flow →</a>
+      <a href="{APP_URL}/dashboard/asset/crypto/BTC" style="color:#22c55e;font-size:13px;font-weight:600;text-decoration:none;">Try it on BTC →</a>
     </div>
     <a href="{APP_URL}/dashboard" style="display:inline-block;background:#22c55e;color:#000;font-weight:700;font-size:14px;padding:12px 24px;border-radius:8px;text-decoration:none;">
       Open dashboard →
     </a>
     <div style="margin-top:32px;padding-top:20px;border-top:1px solid #27272a;font-size:11px;color:#3f3f46;text-align:center;">
-      Plebs.finance · Not financial advice · <a href="{APP_URL}/unsubscribe" style="color:#52525b;">Unsubscribe</a>
+      Plebs is open source · Not financial advice · <a href="{APP_URL}/unsubscribe" style="color:#52525b;">Unsubscribe</a>
     </div>
   </div>
 </body>
 </html>"""
-    text = f"""Two features worth checking out — Day 2 of your trial.
+    text = f"""Two features worth checking out.
 
 Signal accuracy per asset:
-Every signal gets tracked against actual outcomes. See win rates per ticker.
+Every signal gets tracked against actual outcomes. See win rates per asset.
 {APP_URL}/dashboard
 
-Options flow:
-Unusual call/put sweeps flagged in real time.
-{APP_URL}/dashboard
+On-demand scoring:
+Generate an AI signal on any coin from its asset page.
+{APP_URL}/dashboard/asset/crypto/BTC
 
 Not financial advice. Unsubscribe: {APP_URL}/unsubscribe"""
     return subject, html, text
 
 
 def _email_day4(name: str) -> tuple[str, str, str]:
-    subject = "Congressional trades + your morning briefing"
+    subject = "Prediction markets + your morning briefing"
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -146,16 +145,16 @@ def _email_day4(name: str) -> tuple[str, str, str]:
       Two more things you should be using
     </h1>
     <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:20px;margin-bottom:16px;">
-      <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">🏛 Congressional trade tracker</div>
+      <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">🎯 Prediction markets</div>
       <div style="color:#a1a1aa;font-size:14px;line-height:1.6;margin-bottom:12px;">
-        Every House and Senate STOCK Act disclosure in one feed. Politicians legally have to report trades within 45 days — you can see exactly what they're buying.
+        Browse Polymarket contracts with AI-scored YES/NO signals. See probabilities, sparklines, and volume data for elections, macro, crypto, and more.
       </div>
-      <a href="{APP_URL}/dashboard/congress" style="color:#22c55e;font-size:13px;font-weight:600;text-decoration:none;">View congressional trades →</a>
+      <a href="{APP_URL}/dashboard/predictions" style="color:#22c55e;font-size:13px;font-weight:600;text-decoration:none;">Browse predictions →</a>
     </div>
     <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:20px;margin-bottom:24px;">
       <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">☀️ Morning briefing</div>
       <div style="color:#a1a1aa;font-size:14px;line-height:1.6;margin-bottom:12px;">
-        Hits your inbox at 7am ET every weekday. Top signals, macro context, what to watch, and a risk note — written by AI, reviewed for accuracy. Five minutes and you're caught up.
+        Hits your inbox daily. Crypto markets, prediction markets, geopolitics, tech, and whatever else is moving the world. Five minutes and you're caught up.
       </div>
       <a href="{APP_URL}/dashboard/briefing" style="color:#22c55e;font-size:13px;font-weight:600;text-decoration:none;">Read today's briefing →</a>
     </div>
@@ -163,81 +162,20 @@ def _email_day4(name: str) -> tuple[str, str, str]:
       Open dashboard →
     </a>
     <div style="margin-top:32px;padding-top:20px;border-top:1px solid #27272a;font-size:11px;color:#3f3f46;text-align:center;">
-      Plebs.finance · Not financial advice · <a href="{APP_URL}/unsubscribe" style="color:#52525b;">Unsubscribe</a>
+      Plebs is open source · Not financial advice · <a href="{APP_URL}/unsubscribe" style="color:#52525b;">Unsubscribe</a>
     </div>
   </div>
 </body>
 </html>"""
-    text = f"""Congressional trades + your morning briefing — Day 4.
+    text = f"""Prediction markets + your morning briefing.
 
-Congressional trade tracker:
-Every STOCK Act disclosure in one feed.
-{APP_URL}/dashboard/congress
+Prediction markets:
+Browse Polymarket contracts with AI-scored signals.
+{APP_URL}/dashboard/predictions
 
 Morning briefing:
-Hits your inbox at 7am ET weekdays. Top signals, macro context, risk note.
+Hits your inbox daily. Crypto, predictions, geopolitics, tech.
 {APP_URL}/dashboard/briefing
-
-Not financial advice. Unsubscribe: {APP_URL}/unsubscribe"""
-    return subject, html, text
-
-
-def _email_day6(name: str, tier: str) -> tuple[str, str, str]:
-    subject = "Your trial ends tomorrow — here's what happens next"
-    is_pro   = tier in ("pro", "elite")
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
-    <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:24px;">
-      plebs<span style="color:#22c55e;">.finance</span>
-    </div>
-    <h1 style="color:#fff;font-size:20px;font-weight:700;margin:0 0 12px;">
-      Your trial ends tomorrow
-    </h1>
-    <p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:0 0 24px;">
-      {"You're already subscribed — nothing changes for you." if is_pro else "After tomorrow, you'll lose access to signals, options flow, congressional trades, and your morning briefing."}
-    </p>
-    {"" if is_pro else f'''
-    <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:20px;margin-bottom:24px;">
-      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px;">Keep your access</div>
-      <div style="margin-bottom:10px;display:flex;align-items:center;gap:12px;">
-        <div style="flex:1;">
-          <div style="color:#fff;font-weight:600;font-size:15px;">Pro</div>
-          <div style="color:#71717a;font-size:13px;">Signals, options flow, briefing, congressional trades</div>
-        </div>
-        <div style="color:#22c55e;font-weight:800;font-size:18px;">$40<span style="font-size:12px;font-weight:400;color:#52525b;">/mo</span></div>
-      </div>
-      <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">
-        <div style="flex:1;">
-          <div style="color:#fff;font-weight:600;font-size:15px;">Lifetime Pro</div>
-          <div style="color:#71717a;font-size:13px;">Pay once, access forever</div>
-        </div>
-        <div style="color:#22c55e;font-weight:800;font-size:18px;">$299<span style="font-size:12px;font-weight:400;color:#52525b;"> once</span></div>
-      </div>
-      <a href="{APP_URL}/dashboard/upgrade" style="display:block;text-align:center;background:#22c55e;color:#000;font-weight:700;font-size:14px;padding:12px;border-radius:8px;text-decoration:none;">
-        Upgrade now →
-      </a>
-    </div>
-    '''}
-    <p style="color:#52525b;font-size:12px;line-height:1.6;margin:0;">
-      Questions? Reply to this email or reach us at support@plebs.finance.
-    </p>
-    <div style="margin-top:32px;padding-top:20px;border-top:1px solid #27272a;font-size:11px;color:#3f3f46;text-align:center;">
-      Plebs.finance · Not financial advice · <a href="{APP_URL}/unsubscribe" style="color:#52525b;">Unsubscribe</a>
-    </div>
-  </div>
-</body>
-</html>"""
-    text = f"""Your trial ends tomorrow.
-
-{"You're already subscribed — nothing changes." if is_pro else f"Upgrade to keep access: {APP_URL}/dashboard/upgrade"}
-
-Pro: $40/mo
-Lifetime Pro: $299 once
-
-Questions? support@plebs.finance
 
 Not financial advice. Unsubscribe: {APP_URL}/unsubscribe"""
     return subject, html, text
@@ -262,7 +200,7 @@ def _send(to_email: str, subject: str, html: str, text: str) -> bool:
 
 
 def send_welcome_sequence() -> str:
-    """Send the appropriate welcome email to users based on their trial day.
+    """Send the appropriate welcome email to users based on their signup day.
 
     NOTE: this is a daily batch scan — day-0 emails can arrive up to 24h
     after signup, and a missed cron run skips that day's steps entirely.
@@ -281,7 +219,7 @@ def send_welcome_sequence() -> str:
     failed = 0
 
     try:
-        result = supabase.table("profiles").select("id, full_name, tier, created_at").execute()
+        result = supabase.table("profiles").select("id, full_name, created_at").execute()
         profiles = result.data or []
     except Exception as e:
         logger.error("welcome_sequence: failed to fetch profiles — {}", e)
@@ -298,7 +236,7 @@ def send_welcome_sequence() -> str:
             continue
 
         day = (today - signup_date).days
-        if day not in (0, 2, 4, 6):
+        if day not in (0, 2, 4):
             continue
 
         try:
@@ -311,16 +249,13 @@ def send_welcome_sequence() -> str:
             continue
 
         name = profile.get("full_name") or ""
-        tier = profile.get("tier") or "free"
 
         if day == 0:
             subject, html, text = _email_day0(name)
         elif day == 2:
             subject, html, text = _email_day2(name)
-        elif day == 4:
-            subject, html, text = _email_day4(name)
         else:
-            subject, html, text = _email_day6(name, tier)
+            subject, html, text = _email_day4(name)
 
         if _send(email, subject, html, text):
             sent += 1

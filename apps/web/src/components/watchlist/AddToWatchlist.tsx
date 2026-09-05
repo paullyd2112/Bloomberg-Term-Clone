@@ -2,18 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, ArrowRight } from "lucide-react";
+import { Plus } from "lucide-react";
 
 type AssetType = "stock" | "crypto";
 
 export default function AddToWatchlist({
   onAdded,
   disabled,
-  limitReached,
 }: {
   onAdded?: () => void;
   disabled?: boolean;
-  limitReached?: boolean;
 }) {
   const router   = useRouter();
   const [open, setOpen]           = useState(false);
@@ -45,18 +43,6 @@ export default function AddToWatchlist({
     setLoading(false);
     router.refresh();
     onAdded?.();
-  }
-
-  if (limitReached) {
-    return (
-      <a
-        href="/dashboard/upgrade"
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-400 hover:text-amber-300 border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 rounded-lg transition-colors"
-      >
-        Upgrade for unlimited watchlist
-        <ArrowRight className="h-3 w-3" />
-      </a>
-    );
   }
 
   return (

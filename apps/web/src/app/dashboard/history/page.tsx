@@ -2,8 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { History, ClipboardList, ArrowRight, TrendingUp, TrendingDown, BarChart3, Target } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getUserTier } from "@/lib/user";
-import SubscribeGate from "@/components/ui/SubscribeGate";
+import { getUser } from "@/lib/user";
 import HistoryFilters from "./HistoryFilters";
 
 export const revalidate = 60;
@@ -110,11 +109,6 @@ export default async function HistoryPage({
   searchParams: { asset?: string; outcome?: string; horizon?: string };
 }) {
   await getUser();
-  const tier = await getUserTier();
-
-  if (tier === "free") {
-    return <SubscribeGate message="Pleby Trade History is available on Pro and Elite plans." />;
-  }
 
   const supabase = createClient();
 

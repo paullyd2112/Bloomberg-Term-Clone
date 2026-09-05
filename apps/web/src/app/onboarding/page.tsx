@@ -275,17 +275,16 @@ export default function OnboardingPage() {
             <div>
               <h1 className="text-2xl font-bold text-white">You&apos;re all set!</h1>
               <p className="text-zinc-400 text-sm mt-2">
-                One more step: choose a plan to get started, or continue with the free tier.
-                Paid plans include a free trial — cancel anytime without being charged.
+                Everything is ready. Jump into the dashboard to see live signals.
               </p>
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 text-left space-y-2">
               <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                What you get with your trial
+                What&apos;s included
               </p>
               {[
-                "AI crypto signals with 89% backtest win rate",
+                "AI crypto signals with tracked win rates",
                 "Prediction market analysis",
                 "Unlimited watchlist",
                 "Morning briefing email",
@@ -300,16 +299,10 @@ export default function OnboardingPage() {
 
             <div className="space-y-3">
               <Link
-                href="/dashboard/upgrade"
+                href="/dashboard"
                 className="block w-full bg-green-500 hover:bg-green-400 text-black font-bold py-3 rounded-lg transition-colors text-center"
               >
-                Choose a plan →
-              </Link>
-              <Link
-                href="/dashboard"
-                className="block text-sm text-zinc-500 hover:text-zinc-300 transition-colors text-center"
-              >
-                Browse the dashboard first
+                Open dashboard →
               </Link>
             </div>
           </div>

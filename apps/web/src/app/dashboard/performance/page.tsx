@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { TrendingUp, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getUserTier } from "@/lib/user";
-import { canAccessFeature } from "@/lib/tier";
+import { getUser } from "@/lib/user";
 import EquityCurve, { type EquityPoint } from "@/components/performance/EquityCurve";
 
 export const revalidate = 60;
@@ -73,31 +72,6 @@ function buildEquityCurve(closed: Position[]): EquityPoint[] {
 
 export default async function PerformancePage() {
   const user = await getUser();
-  const tier = await getUserTier();
-
-  if (!canAccessFeature(tier, "performance")) {
-    return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-2xl p-8 text-center flex flex-col items-center gap-4">
-          <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
-            <TrendingUp className="h-6 w-6" />
-          </span>
-          <h2 className="text-white font-semibold text-lg tracking-tight">Performance Analytics</h2>
-          <p className="text-zinc-400 text-sm leading-relaxed max-w-md">
-            See your personal win rate, total return, profit factor, and equity
-            curve across every trade you log. Pro and Elite only.
-          </p>
-          <Link
-            href="/dashboard/upgrade"
-            className="inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm px-5 py-2.5 rounded-lg transition-colors"
-          >
-            Upgrade to Pro
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   const supabase = createClient();
   const { data: rows } = await supabase

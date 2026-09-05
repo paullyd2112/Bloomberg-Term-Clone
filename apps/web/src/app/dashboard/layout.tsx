@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getUser, getUserTier, getUserProfile } from "@/lib/user";
+import { getUser } from "@/lib/user";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import BottomNav from "@/components/BottomNav";
@@ -14,21 +14,13 @@ export default async function DashboardLayout({
   const user = await getUser();
   if (!user) redirect("/login");
 
-  let tier: Awaited<ReturnType<typeof getUserTier>> = "free";
-  let profile: Awaited<ReturnType<typeof getUserProfile>> = null;
-  try {
-    [tier, profile] = await Promise.all([getUserTier(), getUserProfile()]);
-  } catch (e) {
-    console.error("DashboardLayout: failed to load profile/tier, falling back to free", e);
-  }
-
   return (
     <div className="flex h-screen bg-background text-white overflow-hidden">
       {/* Sidebar — desktop only */}
-      <Sidebar tier={tier} billingInterval={profile?.billing_interval} />
+      <Sidebar />
 
       <div className="flex flex-col flex-1 min-w-0 relative z-10">
-        <TopBar user={user} tier={tier} trialEndsAt={profile?.trial_ends_at ?? null} />
+        <TopBar user={user} />
         <TickerBar showStatus={false} />
         <div className="px-4 py-1 border-b border-white/[0.06] text-center flex-shrink-0">
           <p className="text-[10px] text-zinc-600">
@@ -41,7 +33,7 @@ export default async function DashboardLayout({
       </div>
 
       {/* Bottom nav — mobile only */}
-      <BottomNav tier={tier} />
+      <BottomNav />
     </div>
   );
 }

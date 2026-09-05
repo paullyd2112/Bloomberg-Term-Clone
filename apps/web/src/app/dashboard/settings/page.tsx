@@ -1,9 +1,6 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getUser, getUserProfile } from "@/lib/user";
 import { createClient } from "@/lib/supabase/server";
-import { isPaidTier, type Tier } from "@/lib/tier";
-import BillingPortalButton from "@/app/dashboard/upgrade/BillingPortalButton";
 import SettingsForm from "./SettingsForm";
 import SignOutButton from "./SignOutButton";
 
@@ -17,7 +14,6 @@ export default async function SettingsPage() {
   if (!user) redirect("/login");
 
   const profile = await getUserProfile();
-  const tier = (profile?.tier as Tier) ?? "free";
 
   let emailAlerts = true;
   let smsAlerts = false;
@@ -44,19 +40,9 @@ export default async function SettingsPage() {
     // columns not present yet — keep defaults
   }
 
-  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  const planLabel = profile?.billing_interval === "lifetime"
-    ? `Lifetime ${capitalize(tier)}`
-    : `${capitalize(tier)}${tier !== "free" ? " plan" : ""}`;
-
   const memberSince = user.created_at
     ? new Date(user.created_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
     : "—";
-
-  const trialEnds = profile?.trial_ends_at
-    ? new Date(profile.trial_ends_at)
-    : null;
-  const trialActive = trialEnds && trialEnds.getTime() > Date.now();
 
   return (
     <div className="p-5 md:p-8 max-w-3xl mx-auto space-y-6">
@@ -80,29 +66,8 @@ export default async function SettingsPage() {
             <div className="text-xs text-zinc-500">Member since</div>
             <div className="text-sm text-white mt-0.5">{memberSince}</div>
           </div>
-          <div>
-            <div className="text-xs text-zinc-500">Plan</div>
-            <div className="text-sm text-white mt-0.5">
-              {planLabel}
-              {trialActive && (
-                <span className="ml-2 text-xs text-emerald-400">
-                  · trial ends {trialEnds!.toLocaleDateString()}
-                </span>
-              )}
-            </div>
-          </div>
         </div>
         <div className="flex items-center gap-3 pt-1">
-          {isPaidTier(tier) ? (
-            <BillingPortalButton />
-          ) : (
-            <Link
-              href="/dashboard/upgrade"
-              className="bg-emerald-500 hover:bg-emerald-400 text-black text-sm font-bold px-4 py-2 rounded-lg transition-colors"
-            >
-              View plans →
-            </Link>
-          )}
           <SignOutButton />
         </div>
       </div>
@@ -116,13 +81,12 @@ export default async function SettingsPage() {
         initialEmailAlerts={emailAlerts}
         initialSmsAlerts={smsAlerts}
         initialNewsletterFreq={newsletterFreq}
-        tier={tier}
       />
 
       <p className="text-zinc-600 text-xs">
-        Need help? Email{" "}
-        <a href="mailto:support@plebs.finance" className="text-zinc-400 hover:text-white">
-          support@plebs.finance
+        Plebs is open source.{" "}
+        <a href="https://github.com/paullyd2112/bloomberg-term-clone" className="text-zinc-400 hover:text-white">
+          View on GitHub
         </a>
       </p>
     </div>

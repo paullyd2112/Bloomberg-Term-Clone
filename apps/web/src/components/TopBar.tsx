@@ -2,25 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import { AlertTriangle, Clock, Settings, LogOut } from "lucide-react";
-import type { Tier } from "@/lib/tier";
+import { Settings, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import SearchBar from "@/components/SearchBar";
 
-function getTrialDaysLeft(trialEndsAt: string | null): number | null {
-  if (!trialEndsAt) return null;
-  const now = new Date();
-  const end = new Date(trialEndsAt);
-  const diff = end.getTime() - now.getTime();
-  if (diff <= 0) return 0;
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export default function TopBar({ user, tier, trialEndsAt }: { user: User; tier: Tier; trialEndsAt: string | null }) {
+export default function TopBar({ user }: { user: User }) {
   const router = useRouter();
   const supabase = createClient();
-  const trialDaysLeft = getTrialDaysLeft(trialEndsAt);
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -31,21 +19,6 @@ export default function TopBar({ user, tier, trialEndsAt }: { user: User; tier: 
   return (
     <header className="h-14 flex-shrink-0 bg-black/40 backdrop-blur-xl border-b border-white/[0.06] flex items-center justify-between px-5 gap-4 relative z-30">
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        {tier === "free" && trialEndsAt !== null && trialDaysLeft === 0 && (
-          <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1 whitespace-nowrap flex-shrink-0">
-            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-            Trial ended —{" "}
-            <a href="/dashboard/upgrade" className="underline underline-offset-2 hover:text-red-200">
-              subscribe to continue
-            </a>
-          </span>
-        )}
-        {tier !== "free" && trialDaysLeft !== null && trialDaysLeft > 0 && (
-          <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1 whitespace-nowrap flex-shrink-0">
-            <Clock className="h-3.5 w-3.5 flex-shrink-0" />
-            Trial: {trialDaysLeft} {trialDaysLeft === 1 ? "day" : "days"} left
-          </span>
-        )}
         <SearchBar />
       </div>
 

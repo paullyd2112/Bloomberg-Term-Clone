@@ -50,33 +50,17 @@ export default function TermsOfService() {
           <li>You must be at least 18 years old to use Plebs.Finance.</li>
           <li>You are responsible for maintaining the security of your account credentials.</li>
           <li>You must provide accurate information when creating your account.</li>
-          <li>You may not share your account with others or create multiple accounts to abuse trial periods.</li>
+          <li>You may not create multiple accounts to circumvent rate limits or other restrictions.</li>
           <li>We reserve the right to suspend or terminate accounts that violate these Terms.</li>
         </ul>
       </section>
 
       <section className="mb-8">
-        <h2 className="text-xl font-semibold text-white mb-3">4. Subscriptions & Payments</h2>
-        <ul className="list-disc pl-5 space-y-2">
-          <li><strong>Free tier:</strong> A free tier is available with limited access (delayed signals, weekly recap). No credit card required.</li>
-          <li><strong>Trial:</strong> Pro monthly plans include a 7-day trial; Elite monthly plans include a 14-day trial. A valid payment method is required to start the trial. No charge during the trial period.</li>
-          <li><strong>Billing:</strong> After the trial, your selected plan is billed automatically via Stripe on a monthly or quarterly basis depending on your selection.</li>
-          <li><strong>Lifetime access:</strong> Lifetime Pro purchases are one-time payments that grant perpetual access to Pro features as they exist at time of purchase. We reserve the right to add new features to higher tiers.</li>
-          <li><strong>Price changes:</strong> We may change subscription prices with 30 days notice. Existing subscribers on locked-in rates will not be affected.</li>
-          <li><strong>Cancellation:</strong> You may cancel your subscription at any time. Access continues until the end of your current billing period.</li>
-        </ul>
-      </section>
-
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold text-white mb-3">5. Refund Policy</h2>
+        <h2 className="text-xl font-semibold text-white mb-3">4. Access</h2>
         <p>
-          We offer refunds within 7 days of your first charge if you are unsatisfied with the
-          Service. After 7 days, all payments are non-refundable. Lifetime purchases are
-          non-refundable after 14 days. To request a refund, contact{' '}
-          <a href="mailto:support@plebs.finance" className="text-blue-400 hover:underline">
-            support@plebs.finance
-          </a>
-          .
+          Plebs.Finance is free and open source. All features are available to every registered
+          user at no cost. We reserve the right to introduce optional paid features in the future,
+          which will be clearly communicated.
         </p>
       </section>
 
@@ -95,10 +79,9 @@ export default function TermsOfService() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-white mb-3">7. Intellectual Property</h2>
         <p>
-          All content on Plebs.Finance, including signals, AI analysis, platform design, and branding,
-          is owned by Plebs.Finance. You may not reproduce or distribute this content without explicit
-          written permission. Signal sharing features provided within the platform are permitted
-          for personal, non-commercial use.
+          The Plebs.Finance source code is available under the MIT License. The Plebs brand name
+          and logo remain the property of Plebs.Finance. AI-generated signals and analysis are
+          provided as-is and may be shared freely.
         </p>
       </section>
 
@@ -112,7 +95,7 @@ export default function TermsOfService() {
         </p>
         <p className="mt-3">
           Our total liability to you for any claim arising from use of the Service shall not
-          exceed the amount you paid us in the 3 months preceding the claim.
+          exceed $100.
         </p>
       </section>
 

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getUserTier } from "@/lib/user";
-import { isPaidTier } from "@/lib/tier";
+import { getUser } from "@/lib/user";
 
 const BacktestBody = z.object({
   asset_type:     z.enum(["all", "stock", "crypto", "prediction"]),
@@ -196,9 +195,6 @@ function computeResults(signals: RawSignal[], tradeSize: number): BacktestResult
 export async function POST(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const tier = await getUserTier();
-  if (!isPaidTier(tier)) return NextResponse.json({ error: "Pro required" }, { status: 403 });
 
   const parsed = BacktestBody.safeParse(await req.json());
   if (!parsed.success) {

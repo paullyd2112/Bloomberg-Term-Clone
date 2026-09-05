@@ -38,8 +38,6 @@ export default function WatchlistToggle({
       if (res.ok) {
         setWid(data.id);
         router.refresh();
-      } else if (res.status === 403) {
-        setError("Watchlist full — upgrade for unlimited");
       } else {
         setError(data.error ?? "Failed");
       }
@@ -63,9 +61,7 @@ export default function WatchlistToggle({
         <span>{loading ? "…" : wid ? "Watching" : "Watch"}</span>
       </button>
       {error && (
-        <a href="/dashboard/upgrade" className="text-xs text-amber-400 hover:text-amber-300">
-          {error}
-        </a>
+        <span className="text-xs text-red-400">{error}</span>
       )}
     </div>
   );

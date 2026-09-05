@@ -1,8 +1,6 @@
-import Link from "next/link";
-import { Bell, Zap, Target, Newspaper, ArrowRight } from "lucide-react";
+import { Bell, Zap, Target, Newspaper } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getUserTier } from "@/lib/user";
-import { canAccessFeature } from "@/lib/tier";
+import { getUser } from "@/lib/user";
 import AlertRow from "@/components/alerts/AlertRow";
 import AddAlertModal from "@/components/alerts/AddAlertModal";
 import PushToggle from "@/components/notifications/PushToggle";
@@ -32,30 +30,6 @@ async function fetchAlerts(userId: string): Promise<Alert[]> {
 
 export default async function AlertsPage() {
   const user = await getUser();
-  const tier = await getUserTier();
-
-  if (!canAccessFeature(tier, "alerts")) {
-    return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-2xl p-8 text-center flex flex-col items-center gap-4">
-          <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
-            <Bell className="h-6 w-6" />
-          </span>
-          <h2 className="text-white font-semibold text-lg tracking-tight">Alerts</h2>
-          <p className="text-zinc-400 text-sm leading-relaxed max-w-sm">
-            Get notified when a signal fires, a price crosses your target, or news drops for any asset. Checked every 30 minutes. Pro and Elite only.
-          </p>
-          <Link
-            href="/dashboard/upgrade"
-            className="inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm px-5 py-2.5 rounded-lg transition-colors"
-          >
-            Upgrade to Pro
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   const alerts  = await fetchAlerts(user!.id);
   const active  = alerts.filter((a) => a.is_active);

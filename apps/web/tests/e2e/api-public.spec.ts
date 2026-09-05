@@ -29,11 +29,4 @@ test.describe("Public API endpoints", () => {
     });
     expect(res.status()).toBe(401);
   });
-
-  test("POST /api/stripe/checkout returns 401 without auth", async ({ request }) => {
-    const res = await request.post("/api/stripe/checkout", {
-      data: { priceId: "fake_price_id" },
-    });
-    expect(res.status()).toBe(401);
-  });
 });

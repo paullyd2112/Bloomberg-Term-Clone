@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { requireUser, getUserTier } from "@/lib/user";
-import { canAccessFeature } from "@/lib/tier";
+import { requireUser } from "@/lib/user";
 
 export const maxDuration = 30;
 
@@ -18,14 +17,6 @@ export async function POST(request: Request) {
   const user = await requireUser().catch(() => null);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const tier = await getUserTier();
-  if (!canAccessFeature(tier, "on_demand_scoring")) {
-    return NextResponse.json(
-      { error: "On-demand scoring is an Elite feature" },
-      { status: 403 },
-    );
   }
 
   const body = await request.json().catch(() => null);

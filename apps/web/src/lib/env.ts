@@ -18,19 +18,6 @@ export const SUPABASE_SERVICE_ROLE_KEY       = () => requireEnv("SUPABASE_SERVIC
 // ─── AI ───────────────────────────────────────────────────────────────────────
 export const ANTHROPIC_API_KEY               = () => requireEnv("ANTHROPIC_API_KEY");
 
-// ─── Stripe ───────────────────────────────────────────────────────────────────
-export const STRIPE_SECRET_KEY               = () => requireEnv("STRIPE_SECRET_KEY");
-export const STRIPE_WEBHOOK_SECRET           = () => requireEnv("STRIPE_WEBHOOK_SECRET");
-export const NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = requirePublicEnv("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY");
-export const STRIPE_PRICE_MONTHLY            = () => requireEnv("STRIPE_PRICE_MONTHLY");
-export const STRIPE_PRICE_QUARTERLY          = () => requireEnv("STRIPE_PRICE_QUARTERLY");
-export const STRIPE_PRICE_ANNUAL             = () => requireEnv("STRIPE_PRICE_ANNUAL");
-export const STRIPE_PRICE_ELITE_MONTHLY      = () => requireEnv("STRIPE_PRICE_ELITE_MONTHLY");
-export const STRIPE_PRICE_ELITE_ANNUAL       = () => requireEnv("STRIPE_PRICE_ELITE_ANNUAL");
-export const STRIPE_PRICE_LIFETIME           = () => requireEnv("STRIPE_PRICE_LIFETIME");
-export const STRIPE_PRICE_LIFETIME_ELITE     = () => requireEnv("STRIPE_PRICE_LIFETIME_ELITE");
-export const STRIPE_PRICE_ELITE_QUARTERLY    = () => requireEnv("STRIPE_PRICE_ELITE_QUARTERLY");
-
 // ─── Email ────────────────────────────────────────────────────────────────────
 export const RESEND_API_KEY                  = () => requireEnv("RESEND_API_KEY");
 

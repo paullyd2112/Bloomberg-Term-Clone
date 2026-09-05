@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Share2, Check, Link2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-
 type ShareProps = {
   signalId: number;
   ticker?: string;
@@ -35,42 +33,10 @@ function RedditIcon({ className }: { className?: string }) {
   );
 }
 
-let referralCodePromise: Promise<string | null> | null = null;
-
-// Shared across every ShareButton instance on the page — the signal feed can render
-// hundreds of rows at once, and each one used to independently call auth.getUser() +
-// look up the same profile, firing a stampede of duplicate requests on page load.
-function getReferralCode(): Promise<string | null> {
-  if (!referralCodePromise) {
-    const supabase = createClient();
-    referralCodePromise = supabase.auth.getUser().then(({ data: { user } }: { data: { user: { id: string } | null } }) => {
-      if (!user) return null;
-      return supabase
-        .from("profiles")
-        .select("referral_code")
-        .eq("id", user.id)
-        .single()
-        .then(({ data }: { data: { referral_code?: string } | null }) => data?.referral_code ?? null);
-    });
-  }
-  return referralCodePromise!;
-}
-
 export default function ShareButton({ signalId, ticker, direction, confidence }: ShareProps) {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
-  const referralCodeRef = useRef<string | null>(null);
-  const fetchedRef = useRef(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
-
-    getReferralCode().then((code) => {
-      referralCodeRef.current = code;
-    });
-  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -84,11 +50,9 @@ export default function ShareButton({ signalId, ticker, direction, confidence }:
   }, [open]);
 
   function getUrl() {
-    const base =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/signal/${signalId}`
-        : `https://plebs.finance/signal/${signalId}`;
-    return referralCodeRef.current ? `${base}?ref=${referralCodeRef.current}` : base;
+    return typeof window !== "undefined"
+      ? `${window.location.origin}/signal/${signalId}`
+      : `https://plebs.finance/signal/${signalId}`;
   }
 
   function getShareText() {

@@ -62,8 +62,6 @@ export default async function AdminOverview() {
           "NEXT_PUBLIC_SUPABASE_URL",
           "NEXT_PUBLIC_SUPABASE_ANON_KEY",
           "SUPABASE_SERVICE_ROLE_KEY",
-          "STRIPE_SECRET_KEY",
-          "STRIPE_WEBHOOK_SECRET",
           "ADMIN_EMAILS",
         ].map((key) => (
           <div key={key} className="flex items-center justify-between text-xs">

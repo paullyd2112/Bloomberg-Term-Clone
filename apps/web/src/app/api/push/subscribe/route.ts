@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { requireUser, getUserTier } from "@/lib/user";
-import { canAccessFeature } from "@/lib/tier";
+import { requireUser } from "@/lib/user";
 
 const Body = z.object({
   endpoint: z.string().url(),
@@ -16,15 +15,6 @@ export async function POST(request: Request) {
   const user = await requireUser().catch(() => null);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Alerts (and thus push) are a paid feature
-  const tier = await getUserTier();
-  if (!canAccessFeature(tier, "alerts")) {
-    return NextResponse.json(
-      { error: "Push notifications require a paid plan" },
-      { status: 403 },
-    );
   }
 
   const body = await request.json().catch(() => null);

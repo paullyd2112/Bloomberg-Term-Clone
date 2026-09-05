@@ -12,24 +12,20 @@ import {
   Receipt,
   Bell,
   Landmark,
-  Gift,
   PieChart,
   Bot,
   ArrowUpRight,
   Calculator,
   BarChart3,
   Layers,
-  Lock,
   Trophy,
   type LucideIcon,
 } from "lucide-react";
-import type { Tier } from "@/lib/tier";
 
 type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
-  tier?: "pro" | "elite";
 };
 
 type NavGroup = {
@@ -50,33 +46,28 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Tools",
     items: [
-      { href: "/dashboard/screener",        label: "Screener",     icon: Search,     tier: "pro" },
-      { href: "/dashboard/portfolio",       label: "Portfolio",    icon: Wallet,     tier: "pro" },
-      { href: "/dashboard/performance",     label: "Performance",  icon: TrendingUp, tier: "pro" },
-      { href: "/dashboard/backtest",        label: "Backtest",     icon: ArrowUpRight, tier: "pro" },
-      { href: "/dashboard/history",         label: "Pleby Trades", icon: Receipt,    tier: "pro" },
-      { href: "/dashboard/alerts",          label: "Alerts",       icon: Bell,       tier: "pro" },
-      { href: "/dashboard/challenge",        label: "Challenge",    icon: Trophy,     tier: "pro" },
-      { href: "/dashboard/prop-calculator", label: "Prop Sizing",  icon: Calculator, tier: "elite" },
-      { href: "/dashboard/allocator",       label: "Allocator",    icon: PieChart,   tier: "elite" },
-      { href: "/dashboard/pleby",           label: "Pleby AI",     icon: Bot,        tier: "elite" },
+      { href: "/dashboard/screener",        label: "Screener",     icon: Search },
+      { href: "/dashboard/portfolio",       label: "Portfolio",    icon: Wallet },
+      { href: "/dashboard/performance",     label: "Performance",  icon: TrendingUp },
+      { href: "/dashboard/backtest",        label: "Backtest",     icon: ArrowUpRight },
+      { href: "/dashboard/history",         label: "Pleby Trades", icon: Receipt },
+      { href: "/dashboard/alerts",          label: "Alerts",       icon: Bell },
+      { href: "/dashboard/challenge",        label: "Challenge",    icon: Trophy },
+      { href: "/dashboard/prop-calculator", label: "Prop Sizing",  icon: Calculator },
+      { href: "/dashboard/allocator",       label: "Allocator",    icon: PieChart },
+      { href: "/dashboard/pleby",           label: "Pleby AI",     icon: Bot },
     ],
   },
   {
     label: "",
     items: [
       { href: "/dashboard/congress",  label: "Congress",  icon: Landmark },
-      { href: "/dashboard/referrals", label: "Referrals", icon: Gift },
     ],
   },
 ];
 
-export default function Sidebar({ tier, billingInterval }: { tier: Tier; billingInterval?: string | null }) {
+export default function Sidebar() {
   const pathname = usePathname();
-  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  const displayLabel = billingInterval === "lifetime"
-    ? `Lifetime ${capitalize(tier)}`
-    : `${capitalize(tier)} plan`;
 
   return (
     <aside className="hidden lg:flex w-56 flex-shrink-0 bg-black/40 backdrop-blur-xl border-r border-white/[0.06] flex-col">
@@ -97,14 +88,7 @@ export default function Sidebar({ tier, billingInterval }: { tier: Tier; billing
               </div>
             )}
             <div className="space-y-0.5">
-              {group.items.map(({ href, label, icon: Icon, tier: requiredTier }) => {
-                const locked =
-                  requiredTier === "elite"
-                    ? tier !== "elite"
-                    : requiredTier === "pro"
-                    ? tier === "free"
-                    : false;
-
+              {group.items.map(({ href, label, icon: Icon }) => {
                 const active =
                   href === "/dashboard"
                     ? pathname === "/dashboard"
@@ -113,13 +97,12 @@ export default function Sidebar({ tier, billingInterval }: { tier: Tier; billing
                 return (
                   <Link
                     key={href}
-                    href={locked ? "/dashboard/upgrade" : href}
+                    href={href}
                     className={clsx(
                       "group relative flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all",
                       active
                         ? "bg-white/[0.06] text-white ring-hairline"
                         : "text-zinc-400 hover:text-white hover:bg-white/[0.04]",
-                      locked && "opacity-50 hover:opacity-80",
                     )}
                   >
                     {active && (
@@ -133,9 +116,6 @@ export default function Sidebar({ tier, billingInterval }: { tier: Tier; billing
                       strokeWidth={2}
                     />
                     <span className="truncate">{label}</span>
-                    {locked && (
-                      <Lock className="ml-auto h-3 w-3 text-zinc-600 flex-shrink-0" />
-                    )}
                   </Link>
                 );
               })}
@@ -143,28 +123,6 @@ export default function Sidebar({ tier, billingInterval }: { tier: Tier; billing
           </div>
         ))}
       </nav>
-
-      {/* Tier badge */}
-      <div className="p-4 border-t border-white/[0.06]">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className={clsx(
-              "w-1.5 h-1.5 rounded-full",
-              tier === "elite" ? "bg-emerald-400" : tier === "pro" ? "bg-amber-400" : "bg-zinc-500"
-            )} />
-            <span className="font-mono text-[11px] uppercase tracking-wider text-zinc-400">{displayLabel}</span>
-          </div>
-          {tier === "free" && (
-            <Link
-              href="/dashboard/upgrade"
-              className="group inline-flex items-center gap-0.5 text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
-            >
-              Upgrade
-              <ArrowUpRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-            </Link>
-          )}
-        </div>
-      </div>
     </aside>
   );
 }

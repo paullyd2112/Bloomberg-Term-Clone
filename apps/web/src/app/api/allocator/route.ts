@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
-import { requireUser, getUserTier } from "@/lib/user";
+import { requireUser } from "@/lib/user";
 
 export const maxDuration = 60;
 
@@ -145,11 +145,6 @@ export async function POST(req: Request) {
   try { user = await requireUser(); }
   catch { return NextResponse.json({ error: "Unauthenticated" }, { status: 401 }); }
 
-  const tier = await getUserTier();
-  if (tier !== "elite") {
-    return NextResponse.json({ error: "Elite tier required" }, { status: 403 });
-  }
-
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
@@ -237,11 +232,6 @@ export async function GET() {
   let user;
   try { user = await requireUser(); }
   catch { return NextResponse.json({ error: "Unauthenticated" }, { status: 401 }); }
-
-  const tier = await getUserTier();
-  if (tier !== "elite") {
-    return NextResponse.json({ error: "Elite tier required" }, { status: 403 });
-  }
 
   const supabase = createClient();
   const { data } = await supabase

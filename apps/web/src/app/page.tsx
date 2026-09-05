@@ -68,7 +68,6 @@ function Nav() {
 
         <div className="hidden md:flex items-center gap-8 text-sm text-secondary-foreground">
           <a href="#terminal" className="hover:text-white transition-colors">The terminal</a>
-          <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
           <a href="/faq" className="hover:text-white transition-colors">FAQ</a>
         </div>
 
@@ -586,136 +585,6 @@ function NewsletterBand() {
   );
 }
 
-// ─── Pricing ──────────────────────────────────────────────────────────────────
-
-const PLANS = [
-  {
-    name:      "Free",
-    price:     "$0",
-    period:    "",
-    blurb:     "See the signals. Decide when you're ready for more.",
-    highlight: false,
-    cta:       "Create free account",
-    href:      "/signup",
-    features: [
-      "3 signals per day (4h delay)",
-      "Weekly Monday newsletter recap",
-      "Dashboard access (view-only)",
-      "Track record & accuracy stats",
-    ],
-  },
-  {
-    name:      "Pro",
-    price:     "$40",
-    period:    "/mo",
-    blurb:     "Everything you need to trade crypto with an edge.",
-    highlight: false,
-    cta:       "Start 7-day trial",
-    href:      "/signup",
-    features: [
-      "24/7 signals for BTC, ETH & 50+ coins",
-      "Confidence scores + full reasoning",
-      "Win rates tracked per coin",
-      "Unlimited watchlist",
-      "Morning briefing email",
-      "Congressional trade tracker",
-      "Price & signal alerts",
-    ],
-  },
-  {
-    name:      "Elite",
-    price:     "$80",
-    period:    "/mo",
-    blurb:     "The real alpha: prediction markets and your own analyst on call.",
-    highlight: true,
-    cta:       "Start 14-day trial",
-    href:      "/signup",
-    features: [
-      "Everything in Pro",
-      "Prediction market signals (Polymarket)",
-      "Mispriced contract detection",
-      "Pleby, your personal analyst, on call",
-      "Personalised morning briefing",
-      "On-demand scoring: analyse any coin",
-    ],
-  },
-];
-
-function Pricing() {
-  return (
-    <section id="pricing" className="py-24 px-5 sm:px-8">
-      <div className="max-w-5xl mx-auto">
-        <Reveal className="max-w-2xl mb-12">
-          <SectionLabel index="05">Pricing</SectionLabel>
-          <h2 className="mt-5 text-3xl sm:text-4xl font-semibold text-white tracking-tightest">
-            Start free. Upgrade when the signals pay for themselves.
-          </h2>
-        </Reveal>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {PLANS.map((plan, i) => (
-            <Reveal key={plan.name} delay={i * 80}>
-              <div
-                className={`relative h-full rounded-2xl p-8 border transition-all duration-300 ${
-                  plan.highlight
-                    ? "border-emerald-600/40 bg-emerald-500/[0.03] glow-green"
-                    : "border-white/10 bg-white/[0.02] ring-hairline hover:-translate-y-0.5 hover:border-white/20"
-                }`}
-              >
-                {plan.highlight && (
-                  <span className="absolute -top-3 left-8 bg-emerald-500 text-black text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">
-                    Most popular
-                  </span>
-                )}
-
-                <div className="flex items-baseline justify-between">
-                  <div className="text-zinc-300 font-medium">{plan.name}</div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="font-mono text-4xl font-semibold text-white tracking-tightest">
-                      {plan.price}
-                    </span>
-                    <span className="text-muted-foreground text-sm">{plan.period}</span>
-                  </div>
-                </div>
-
-                <p className="text-muted-foreground text-sm mt-3 leading-relaxed">{plan.blurb}</p>
-
-                <Link
-                  href={plan.href}
-                  className={`block w-full text-center py-2.5 rounded-lg font-semibold text-sm my-7 transition-colors ${
-                    plan.highlight
-                      ? "bg-emerald-500 hover:bg-emerald-400 text-black"
-                      : "border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] text-zinc-200"
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
-
-                <ul className="space-y-3">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-secondary-foreground">
-                      <CircleCheck className="h-4 w-4 mt-0.5 flex-shrink-0 text-emerald-400" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-
-        <p className="text-center text-muted-foreground text-sm mt-8">
-          Free forever. Pro includes a 7-day trial, Elite a 14-day trial. Cancel anytime. Prefer to pay once?{" "}
-          <Link href="/signup" className="text-emerald-400 hover:text-emerald-300 underline underline-offset-4 transition-colors">
-            Lifetime access from $399
-          </Link>
-          .
-        </p>
-      </div>
-    </section>
-  );
-}
-
 // ─── FAQ ──────────────────────────────────────────────────────────────────────
 
 const FAQS = [
@@ -728,8 +597,8 @@ const FAQS = [
     a: "No. Plebs provides market analysis for informational purposes only. We surface signals and data, but every trade decision is yours. Always do your own research.",
   },
   {
-    q: "How does the trial work?",
-    a: "Pro comes with a 7-day trial, Elite with a 14-day trial. Full access to everything in that tier. Credit card is required upfront. Cancel anytime during the trial and you won't be charged. Or start with the free plan, no card needed.",
+    q: "Is Plebs really free?",
+    a: "Yes. Plebs is open source and completely free. Every feature is available to every user, no paywalls or tier restrictions.",
   },
   {
     q: "What markets do you cover?",
@@ -825,7 +694,6 @@ const FOOTER_COLS = [
     heading: "Product",
     links: [
       { label: "The terminal", href: "#terminal" },
-      { label: "Pricing", href: "#pricing" },
       { label: "FAQ", href: "/faq" },
       { label: "Glossary", href: "/glossary" },
       { label: "Prop trading", href: "/prop-trading" },
@@ -837,7 +705,7 @@ const FOOTER_COLS = [
     links: [
       { label: "Log in", href: "/login" },
       { label: "Start free", href: "/signup" },
-      { label: "Newsletter", href: "/#pricing" },
+      { label: "Newsletter", href: "/#newsletter" },
     ],
   },
   {
@@ -979,7 +847,6 @@ export default function LandingPage() {
         <PropDesk />
         <Ethos />
         <NewsletterBand />
-        <Pricing />
         <Faq />
         <CTAStrip />
       </main>

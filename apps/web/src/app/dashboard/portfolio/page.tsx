@@ -1,8 +1,6 @@
-import Link from "next/link";
-import { Briefcase, ArrowRight } from "lucide-react";
+import { Briefcase } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getUserTier } from "@/lib/user";
-import { canAccessFeature } from "@/lib/tier";
+import { getUser } from "@/lib/user";
 import PositionRow from "@/components/portfolio/PositionRow";
 import AddPositionModal from "@/components/portfolio/AddPositionModal";
 
@@ -90,30 +88,6 @@ export default async function PortfolioPage({
     : undefined;
 
   const user = await getUser();
-  const tier = await getUserTier();
-
-  if (!canAccessFeature(tier, "portfolio")) {
-    return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="bg-white/[0.03] border border-white/[0.06] ring-hairline rounded-2xl p-8 text-center flex flex-col items-center gap-4">
-          <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-700/30 bg-emerald-500/10 text-emerald-400">
-            <Briefcase className="h-6 w-6" />
-          </span>
-          <h2 className="text-white font-semibold text-lg tracking-tight">Portfolio Tracker</h2>
-          <p className="text-zinc-400 text-sm leading-relaxed max-w-md">
-            Log your positions, track unrealized P&amp;L in real-time, and see your win rate across closed trades. Pro and Elite only.
-          </p>
-          <Link
-            href="/dashboard/upgrade"
-            className="inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm px-5 py-2.5 rounded-lg transition-colors"
-          >
-            Upgrade to Pro
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   const positions = await fetchPositions(user!.id);
   const stats     = calcStats(positions);

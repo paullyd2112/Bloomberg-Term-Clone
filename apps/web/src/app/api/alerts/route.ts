@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/user";
-import type { Tier } from "@/lib/tier";
 
 const Body = z.object({
   asset_type:   z.enum(["stock", "crypto"]),
@@ -24,16 +23,6 @@ export async function POST(req: Request) {
   }
 
   const supabase = createClient();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("tier")
-    .eq("id", user.id)
-    .single();
-
-  const tier = (profile?.tier ?? "free") as Tier;
-  if (tier === "free") {
-    return NextResponse.json({ error: "Alerts are a Pro feature", upgrade: true }, { status: 403 });
-  }
 
   // Cap total alerts to avoid abuse
   const { count } = await supabase
