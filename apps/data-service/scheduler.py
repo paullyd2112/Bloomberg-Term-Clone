@@ -1714,6 +1714,42 @@ def backtest_data_diagnostic():
                         "traceback": traceback.format_exc()}), 500
 
 
+# ─── Webhook subscriber management ───────────────────────────────────────────
+
+@app.route("/api/v1/webhooks", methods=["GET"])
+def list_webhooks():
+    from webhooks.dispatch import list_subscribers
+    return jsonify({"subscribers": list_subscribers()})
+
+
+@app.route("/api/v1/webhooks/register", methods=["POST"])
+def register_webhook():
+    from flask import request as flask_request
+    from webhooks.dispatch import register_subscriber
+
+    body = flask_request.get_json(silent=True) or {}
+    url = body.get("callback_url", "").strip()
+    secret = body.get("secret", "").strip()
+    label = body.get("label", "")
+
+    if not url or not secret:
+        return jsonify({"error": "callback_url and secret are required"}), 400
+    if len(secret) < 16:
+        return jsonify({"error": "secret must be at least 16 characters"}), 400
+
+    sub = register_subscriber(url, secret, label)
+    return jsonify({"subscriber": sub}), 201
+
+
+@app.route("/api/v1/webhooks/<int:sub_id>", methods=["DELETE"])
+def delete_webhook(sub_id):
+    from webhooks.dispatch import unregister_subscriber
+    ok = unregister_subscriber(str(sub_id))
+    if ok:
+        return jsonify({"deleted": True})
+    return jsonify({"error": "not found"}), 404
+
+
 @app.route("/pipeline-check")
 def pipeline_check():
     """

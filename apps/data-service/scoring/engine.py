@@ -699,7 +699,15 @@ def _write_signal(
     if trade_setup_data:
         base["trade_setup"] = trade_setup_data
     result = supabase.table("signals").insert(base).execute()
-    return result.data[0] if result.data else base
+    record = result.data[0] if result.data else base
+
+    try:
+        from webhooks.dispatch import dispatch_signal
+        dispatch_signal(record)
+    except Exception as e:
+        logger.debug("webhook dispatch failed: {}", e)
+
+    return record
 
 
 # ─── Tier-gated API response formatting ──────────────────────────────────────
